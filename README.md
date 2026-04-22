@@ -58,6 +58,172 @@ Documents below 60% confidence are flagged `needs_review: true` in the JSON.
 
 ---
 
+## Azure Setup
+
+This pipeline authenticates with Microsoft Graph API using an Azure App Registration. You need to create this once — it takes about 10 minutes.
+
+> **Two different Azure portals — don't mix them up:**
+> - **https://portal.azure.com** — where you create the App Registration for this pipeline (Microsoft Entra ID / Azure Active Directory). This is what this section covers.
+> - **https://dev.azure.com** — Azure DevOps, used for code repositories, CI/CD pipelines, and work items. Not required for this pipeline, but useful if your team wants to host the code there instead of GitHub.
+
+---
+
+### Step 1 — Create the App Registration
+
+1. Go to [https://portal.azure.com](https://portal.azure.com) and sign in
+2. Search for **"App registrations"** in the top search bar and open it
+3. Click **"New registration"**
+4. Fill in:
+   - **Name:** `ms_outlook_pipeline` (or any name you'll recognise)
+   - **Supported account types:** see [Personal vs Organisational](#personal-vs-organisational-accounts) below
+   - **Redirect URI:** select `Web` and enter `http://localhost:3333/auth/callback`
+5. Click **Register**
+6. On the app overview page, copy the **Application (client) ID** — this is your `MS_CLIENT_ID`
+
+---
+
+### Step 2 — Add API Permissions
+
+1. In your app registration, go to **API permissions** (left menu)
+2. Click **"Add a permission"** → **Microsoft Graph** → **Delegated permissions**
+3. Search for and add each of these:
+
+   | Permission | Why it's needed |
+   |---|---|
+   | `Mail.ReadWrite` | Read emails and move them after processing |
+   | `User.Read` | Read the logged-in user's profile |
+   | `offline_access` | Keep the session alive without re-logging in every time |
+
+4. Click **"Grant admin consent"** if you have admin rights — otherwise ask your Azure admin to do this. Without it, users will see a consent prompt on first login (which is fine for personal accounts).
+
+> **Note:** This pipeline does **not** request `Mail.Send`, `Calendars`, or `Files` permissions — only what it needs.
+
+---
+
+### Step 3 — Create a Client Secret
+
+The pipeline uses device code flow (browser login) so a client secret is technically optional for personal accounts. However it's good practice to create one in case you switch to app-only auth later.
+
+1. Go to **Certificates & secrets** (left menu)
+2. Click **"New client secret"**
+3. Set a description and expiry (12–24 months recommended)
+4. Click **Add**
+5. **Copy the secret VALUE immediately** — it's only shown once. This is not the same as the Secret ID.
+
+If you choose not to create a secret, leave `MS_CLIENT_SECRET` blank in `.env`.
+
+---
+
+### Step 4 — Configure `.env`
+
+```env
+MS_CLIENT_ID=paste-your-client-id-here
+MS_TENANT_ID=consumers        # for personal accounts — see below
+```
+
+---
+
+### Personal vs Organisational Accounts
+
+The **"Supported account types"** setting you choose at registration time controls who can log in, and what `MS_TENANT_ID` you should set.
+
+#### Personal Microsoft Account (e.g. @outlook.com, @hotmail.com)
+
+This is the setup used by this pipeline by default — suitable for personal use or small teams using personal Outlook.
+
+**At registration:** select **"Personal Microsoft accounts only"**
+
+**Known issue with the portal UI:** If you try to change this via the **Authentication** tab, you may see:
+> `api.requestedAccessTokenVersion is invalid`
+
+**Fix:** Use the **Manifest** editor instead (left menu → Manifest):
+```json
+"signInAudience": "PersonalMicrosoftAccount",
+"api": {
+    "requestedAccessTokenVersion": 2
+}
+```
+Save the Manifest directly — do not use the Authentication tab UI for this change.
+
+**In `.env`:**
+```env
+MS_TENANT_ID=consumers
+```
+
+**Why `consumers`?** Microsoft routes personal account logins through `login.microsoftonline.com/consumers`. Using `/common` will produce this error:
+> `AADSTS9002346: Please use the /consumers endpoint`
+
+---
+
+#### Work or School Account (e.g. @yourcompany.com)
+
+For use within a business with an Azure Active Directory (Entra ID) tenant — e.g. if this is deployed for a team or company.
+
+**At registration:** select **"Accounts in this organizational directory only (Single tenant)"**
+
+**In `.env`:**
+```env
+MS_TENANT_ID=your-tenant-id-here
+```
+
+Find your tenant ID: Azure Portal → **Microsoft Entra ID** → **Overview** → Directory (tenant) ID.
+
+**Adding users to the app:**
+1. Go to **Enterprise applications** (search in portal)
+2. Find your app by name
+3. Go to **Users and groups** → **Add user/group**
+4. Assign the users who should be able to log in
+
+If you leave "Assignment required" off (default), any user in your organisation can log in automatically.
+
+**Admin consent:** For work accounts, an Azure admin typically needs to grant consent once for the whole organisation:
+1. In your app registration → **API permissions**
+2. Click **"Grant admin consent for [your organisation]"**
+3. Users then log in without seeing a consent prompt
+
+---
+
+#### Both Personal and Work Accounts
+
+**At registration:** select **"Accounts in any organizational directory and personal Microsoft accounts"**
+
+This is what [ryaker/outlook-mcp](https://github.com/ryaker/outlook-mcp) uses by default.
+
+**In `.env`:**
+```env
+MS_TENANT_ID=common
+```
+
+**Caveat:** The `/common` endpoint has quirks. If your app is configured for personal accounts only and you use `/common`, you will get `AADSTS9002346`. Make sure the Manifest `signInAudience` matches the tenant you're using.
+
+---
+
+### Comparison: Personal vs Organisational
+
+| | Personal | Organisational | Both |
+|---|---|---|---|
+| Account type | @outlook.com, @hotmail.com | @company.com (Azure AD) | Either |
+| `MS_TENANT_ID` | `consumers` | your tenant GUID | `common` |
+| `signInAudience` (Manifest) | `PersonalMicrosoftAccount` | `AzureADMyOrg` | `AzureADandPersonalMicrosoftAccount` |
+| Admin consent required | No | Yes (recommended) | Depends |
+| User management | Not applicable | Entra ID → Users and groups | Mixed |
+| Good for | Personal/solo use | Business teams | Mixed environments |
+
+---
+
+### Optional: ryaker/outlook-mcp (Node.js MCP Server)
+
+If you also want to control your Outlook from an AI assistant (like Claude), [ryaker/outlook-mcp](https://github.com/ryaker/outlook-mcp) is a companion Node.js server that uses the same Azure App Registration.
+
+```bash
+git clone https://github.com/ryaker/outlook-mcp.git
+cd outlook-mcp
+```
+
+Follow the setup instructions in that repo's README. It uses the same `MS_CLIENT_ID` and `MS_CLIENT_SECRET` — you can point it at the same app registration you created above. The two tools are independent and can run side by side.
+
+---
+
 ## Requirements
 
 ### Python
