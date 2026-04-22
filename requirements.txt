@@ -1,4 +1,5 @@
 msal>=1.28
+python-dotenv>=1.0
 requests>=2.31
 pdfplumber>=0.11
 pymupdf>=1.24
