@@ -7,9 +7,10 @@ Prompts for how many days of emails to process (default: 1).
 After each email is successfully processed, moves it to the
 "Processed-Pipeline" folder so it won't be picked up again.
 """
+import json
 import logging
-import sys
 from datetime import datetime
+from pathlib import Path
 
 from utils.logger import setup_logging
 from auth.graph_client import GraphClient
@@ -20,7 +21,8 @@ from pipeline.customer_classifier import classify
 from pipeline.template_parser import parse
 from pipeline.json_output import build_output, save_json
 from pipeline.email_mover import move_to_processed
-from config.settings import MOVE_AFTER_PROCESSING
+from pipeline.security import validate_attachment, scrub_prompt_injection
+from config.settings import MOVE_AFTER_PROCESSING, TEMPLATES_DIR
 from database import db
 
 setup_logging()
@@ -41,7 +43,24 @@ def _ask_days() -> int:
         return 1
 
 
-def process_attachment(client, message, attachment_path) -> bool:
+def _load_allowed_domains() -> set[str]:
+    """Collect all sender_domains from every customer template."""
+    domains: set[str] = set()
+    for f in TEMPLATES_DIR.glob("*.json"):
+        try:
+            tmpl = json.loads(f.read_text(encoding="utf-8"))
+            for d in tmpl.get("sender_domains", []):
+                domains.add(d.lower())
+        except Exception:
+            pass
+    if domains:
+        log.info(f"Sender allowlist loaded: {sorted(domains)}")
+    else:
+        log.warning("No sender_domains found in templates — all senders will be allowed.")
+    return domains
+
+
+def process_attachment(client, message, attachment_path, allowed_domains) -> bool:
     """Returns True if processing succeeded (used to decide whether to move the email)."""
     msg_id = message["id"]
     filename = attachment_path.name
@@ -52,9 +71,26 @@ def process_attachment(client, message, attachment_path) -> bool:
         log.info(f"Already processed, skipping: {filename}")
         return True
 
+    # --- Security gate ---
+    ok, issues = validate_attachment(attachment_path, sender, allowed_domains)
+    for issue in issues:
+        log.warning(f"SECURITY [{filename}]: {issue}")
+    if not ok:
+        log.warning(f"Attachment blocked by security checks, skipping: {filename}")
+        db.record(
+            message_id=msg_id,
+            attachment_filename=filename,
+            sender_email=sender,
+            received_at=received,
+            processed_at=datetime.utcnow().isoformat() + "Z",
+            error="BLOCKED: " + " | ".join(issues),
+        )
+        return False
+
     try:
         log.info(f"Extracting text: {filename}")
         text, is_native = extract_text(attachment_path)
+        text = scrub_prompt_injection(text)
 
         log.info(f"Classifying customer for: {filename}")
         customer_name, class_confidence = classify(sender, text)
@@ -103,9 +139,11 @@ def main():
     days = _ask_days()
     log.info(f"Pipeline starting — processing last {days} day(s) of emails.")
 
+    allowed_domains = _load_allowed_domains()
     client = GraphClient()
 
     total = 0
+    blocked = 0
     moved = 0
 
     for message in fetch_unread_with_attachments(client, days=days):
@@ -120,17 +158,20 @@ def main():
 
         all_succeeded = True
         for path in paths:
-            success = process_attachment(client, message, path)
+            success = process_attachment(client, message, path, allowed_domains)
             if not success:
                 all_succeeded = False
+                blocked += 1
             total += 1
 
-        # Move email only if every attachment processed without error
         if MOVE_AFTER_PROCESSING and all_succeeded:
             if move_to_processed(client, msg_id):
                 moved += 1
 
-    log.info(f"Pipeline complete. {total} attachment(s) processed, {moved} email(s) moved.")
+    log.info(
+        f"Pipeline complete. {total} attachment(s) processed, "
+        f"{blocked} blocked, {moved} email(s) moved."
+    )
 
 
 if __name__ == "__main__":
