@@ -100,7 +100,26 @@ This pipeline authenticates with Microsoft Graph API using an Azure App Registra
 
 ---
 
-### Step 3 — Create a Client Secret
+### Step 3 — Enable Public Client Flows
+
+Device code flow (the browser login prompt) is a "public client" flow. Azure blocks it by default and requires you to opt in.
+
+1. In your app registration, go to **Authentication** (left menu)
+2. Scroll to **Advanced settings**
+3. Set **"Allow public client flows"** to **Yes**
+4. Click **Save**
+
+> **If you skip this step** you will get:
+> `AADSTS70002: The client application must be marked as 'mobile.'`
+
+Alternatively, set it via the **Manifest** editor:
+```json
+"allowPublicClient": true
+```
+
+---
+
+### Step 4 — Create a Client Secret
 
 The pipeline uses device code flow (browser login) so a client secret is technically optional for personal accounts. However it's good practice to create one in case you switch to app-only auth later.
 
@@ -114,7 +133,7 @@ If you choose not to create a secret, leave `MS_CLIENT_SECRET` blank in `.env`.
 
 ---
 
-### Step 4 — Configure `.env`
+### Step 5 — Configure `.env`
 
 ```env
 MS_CLIENT_ID=paste-your-client-id-here
