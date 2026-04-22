@@ -22,6 +22,7 @@ from pipeline.template_parser import parse
 from pipeline.json_output import build_output, save_json
 from pipeline.email_mover import move_to_processed
 from pipeline.security import validate_attachment, scrub_prompt_injection
+from pipeline.template_suggester import suggest as suggest_template
 from config.settings import MOVE_AFTER_PROCESSING, TEMPLATES_DIR
 from database import db
 
@@ -97,6 +98,16 @@ def process_attachment(client, message, attachment_path, allowed_domains, allowe
 
         log.info(f"Classifying customer for: {filename}")
         customer_name, class_confidence = classify(sender, text)
+
+        if not customer_name or class_confidence < 0.5:
+            display_name = message.get("from", {}).get("emailAddress", {}).get("name", "")
+            suggestion_path = suggest_template(sender, display_name, text)
+            if suggestion_path:
+                log.warning(
+                    f"No template matched for {sender!r} — "
+                    f"draft saved to {suggestion_path.relative_to(Path.cwd())}. "
+                    "Review and copy to config/templates/ to activate."
+                )
 
         log.info(f"Parsing with template: {customer_name!r}")
         parsed = parse(text, customer_name) if customer_name else {"_confidence": 0.0}

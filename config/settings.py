@@ -33,7 +33,8 @@ RAW_TEXT_DIR    = ROOT / "raw_text"
 PARSED_DIR      = ROOT / "parsed"
 LOGS_DIR        = ROOT / "logs"
 DB_PATH         = ROOT / "database" / "pipeline.db"
-TEMPLATES_DIR   = ROOT / "config" / "templates"
+TEMPLATES_DIR           = ROOT / "config" / "templates"
+SUGGESTED_TEMPLATES_DIR = ROOT / "config" / "suggested_templates"
 
 # --- OCR ---
 TESSERACT_CMD = os.getenv("TESSERACT_CMD", "tesseract")

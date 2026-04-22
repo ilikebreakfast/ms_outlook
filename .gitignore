@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 .env
 config/token_cache.bin
+config/suggested_templates/
 attachments/
 raw_text/
 parsed/
