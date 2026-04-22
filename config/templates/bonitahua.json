@@ -1,10 +1,9 @@
 {
   "_comment": "Copy this file, rename to your customer, fill in the fields.",
-  "customer_name": "ACME Corp",
-  "sender_emails": [],
-  "sender_domains": ["acmecorp.com.au"],
-  "abns": ["12345678901"],
-  "keywords": ["acme", "purchase order", "delivery docket"],
+  "customer_name": "Bonita Hua",
+  "sender_domains": ["bonitahua@hotmail.com"],
+  "abns": [""],
+  "keywords": ["bonita"],
   "required_fields": ["invoice_number", "order_date", "abn"],
   "fields": {
     "customer_name":           ["ACME\\s+Corp(?:oration)?"],

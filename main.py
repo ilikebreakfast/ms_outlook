@@ -43,24 +43,27 @@ def _ask_days() -> int:
         return 1
 
 
-def _load_allowed_domains() -> set[str]:
-    """Collect all sender_domains from every customer template."""
+def _load_allowlists() -> tuple[set[str], set[str]]:
+    """Collect sender_domains and sender_emails from every customer template."""
     domains: set[str] = set()
+    emails: set[str] = set()
     for f in TEMPLATES_DIR.glob("*.json"):
         try:
             tmpl = json.loads(f.read_text(encoding="utf-8"))
             for d in tmpl.get("sender_domains", []):
                 domains.add(d.lower())
+            for e in tmpl.get("sender_emails", []):
+                emails.add(e.lower())
         except Exception:
             pass
-    if domains:
-        log.info(f"Sender allowlist loaded: {sorted(domains)}")
+    if domains or emails:
+        log.info(f"Sender allowlist — domains: {sorted(domains)}, emails: {sorted(emails)}")
     else:
-        log.warning("No sender_domains found in templates — all senders will be allowed.")
-    return domains
+        log.warning("No sender allowlist found in templates — all senders will be allowed.")
+    return domains, emails
 
 
-def process_attachment(client, message, attachment_path, allowed_domains) -> bool:
+def process_attachment(client, message, attachment_path, allowed_domains, allowed_emails) -> bool:
     """Returns True if processing succeeded (used to decide whether to move the email)."""
     msg_id = message["id"]
     filename = attachment_path.name
@@ -72,7 +75,7 @@ def process_attachment(client, message, attachment_path, allowed_domains) -> boo
         return True
 
     # --- Security gate ---
-    ok, issues = validate_attachment(attachment_path, sender, allowed_domains)
+    ok, issues = validate_attachment(attachment_path, sender, allowed_domains, allowed_emails)
     for issue in issues:
         log.warning(f"SECURITY [{filename}]: {issue}")
     if not ok:
@@ -139,7 +142,7 @@ def main():
     days = _ask_days()
     log.info(f"Pipeline starting — processing last {days} day(s) of emails.")
 
-    allowed_domains = _load_allowed_domains()
+    allowed_domains, allowed_emails = _load_allowlists()
     client = GraphClient()
 
     total = 0
@@ -158,7 +161,7 @@ def main():
 
         all_succeeded = True
         for path in paths:
-            success = process_attachment(client, message, path, allowed_domains)
+            success = process_attachment(client, message, path, allowed_domains, allowed_emails)
             if not success:
                 all_succeeded = False
                 blocked += 1

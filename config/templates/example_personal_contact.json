@@ -1,0 +1,18 @@
+{
+  "_comment": "Use this pattern for customers who email from personal addresses (hotmail, gmail, etc). Domain matching is useless here — use sender_emails for exact address matching instead.",
+  "customer_name": "Bonita Hua",
+  "sender_emails": ["bonitahua@hotmail.com"],
+  "sender_domains": [],
+  "abns": [],
+  "keywords": ["bonita", "hua", "order", "purchase"],
+  "required_fields": ["invoice_number", "order_date"],
+  "fields": {
+    "customer_name":           ["Bonita\\s+Hua", "B\\.?\\s*Hua"],
+    "abn":                     ["ABN[:\\s]+(\\d[\\d\\s]{9,12}\\d)"],
+    "address":                 ["(\\d+\\s+\\w+.*?(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\\s+\\d{4})"],
+    "order_date":              ["(?:Order|Invoice|Date)[:\\s]+(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})"],
+    "requested_delivery_date": ["(?:Deliver(?:y)?\\s+(?:By|Date))[:\\s]+(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})"],
+    "invoice_number":          ["(?:Invoice|INV|PO|Ref)[\\s#:.]*(\\w{3,20})"]
+  },
+  "line_items_pattern": "(?P<qty>\\d+(?:\\.\\d+)?)\\s+(?P<description>[A-Za-z][\\w\\s,.-]{3,60})\\s+\\$?(?P<unit_price>[\\d,]+\\.\\d{2})\\s+\\$?(?P<total>[\\d,]+\\.\\d{2})"
+}

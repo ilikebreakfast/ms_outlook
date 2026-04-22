@@ -1,5 +1,6 @@
 {
   "customer_name": "Evergy",
+  "sender_emails": [],
   "sender_domains": ["evergy.com.au"],
   "abns": ["56623005836"],
   "keywords": ["evergy", "electricity bill", "centralised services", "NMI"],

@@ -166,15 +166,17 @@ def scan_with_clamav(path: Path) -> Optional[str]:
 # 6. Sender allowlist
 # ---------------------------------------------------------------------------
 
-def is_allowed_sender(sender_email: str, allowed_domains: set[str]) -> bool:
+def is_allowed_sender(sender_email: str, allowed_domains: set[str], allowed_emails: set[str]) -> bool:
     """
-    Returns True if the sender's domain is in the allowlist.
-    Pass an empty set to allow all senders (not recommended).
+    Returns True if the sender is in either the domain allowlist or the exact email allowlist.
+    Personal senders (hotmail.com, gmail.com) are matched by exact address, not domain.
+    Pass empty sets to allow all senders (not recommended).
     """
-    if not allowed_domains:
+    if not allowed_domains and not allowed_emails:
         return True
-    domain = sender_email.split("@")[-1].lower() if "@" in sender_email else ""
-    return domain in allowed_domains
+    email_lower = sender_email.lower()
+    domain = email_lower.split("@")[-1] if "@" in email_lower else ""
+    return email_lower in allowed_emails or domain in allowed_domains
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +198,7 @@ def scrub_prompt_injection(text: str) -> str:
 # Combined gate — call this before processing any attachment
 # ---------------------------------------------------------------------------
 
-def validate_attachment(path: Path, sender_email: str, allowed_domains: set[str]) -> tuple[bool, list[str]]:
+def validate_attachment(path: Path, sender_email: str, allowed_domains: set[str], allowed_emails: set[str] = set()) -> tuple[bool, list[str]]:
     """
     Runs all checks on an attachment before it is processed.
 
@@ -229,8 +231,8 @@ def validate_attachment(path: Path, sender_email: str, allowed_domains: set[str]
         issues.append(av_err)
         fatal = True
 
-    if not is_allowed_sender(sender_email, allowed_domains):
-        issues.append(f"Sender domain not in allowlist: {sender_email}")
+    if not is_allowed_sender(sender_email, allowed_domains, allowed_emails):
+        issues.append(f"Sender not in allowlist: {sender_email}")
         fatal = True
 
     return not fatal, issues

@@ -1,9 +1,13 @@
 """
-Identifies which customer a document belongs to using three strategies (in order):
+Identifies which customer a document belongs to using four strategies (in order):
 
-  1. Sender email domain  -> match against template domain list
-  2. ABN extracted from text -> match against template ABN list
-  3. Keyword matching -> score each template, pick highest
+  1. Exact sender email address -> match against template sender_emails list
+  2. Sender email domain        -> match against template sender_domains list
+  3. ABN extracted from text    -> match against template abns list
+  4. Keyword matching           -> score each template, pick highest
+
+Strategy 1 exists specifically for personal email senders (hotmail.com, gmail.com etc.)
+where the domain is shared by millions of people and useless for identification.
 
 Returns (template_name, confidence_score).
 """
@@ -55,19 +59,26 @@ def classify(sender_email: str, text: str) -> Tuple[Optional[str], float]:
         log.warning("No customer templates found in config/templates/.")
         return None, 0.0
 
-    sender_domain = sender_email.split("@")[-1].lower() if "@" in sender_email else ""
+    sender_email_lower = sender_email.lower()
+    sender_domain = sender_email_lower.split("@")[-1] if "@" in sender_email_lower else ""
     found_abn = extract_abn(text)
 
     for tmpl in templates:
         name = tmpl.get("customer_name", "unknown")
 
-        # Strategy 1: domain match (high confidence)
+        # Strategy 1: exact email match (highest confidence — handles personal addresses)
+        emails = [e.lower() for e in tmpl.get("sender_emails", [])]
+        if sender_email_lower and sender_email_lower in emails:
+            log.info(f"Customer matched by exact email: {name}")
+            return name, 0.98
+
+        # Strategy 2: domain match (high confidence — handles business addresses)
         domains = [d.lower() for d in tmpl.get("sender_domains", [])]
         if sender_domain and sender_domain in domains:
             log.info(f"Customer matched by domain: {name}")
             return name, 0.95
 
-        # Strategy 2: ABN match (high confidence)
+        # Strategy 3: ABN match (high confidence)
         abns = [re.sub(r"\s", "", a) for a in tmpl.get("abns", [])]
         if found_abn and found_abn in abns:
             log.info(f"Customer matched by ABN: {name}")
