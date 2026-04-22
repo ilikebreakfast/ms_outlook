@@ -4,6 +4,8 @@ Main pipeline orchestrator.
   python main.py
 
 Prompts for how many days of emails to process (default: 1).
+Sender allowlist is checked BEFORE downloading attachments — unknown
+senders are skipped entirely with no files written to disk.
 After each email is successfully processed, moves it to the
 "Processed-Pipeline" folder so it won't be picked up again.
 """
@@ -21,7 +23,7 @@ from pipeline.customer_classifier import classify
 from pipeline.template_parser import parse
 from pipeline.json_output import build_output, save_json
 from pipeline.email_mover import move_to_processed
-from pipeline.security import validate_attachment, scrub_prompt_injection
+from pipeline.security import validate_attachment, scrub_prompt_injection, is_allowed_sender
 from pipeline.template_suggester import suggest as suggest_template
 from config.settings import MOVE_AFTER_PROCESSING, TEMPLATES_DIR
 from database import db
@@ -75,7 +77,7 @@ def process_attachment(client, message, attachment_path, allowed_domains, allowe
         log.info(f"Already processed, skipping: {filename}")
         return True
 
-    # --- Security gate ---
+    # --- File-level security gate (sender already checked before download) ---
     ok, issues = validate_attachment(attachment_path, sender, allowed_domains, allowed_emails)
     for issue in issues:
         log.warning(f"SECURITY [{filename}]: {issue}")
@@ -163,7 +165,15 @@ def main():
     for message in fetch_unread_with_attachments(client, days=days):
         subject = message.get("subject", "(no subject)")
         msg_id = message["id"]
-        log.info(f"Processing email: {subject!r}")
+        sender = message.get("from", {}).get("emailAddress", {}).get("address", "")
+
+        # --- Sender check BEFORE downloading anything ---
+        if not is_allowed_sender(sender, allowed_domains, allowed_emails):
+            log.info(f"Skipping email from unknown sender (no download): {sender!r} | {subject!r}")
+            blocked += 1
+            continue
+
+        log.info(f"Processing email from {sender!r}: {subject!r}")
 
         paths = download_attachments(client, msg_id)
         if not paths:
@@ -184,7 +194,7 @@ def main():
 
     log.info(
         f"Pipeline complete. {total} attachment(s) processed, "
-        f"{blocked} blocked, {moved} email(s) moved."
+        f"{blocked} blocked/skipped, {moved} email(s) moved."
     )
 
 

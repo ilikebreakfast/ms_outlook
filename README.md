@@ -16,11 +16,16 @@ Outlook mailbox
   Fetch emails with attachments within that date range
         │
         ▼
+  ┌─ Sender allowlist check (BEFORE any download) ──────────────┐
+  │  Known sender?  ──Yes──▶  continue                          │
+  │  Unknown sender? ──No──▶  skip email entirely (no download) │
+  └─────────────────────────────────────────────────────────────┘
+        │
+        ▼
   Download PDFs / images  →  saved to  attachments/
         │
         ▼
-  Security checks (before any file is opened)
-    ├── Sender domain allowlist
+  File-level security checks
     ├── File size limit
     ├── Magic byte validation (real file type check)
     ├── PDF structure scan (embedded JS, auto-actions)
@@ -36,13 +41,17 @@ Outlook mailbox
         │
         ▼
   Identify customer
-    ├── 1. Sender email domain
-    ├── 2. ABN found in document
-    └── 3. Keyword matching
+    ├── 1. Exact sender email match  (personal addresses)
+    ├── 2. Sender domain match       (business addresses)
+    ├── 3. ABN found in document
+    └── 4. Keyword matching
         │
-        ▼
-  Parse fields using customer template (config/templates/*.json)
-    → customer_name, abn, address, invoice_number, dates, line_items
+        ├─ Match found ──▶  Parse fields using customer template
+        │                   → customer_name, abn, address, invoice_number, dates, line_items
+        │
+        └─ No match ─────▶  Auto-generate suggested template
+                            → config/suggested_templates/<sender>.json
+                            Review, edit if needed, copy to config/templates/ to activate
         │
         ▼
   Save structured JSON  →  parsed/
@@ -362,7 +371,7 @@ The pipeline processes emails from the internet, which means it will encounter p
 
 | Threat | Defence |
 |---|---|
-| Phishing from unknown senders | Sender domain allowlist — built from your customer templates automatically |
+| Phishing from unknown senders | Sender allowlist checked **before any download** — unknown senders are skipped entirely, no files written to disk |
 | Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file |
 | Malicious PDF with embedded JavaScript | PDF structure scan — rejects any PDF containing `/JS`, `/JavaScript`, `/OpenAction`, `/Launch`, `/EmbeddedFile`, `/XFA` |
 | Zip-bomb / memory exhaustion | File size limit (default 20 MB) |
@@ -455,6 +464,81 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
 
 ---
 
+## Personal email senders (hotmail, gmail, etc.)
+
+Business senders are identified by their email domain (e.g. `evergy.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
+
+In your customer template, use `sender_emails` instead of `sender_domains`:
+
+```json
+{
+  "customer_name": "Bonita Hua",
+  "sender_emails": ["bonitahua@hotmail.com"],
+  "sender_domains": [],
+  ...
+}
+```
+
+The security allowlist works the same way — `bonitahua@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
+
+**Matching priority:**
+
+| Priority | Strategy | Confidence | Use for |
+|---|---|---|---|
+| 1 | Exact email address | 98% | Personal senders |
+| 2 | Email domain | 95% | Business senders |
+| 3 | ABN in document | 90% | Either |
+| 4 | Keyword scoring | Variable | Fallback |
+
+See `config/templates/example_personal_contact.json` for a full example.
+
+---
+
+## Suggested templates for unknown senders
+
+When an email comes in from a sender not in any template, the pipeline automatically generates a draft template and saves it to `config/suggested_templates/`. Nothing is parsed for that email, but you get a starting point to work from.
+
+**What gets generated:**
+
+```json
+{
+  "_status": "SUGGESTED — review and copy to config/templates/ to activate",
+  "_generated_at": "2026-04-22 12:00 UTC",
+  "_sender_seen": "supplier@newcompany.com.au",
+  "_field_examples_found_in_document": {
+    "invoice_number_example": "INV00123",
+    "order_date_example": "15 Apr 2026",
+    "amounts_found": ["1,250.00", "85.00"],
+    "address_example": "42 Smith St Sydney NSW 2000"
+  },
+  "customer_name": "New Company",
+  "sender_emails": [],
+  "sender_domains": ["newcompany.com.au"],
+  "abns": ["12345678901"],
+  "keywords": ["newcompany", "order", "supply", ...],
+  "fields": {
+    "invoice_number": ["(?:Invoice|INV|PO)[\\s#:.]*(\\w{3,20})"],
+    ...
+  }
+}
+```
+
+The `_field_examples_found_in_document` section shows **actual values pulled from the PDF** so you can see what the regex needs to match without opening the document yourself.
+
+**To activate a suggested template:**
+
+1. Open `config/suggested_templates/<sender>.json`
+2. Check the field examples — adjust any regex patterns that look wrong
+3. Copy the file to `config/templates/`
+4. Remove the `_status`, `_generated_at`, `_sender_seen`, and `_field_examples_found_in_document` keys (they're just notes)
+5. Run the pipeline again — the sender will now be recognised
+
+If the same unknown sender emails again before you activate their template, the suggestion file is updated with any new field examples found — it doesn't overwrite your edits.
+
+> **Suggested templates are gitignored** — they won't be committed to the repo since they may contain customer-specific information.
+
+---
+
 ## Adding a new customer
 
 1. Copy `config/templates/example_new_customer.json`
@@ -513,9 +597,12 @@ ms_outlook/
 ├── config/
 │   ├── settings.py                ← loads .env, defines all config
 │   ├── token_cache.bin            ← created on first login (gitignored)
-│   └── templates/
-│       ├── evergy.json
-│       └── example_new_customer.json
+│   ├── templates/                 ← active customer templates
+│   │   ├── evergy.json
+│   │   ├── example_new_customer.json
+│   │   └── example_personal_contact.json
+│   └── suggested_templates/       ← auto-generated drafts (gitignored)
+│       └── supplier_at_gmail.com.json
 ├── auth/
 │   └── graph_client.py            ← Microsoft login + API calls
 ├── pipeline/
@@ -526,7 +613,8 @@ ms_outlook/
 │   ├── customer_classifier.py     ← identify customer
 │   ├── template_parser.py         ← extract fields using regex templates
 │   ├── json_output.py             ← validate + save JSON
-│   └── email_mover.py             ← move email after processing
+│   ├── email_mover.py             ← move email after processing
+│   └── template_suggester.py      ← auto-generate draft templates for unknown senders
 ├── database/
 │   └── db.py                      ← SQLite (records every run, enables dedup)
 ├── utils/
