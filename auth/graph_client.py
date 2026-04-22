@@ -72,7 +72,7 @@ def get_access_token() -> str:
 
 
 class GraphClient:
-    """Thin wrapper around Microsoft Graph REST API. Read-only."""
+    """Thin wrapper around Microsoft Graph REST API."""
 
     def __init__(self):
         self._token = get_access_token()
@@ -91,3 +91,10 @@ class GraphClient:
         resp = requests.get(url, headers=self._headers(), timeout=60)
         resp.raise_for_status()
         return resp.content
+
+    def post(self, path: str, json: dict = None) -> dict:
+        url = f"{GRAPH_BASE}{path}"
+        headers = {**self._headers(), "Content-Type": "application/json"}
+        resp = requests.post(url, headers=headers, json=json, timeout=30)
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}

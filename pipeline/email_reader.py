@@ -1,9 +1,10 @@
 """
-Fetches unread emails that have attachments from the target mailbox folder.
-Read-only. Does NOT mark emails as read.
+Fetches emails with attachments from the target mailbox folder,
+filtered to a given number of days back.
 """
 import logging
-from typing import Generator
+from datetime import datetime, timedelta, timezone
+from typing import Generator, Optional
 
 from auth.graph_client import GraphClient
 from config.settings import TARGET_FOLDER
@@ -19,24 +20,30 @@ def _get_folder_id(client: GraphClient, folder_name: str) -> str:
     return folders[0]["id"]
 
 
-def _messages_url(folder_id: str = None) -> str:
+def _messages_url(folder_id: Optional[str] = None) -> str:
     if folder_id:
         return f"/me/mailFolders/{folder_id}/messages"
     return "/me/messages"
 
 
-def fetch_unread_with_attachments(client: GraphClient) -> Generator[dict, None, None]:
+def fetch_unread_with_attachments(
+    client: GraphClient, days: int = 1
+) -> Generator[dict, None, None]:
     """
-    Yields unread email message dicts that have at least one attachment.
+    Yields email message dicts that have at least one attachment,
+    received within the last `days` days.
     Handles pagination automatically.
     """
     folder_id = None
     if TARGET_FOLDER:
         folder_id = _get_folder_id(client, TARGET_FOLDER)
 
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    log.info(f"Fetching emails with attachments since {since} ({days} day(s)).")
+
     url = _messages_url(folder_id)
     params = {
-        "$filter": "isRead eq false and hasAttachments eq true",
+        "$filter": f"hasAttachments eq true and receivedDateTime ge {since}",
         "$select": "id,subject,from,receivedDateTime,hasAttachments,isRead",
         "$top": 50,
         "$orderby": "receivedDateTime desc",
@@ -45,11 +52,10 @@ def fetch_unread_with_attachments(client: GraphClient) -> Generator[dict, None, 
     while url:
         data = client.get(url, params=params)
         messages = data.get("value", [])
-        log.info(f"Fetched {len(messages)} unread emails with attachments.")
+        log.info(f"Fetched page of {len(messages)} email(s).")
 
         for msg in messages:
             yield msg
 
-        # Follow pagination links
         url = data.get("@odata.nextLink", "").replace("https://graph.microsoft.com/v1.0", "")
-        params = None  # nextLink already includes params
+        params = None

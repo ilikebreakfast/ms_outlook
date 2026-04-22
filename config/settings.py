@@ -10,7 +10,7 @@ ROOT = Path(__file__).parent.parent
 # --- Microsoft Graph ---
 CLIENT_ID = os.getenv("MS_CLIENT_ID", "b0e9cc23-524a-48b7-bacb-0b76f62c9ceb")
 TENANT_ID = os.getenv("MS_TENANT_ID", "consumers")
-SCOPES = ["Mail.Read", "User.Read"]
+SCOPES = ["Mail.ReadWrite", "User.Read"]
 
 # Token cache file (persists login between runs)
 TOKEN_CACHE_PATH = ROOT / "config" / "token_cache.bin"
@@ -35,6 +35,12 @@ TEMPLATES_DIR   = ROOT / "config" / "templates"
 # --- OCR ---
 # Path to tesseract executable. Adjust if not on PATH.
 TESSERACT_CMD = os.getenv("TESSERACT_CMD", "tesseract")
+
+# --- Email movement ---
+# After successful processing, move emails to this folder.
+# Set to None to disable (emails stay in place, SQLite dedup prevents reprocessing).
+MOVE_AFTER_PROCESSING = os.getenv("MOVE_AFTER_PROCESSING", "true").lower() == "true"
+PROCESSED_FOLDER_NAME = os.getenv("PROCESSED_FOLDER_NAME", "Processed-Pipeline")
 
 # --- Confidence ---
 # Documents below this threshold are flagged for manual review (0.0 - 1.0)

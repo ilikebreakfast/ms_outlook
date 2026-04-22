@@ -1,15 +1,11 @@
 """
-Main pipeline orchestrator. Run this file to process new emails.
+Main pipeline orchestrator.
 
   python main.py
 
-Each unread email with attachments is processed:
-  1. Attachments downloaded
-  2. Text extracted (native PDF or OCR fallback)
-  3. Customer identified
-  4. Data parsed using customer template
-  5. JSON output saved
-  6. Result recorded in SQLite
+Prompts for how many days of emails to process (default: 1).
+After each email is successfully processed, moves it to the
+"Processed-Pipeline" folder so it won't be picked up again.
 """
 import logging
 import sys
@@ -23,13 +19,30 @@ from pipeline.text_extractor import extract_text
 from pipeline.customer_classifier import classify
 from pipeline.template_parser import parse
 from pipeline.json_output import build_output, save_json
+from pipeline.email_mover import move_to_processed
+from config.settings import MOVE_AFTER_PROCESSING
 from database import db
 
 setup_logging()
 log = logging.getLogger(__name__)
 
 
-def process_attachment(client, message, attachment_path):
+def _ask_days() -> int:
+    try:
+        raw = input("How many days of emails to process? [default: 1]: ").strip()
+        if not raw:
+            return 1
+        value = int(raw)
+        if value < 1:
+            raise ValueError
+        return value
+    except ValueError:
+        print("Invalid input — using default of 1 day.")
+        return 1
+
+
+def process_attachment(client, message, attachment_path) -> bool:
+    """Returns True if processing succeeded (used to decide whether to move the email)."""
     msg_id = message["id"]
     filename = attachment_path.name
     sender = message.get("from", {}).get("emailAddress", {}).get("address", "")
@@ -37,12 +50,11 @@ def process_attachment(client, message, attachment_path):
 
     if db.already_processed(msg_id, filename):
         log.info(f"Already processed, skipping: {filename}")
-        return
+        return True
 
     try:
         log.info(f"Extracting text: {filename}")
         text, is_native = extract_text(attachment_path)
-        raw_text_path = None  # set inside extract_text already
 
         log.info(f"Classifying customer for: {filename}")
         customer_name, class_confidence = classify(sender, text)
@@ -72,6 +84,8 @@ def process_attachment(client, message, attachment_path):
         else:
             log.info(f"Done: {filename} | customer={doc.customer_name} | conf={doc.confidence:.0%}")
 
+        return True
+
     except Exception as exc:
         log.error(f"Failed to process {filename}: {exc}", exc_info=True)
         db.record(
@@ -82,24 +96,41 @@ def process_attachment(client, message, attachment_path):
             processed_at=datetime.utcnow().isoformat() + "Z",
             error=str(exc),
         )
+        return False
 
 
 def main():
-    log.info("Pipeline starting.")
+    days = _ask_days()
+    log.info(f"Pipeline starting — processing last {days} day(s) of emails.")
+
     client = GraphClient()
 
     total = 0
-    for message in fetch_unread_with_attachments(client):
+    moved = 0
+
+    for message in fetch_unread_with_attachments(client, days=days):
         subject = message.get("subject", "(no subject)")
         msg_id = message["id"]
         log.info(f"Processing email: {subject!r}")
 
         paths = download_attachments(client, msg_id)
+        if not paths:
+            log.info(f"No supported attachments in: {subject!r}")
+            continue
+
+        all_succeeded = True
         for path in paths:
-            process_attachment(client, message, path)
+            success = process_attachment(client, message, path)
+            if not success:
+                all_succeeded = False
             total += 1
 
-    log.info(f"Pipeline complete. {total} attachment(s) processed.")
+        # Move email only if every attachment processed without error
+        if MOVE_AFTER_PROCESSING and all_succeeded:
+            if move_to_processed(client, msg_id):
+                moved += 1
+
+    log.info(f"Pipeline complete. {total} attachment(s) processed, {moved} email(s) moved.")
 
 
 if __name__ == "__main__":
