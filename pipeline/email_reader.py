@@ -46,7 +46,6 @@ def fetch_unread_with_attachments(
         "$filter": f"hasAttachments eq true and receivedDateTime ge {since}",
         "$select": "id,subject,from,receivedDateTime,hasAttachments,isRead",
         "$top": 50,
-        "$orderby": "receivedDateTime desc",
     }
 
     while url:
