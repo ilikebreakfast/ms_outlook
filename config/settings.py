@@ -17,6 +17,11 @@ SCOPES = ["Mail.ReadWrite", "User.Read"]
 # Token cache — persists login between runs, gitignored
 TOKEN_CACHE_PATH = ROOT / "config" / "token_cache.bin"
 
+# Fallback: reuse the outlook-mcp Node.js token if device flow is blocked.
+# Remove or set to empty string once Azure portal is configured correctly.
+_fallback_raw = os.getenv("FALLBACK_TOKEN_PATH", str(Path.home() / ".outlook-mcp-tokens.json"))
+FALLBACK_TOKEN_PATH = Path(_fallback_raw) if _fallback_raw else None
+
 # --- Mailbox ---
 TARGET_FOLDER = os.getenv("TARGET_FOLDER") or None
 
