@@ -1,0 +1,34 @@
+services:
+  pipeline:
+    build: .
+    image: ms_outlook_pipeline
+
+    # Keeps stdin open so the "how many days?" prompt works
+    stdin_open: true
+    tty: true
+
+    # Load credentials from your local .env (never copied into the image)
+    env_file:
+      - .env
+
+    # Override specific settings for the container environment
+    environment:
+      TESSERACT_CMD: tesseract          # already on PATH inside container
+      CLAMAV_ENABLED: "true"            # ClamAV is installed in the image
+      CLAMAV_CMD: clamscan
+
+    volumes:
+      # Persist output and login token between runs
+      - ./attachments:/app/attachments
+      - ./raw_text:/app/raw_text
+      - ./parsed:/app/parsed
+      - ./logs:/app/logs
+      - ./database:/app/database
+      - ./config/token_cache.bin:/app/config/token_cache.bin
+
+      # Mount templates so you can edit them without rebuilding the image
+      - ./config/templates:/app/config/templates
+
+    # No network access needed after auth — the pipeline only calls Graph API.
+    # Remove this if you hit connectivity issues.
+    # network_mode: none

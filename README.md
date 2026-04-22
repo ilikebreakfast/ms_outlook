@@ -19,9 +19,20 @@ Outlook mailbox
   Download PDFs / images  →  saved to  attachments/
         │
         ▼
+  Security checks (before any file is opened)
+    ├── Sender domain allowlist
+    ├── File size limit
+    ├── Magic byte validation (real file type check)
+    ├── PDF structure scan (embedded JS, auto-actions)
+    └── ClamAV antivirus scan (if enabled)
+        │
+        ▼
   Extract text
     ├── Native PDF (pdfplumber)
     └── Scanned PDF or image (PyMuPDF → Tesseract OCR)  →  saved to  raw_text/
+        │
+        ▼
+  Prompt injection scrubbing (sanitise text before parsing)
         │
         ▼
   Identify customer
@@ -61,9 +72,9 @@ Required for scanned PDFs and image files.
 **Windows:**
 1. Download the installer from https://github.com/UB-Mannheim/tesseract/wiki
 2. Run the installer (default path: `C:\Program Files\Tesseract-OCR\`)
-3. During install, tick **"Add to PATH"** — or set it manually in `.env` (see below)
+3. During install, tick **"Add to PATH"** — or set it manually in `.env`
 
-**Verify install:**
+**Verify:**
 ```bash
 tesseract --version
 ```
@@ -72,107 +83,162 @@ tesseract --version
 
 ## Setup
 
-### 1. Clone the repo
+### Option A — Run directly on Windows (simpler)
+
+**1. Clone the repo**
 ```bash
 git clone https://github.com/ilikebreakfast/ms_outlook.git
 cd ms_outlook
 ```
 
-### 2. Create a virtual environment (recommended)
+**2. Create a virtual environment**
 ```bash
 python -m venv venv
-
-# Windows
 venv\Scripts\activate
-
-# Mac / Linux
-source venv/bin/activate
 ```
 
-### 3. Install dependencies
+**3. Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Create your .env file
+**4. Create your `.env` file**
 ```bash
-cp .env.example .env
+copy .env.example .env
+```
+Open `.env` and fill in your values (see [Configuration](#configuration) below).
+
+**5. Run**
+```bash
+python main.py
 ```
 
-Then open `.env` and fill in your values:
+---
 
-```env
-MS_CLIENT_ID=your-azure-client-id
-MS_TENANT_ID=consumers
-TARGET_FOLDER=
-TESSERACT_CMD=tesseract
-MOVE_AFTER_PROCESSING=true
-PROCESSED_FOLDER_NAME=Processed-Pipeline
+### Option B — Run in Docker (recommended for security)
+
+Docker runs the pipeline in an isolated container. Even if a malicious PDF exploited the parser, it cannot reach your host machine. ClamAV is also included automatically — no separate install needed.
+
+**Prerequisites:** [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)
+
+**1. Clone and configure**
+```bash
+git clone https://github.com/ilikebreakfast/ms_outlook.git
+cd ms_outlook
+copy .env.example .env
+# Edit .env with your values
 ```
 
-The `.env` file is gitignored and will never be committed. It keeps your credentials off GitHub.
+**2. Build the image**
+```bash
+docker compose build
+```
+This installs Tesseract, ClamAV, and downloads the latest virus signatures. Takes a few minutes on first build; subsequent builds are fast.
+
+**3. Run**
+```bash
+docker compose run --rm pipeline
+```
+
+Output files (`attachments/`, `raw_text/`, `parsed/`, `logs/`, `database/`) are written back to your local machine via volume mounts, so you can access them normally after the container exits.
+
+**First run (login):** The device code prompt will appear in the terminal. Follow the instructions to sign in. The token is saved to `config/token_cache.bin` on your host machine and reused on subsequent runs.
+
+> **Note:** `CLAMAV_ENABLED` is automatically set to `true` inside the Docker container via `docker-compose.yml`. You don't need to change your `.env` for this.
 
 ---
 
 ## Configuration
 
-| Setting | Where | What it does |
+All settings go in `.env` (gitignored, never committed).
+
+| Setting | Default | What it does |
 |---|---|---|
-| `MS_CLIENT_ID` | `.env` | Azure app client ID (required) |
-| `MS_TENANT_ID` | `.env` | `consumers` for personal Outlook, tenant GUID for work accounts |
-| `TARGET_FOLDER` | `.env` | Folder to read from — leave blank for Inbox |
-| `TESSERACT_CMD` | `.env` | Full path to tesseract if not on PATH, e.g. `C:\Program Files\Tesseract-OCR\tesseract.exe` |
-| `MOVE_AFTER_PROCESSING` | `.env` | `true` moves processed emails to a separate folder (recommended) |
-| `PROCESSED_FOLDER_NAME` | `.env` | Name of the destination folder — created automatically if it doesn't exist |
-| `LOW_CONFIDENCE_THRESHOLD` | `config/settings.py` | Documents below this score (0.0–1.0) get `needs_review: true` |
+| `MS_CLIENT_ID` | — | Azure app client ID **(required)** |
+| `MS_TENANT_ID` | `consumers` | `consumers` for personal Outlook, tenant GUID for work accounts |
+| `TARGET_FOLDER` | *(blank = Inbox)* | Read from a specific folder e.g. `Orders` |
+| `TESSERACT_CMD` | `tesseract` | Full path if not on PATH e.g. `C:\Program Files\Tesseract-OCR\tesseract.exe` |
+| `CLAMAV_ENABLED` | `false` | Enable ClamAV antivirus scan — set to `true` if installed or using Docker |
+| `CLAMAV_CMD` | `clamscan` | Full path to clamscan if not on PATH |
+| `MOVE_AFTER_PROCESSING` | `true` | Move emails after processing to prevent reprocessing |
+| `PROCESSED_FOLDER_NAME` | `Processed-Pipeline` | Destination folder name (auto-created if missing) |
+
+`LOW_CONFIDENCE_THRESHOLD` (default `0.6`) is in `config/settings.py` — documents below this score are flagged `needs_review: true`.
+
+> **Credentials changed?** Delete `config/token_cache.bin` before the next run so MSAL prompts a fresh login with the updated permissions.
+
+---
+
+## Security
+
+The pipeline processes emails from the internet, which means it will encounter phishing emails and potentially malicious PDFs. The following defences run before any file is opened or parsed.
+
+### What's protected against
+
+| Threat | Defence |
+|---|---|
+| Phishing from unknown senders | Sender domain allowlist — built from your customer templates automatically |
+| Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file |
+| Malicious PDF with embedded JavaScript | PDF structure scan — rejects any PDF containing `/JS`, `/JavaScript`, `/OpenAction`, `/Launch`, `/EmbeddedFile`, `/XFA` |
+| Zip-bomb / memory exhaustion | File size limit (default 20 MB) |
+| Malware in attachments | ClamAV antivirus scan (when enabled) |
+| Path traversal in filenames (`../../evil.py`) | Filename sanitisation — strips directory components |
+| Prompt injection via PDF text | Text scrubbing — removes LLM instruction patterns before the text enters any parser |
+| Parser exploitation / sandbox escape | Docker isolation — parser runs in a container with no access to host filesystem beyond mounted output dirs |
+
+### ClamAV (antivirus)
+
+ClamAV is free, open-source antivirus software.
+
+**With Docker (easiest):** ClamAV is installed and enabled automatically inside the container. Nothing extra needed.
+
+**Without Docker (Windows native):**
+1. Download from https://www.clamav.net/downloads
+2. Install and note the install path (e.g. `C:\ClamAV\`)
+3. Run `freshclam.exe` to download virus signatures
+4. In `.env` set:
+   ```
+   CLAMAV_ENABLED=true
+   CLAMAV_CMD=C:\ClamAV\clamscan.exe
+   ```
+
+If ClamAV is not installed and `CLAMAV_ENABLED=false`, the pipeline skips the AV scan and logs a notice — it won't crash.
+
+### What Docker isolation adds
+
+When you run via Docker (`docker compose run`), the pipeline executes inside a container that:
+- Has **no access to your host filesystem** except the specific output folders you've mounted
+- Cannot reach other processes on your machine
+- Is **destroyed after each run** (`--rm` flag) — no state carries over
+
+This means that even if a zero-day exploit in PyMuPDF or pdfplumber was triggered by a crafted PDF, the attacker would land inside an empty container with nothing useful, not on your desktop.
+
+### What's not covered
+
+- **Emails you deliberately open yourself** — these defences apply to the pipeline only, not your Outlook client
+- **Links inside emails** — the pipeline never follows links, only downloads attachments listed by the Graph API
+- **Zero-day AV evasion** — ClamAV uses signature-based detection; novel malware may not be caught until signatures are updated (`freshclam`)
 
 ---
 
 ## Running
 
 ```bash
+# Native
 python main.py
+
+# Docker
+docker compose run --rm pipeline
 ```
 
-You'll be prompted at the start:
-
+You'll be prompted:
 ```
 How many days of emails to process? [default: 1]:
 ```
 
-- Press **Enter** to process only today/yesterday's emails (safe default).
-- Type a number (e.g. `7`) to go back further.
-- This filters at the server side — your 13,000+ unread emails in the inbox are not all fetched.
-
-**First run only:** You'll see a device login prompt:
-
-```
-============================================================
-To sign in, use a web browser to open the page https://microsoft.com/devicelogin
-and enter the code XXXXXXXX to authenticate.
-============================================================
-```
-
-1. Open the URL in your browser
-2. Enter the code shown
-3. Sign in with your Outlook account
-4. Return to the terminal — the pipeline continues automatically
-
-**After first login**, the token is cached in `config/token_cache.bin`. Subsequent runs are silent until the token expires (~90 days).
-
-> **Note:** If you change `MS_CLIENT_ID` or the permission scopes, delete `config/token_cache.bin` first so MSAL prompts a fresh login.
-
----
-
-## Email movement
-
-When `MOVE_AFTER_PROCESSING=true`, each email is moved to the `Processed-Pipeline` folder (or whatever you set) after all its attachments are processed successfully.
-
-- The folder is created automatically if it doesn't exist.
-- If any attachment fails, the email stays in place so you can retry.
-- This prevents the same email from being picked up on the next run.
-
-To disable, set `MOVE_AFTER_PROCESSING=false`. The pipeline will then rely on SQLite dedup instead — if an attachment has already been recorded with no error, it's skipped.
+- Press **Enter** for the last 24 hours (safe default for daily runs).
+- Type a number e.g. `7` to go back further.
+- Filtering happens at the Graph API — your full inbox is not fetched.
 
 ---
 
@@ -186,7 +252,7 @@ raw_text/<message_id>/      extracted text  (e.g. INV001.txt)
 parsed/<message_id>/        structured JSON (e.g. INV001.json)
 ```
 
-**Example JSON output:**
+**Example JSON:**
 ```json
 {
   "customer_name": "Evergy",
@@ -209,34 +275,30 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
 1. Copy `config/templates/example_new_customer.json`
 2. Rename it to your customer (e.g. `acme.json`)
 3. Fill in:
-   - `sender_domains` — the email domain(s) they send from
+   - `sender_domains` — the email domain(s) they send from (also used for the allowlist)
    - `abns` — their ABN(s) as 11 digits, no spaces
    - `keywords` — words that appear in their documents
    - `fields` — regex patterns for each data field you want to extract
 
-The pipeline picks up new template files automatically on the next run — no code changes needed.
+No code changes needed — new templates are picked up automatically on the next run.
 
 ---
 
 ## Checking results
 
-**View flagged documents:**
 ```bash
-sqlite3 database/pipeline.db "SELECT attachment_filename, customer_name, confidence FROM processed_documents WHERE needs_review=1;"
-```
+# Blocked / failed attachments
+sqlite3 database/pipeline.db "SELECT attachment_filename, error FROM processed_documents WHERE error IS NOT NULL;"
 
-**View all runs:**
-```bash
+# Documents flagged for manual review
+sqlite3 database/pipeline.db "SELECT attachment_filename, customer_name, confidence FROM processed_documents WHERE needs_review=1;"
+
+# All recent runs
 sqlite3 database/pipeline.db "SELECT * FROM processed_documents ORDER BY processed_at DESC LIMIT 20;"
 ```
 
-**View errors:**
 ```bash
-sqlite3 database/pipeline.db "SELECT attachment_filename, error FROM processed_documents WHERE error IS NOT NULL;"
-```
-
-**View logs:**
-```bash
+# Live log
 tail -f logs/pipeline.log
 ```
 
@@ -258,19 +320,23 @@ tail -f logs/pipeline.log
 ms_outlook/
 ├── main.py                        ← run this
 ├── requirements.txt
-├── .env                           ← your credentials (gitignored, never committed)
+├── Dockerfile                     ← builds isolated container with ClamAV + Tesseract
+├── docker-compose.yml             ← volume mounts, env wiring
+├── .dockerignore
+├── .env                           ← your credentials (gitignored)
 ├── .env.example                   ← safe template to copy
 ├── config/
 │   ├── settings.py                ← loads .env, defines all config
 │   ├── token_cache.bin            ← created on first login (gitignored)
 │   └── templates/
-│       ├── evergy.json            ← example: Evergy bills
+│       ├── evergy.json
 │       └── example_new_customer.json
 ├── auth/
 │   └── graph_client.py            ← Microsoft login + API calls
 ├── pipeline/
 │   ├── email_reader.py            ← fetch emails filtered by date range
 │   ├── attachment_downloader.py   ← download PDFs/images
+│   ├── security.py                ← all security checks (allowlist, AV, magic bytes, etc.)
 │   ├── text_extractor.py          ← extract text + OCR fallback
 │   ├── customer_classifier.py     ← identify customer
 │   ├── template_parser.py         ← extract fields using regex templates
@@ -279,11 +345,11 @@ ms_outlook/
 ├── database/
 │   └── db.py                      ← SQLite (records every run, enables dedup)
 ├── utils/
-│   └── logger.py                  ← logging setup
-├── attachments/                   ← original files saved here (gitignored)
-├── raw_text/                      ← extracted text saved here (gitignored)
-├── parsed/                        ← JSON output saved here (gitignored)
+│   └── logger.py
+├── attachments/                   ← original files (gitignored)
+├── raw_text/                      ← extracted text (gitignored)
+├── parsed/                        ← JSON output (gitignored)
 ├── logs/                          ← log files (gitignored)
 └── database/
-    └── pipeline.db                ← created automatically (gitignored)
+    └── pipeline.db                ← auto-created (gitignored)
 ```

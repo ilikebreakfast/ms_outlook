@@ -37,5 +37,10 @@ TESSERACT_CMD = os.getenv("TESSERACT_CMD", "tesseract")
 MOVE_AFTER_PROCESSING = os.getenv("MOVE_AFTER_PROCESSING", "true").lower() == "true"
 PROCESSED_FOLDER_NAME = os.getenv("PROCESSED_FOLDER_NAME", "Processed-Pipeline")
 
+# --- Security ---
+# ClamAV: set to "true" to enable AV scanning (requires clamscan on PATH or in container)
+CLAMAV_ENABLED = os.getenv("CLAMAV_ENABLED", "false").lower() == "true"
+CLAMAV_CMD     = os.getenv("CLAMAV_CMD", "clamscan")
+
 # --- Confidence ---
 LOW_CONFIDENCE_THRESHOLD = 0.6

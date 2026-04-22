@@ -1,0 +1,12 @@
+.env
+config/token_cache.bin
+attachments/
+raw_text/
+parsed/
+logs/
+database/
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.git/

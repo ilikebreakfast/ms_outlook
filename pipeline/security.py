@@ -7,14 +7,18 @@ Checks (in order):
   3. Magic byte validation        — confirm actual file type matches extension
   4. PDF structure scan           — flag embedded JavaScript, auto-actions, URIs
   5. Sender allowlist             — skip emails from unknown domains
-  6. Prompt injection scrubbing   — sanitise extracted text before it enters any parser
+  6. ClamAV antivirus scan        — optional, skipped gracefully if not installed
+  7. Prompt injection scrubbing   — sanitise extracted text before it enters any parser
 
 None of these checks modify or execute the file. They only read bytes.
 """
 import logging
 import re
+import subprocess
 from pathlib import Path
 from typing import Optional
+
+from config.settings import CLAMAV_ENABLED, CLAMAV_CMD
 
 log = logging.getLogger(__name__)
 
@@ -122,7 +126,44 @@ def scan_pdf_structure(path: Path) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Sender allowlist
+# 5. ClamAV antivirus scan
+# ---------------------------------------------------------------------------
+
+def scan_with_clamav(path: Path) -> Optional[str]:
+    """
+    Runs clamscan on the file. Returns an error string if infected or scan fails,
+    None if clean. Skipped silently if ClamAV is not enabled or not installed.
+    """
+    if not CLAMAV_ENABLED:
+        return None
+
+    try:
+        result = subprocess.run(
+            [CLAMAV_CMD, "--no-summary", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            log.info(f"ClamAV: clean — {path.name}")
+            return None
+        elif result.returncode == 1:
+            threat = result.stdout.strip().splitlines()[0] if result.stdout else "unknown threat"
+            return f"ClamAV: VIRUS DETECTED — {threat}"
+        else:
+            # returncode 2 = scan error (e.g. permission issue). Log but don't block.
+            log.warning(f"ClamAV scan error for {path.name}: {result.stderr.strip()}")
+            return None
+
+    except FileNotFoundError:
+        log.warning(f"ClamAV not found at {CLAMAV_CMD!r} — skipping AV scan. Set CLAMAV_CMD in .env.")
+        return None
+    except subprocess.TimeoutExpired:
+        return f"ClamAV scan timed out for {path.name}"
+
+
+# ---------------------------------------------------------------------------
+# 6. Sender allowlist
 # ---------------------------------------------------------------------------
 
 def is_allowed_sender(sender_email: str, allowed_domains: set[str]) -> bool:
@@ -181,6 +222,11 @@ def validate_attachment(path: Path, sender_email: str, allowed_domains: set[str]
     issues.extend(pdf_warnings)
     if pdf_warnings:
         # Treat embedded JS / auto-actions as fatal — do not process
+        fatal = True
+
+    av_err = scan_with_clamav(path)
+    if av_err:
+        issues.append(av_err)
         fatal = True
 
     if not is_allowed_sender(sender_email, allowed_domains):
