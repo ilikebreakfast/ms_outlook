@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+config/token_cache.bin
+attachments/
+raw_text/
+parsed/
+logs/
+database/
+*.db
