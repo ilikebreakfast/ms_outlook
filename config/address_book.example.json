@@ -1,0 +1,25 @@
+{
+  "_comment": "Copy this file to address_book.json and fill in your contacts. address_book.json is gitignored — it will not be committed.",
+  "contacts": [
+    {
+      "_comment": "Business sender — matched by email domain",
+      "name": "Example Corp",
+      "domains": ["example.com.au"],
+      "abns": ["12345678901"],
+      "keywords": ["example", "invoice", "supply"],
+      "template": "example_corp"
+    },
+    {
+      "_comment": "Personal sender (gmail/hotmail/etc) — matched by exact email address",
+      "name": "Jane Smith",
+      "emails": ["jane@hotmail.com"],
+      "keywords": ["jane", "smith", "order"],
+      "template": "janesmith"
+    },
+    {
+      "_comment": "Sender with no template yet — text is extracted and saved, email moved to Processed",
+      "name": "New Supplier",
+      "domains": ["newsupplier.com.au"]
+    }
+  ]
+}

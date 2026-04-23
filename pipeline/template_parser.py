@@ -1,26 +1,30 @@
 """
-Extracts structured data from raw text using a JSON customer template.
+Extracts structured data from raw text using a YAML customer template.
 
 Each template defines regex patterns for each field. The parser tries
 each pattern and returns the first match. Fields with no match return None.
 """
-import json
 import logging
 import re
 from pathlib import Path
 from typing import Optional
+
+import yaml
 
 from config.settings import TEMPLATES_DIR
 
 log = logging.getLogger(__name__)
 
 
-def _load_template(customer_name: str) -> Optional[dict]:
-    for f in TEMPLATES_DIR.glob("*.json"):
-        tmpl = json.loads(f.read_text(encoding="utf-8"))
-        if tmpl.get("customer_name") == customer_name:
-            return tmpl
-    return None
+def _load_template(template_name: str) -> Optional[dict]:
+    template_path = TEMPLATES_DIR / f"{template_name}.yaml"
+    if not template_path.exists():
+        return None
+    try:
+        return yaml.safe_load(template_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        log.warning(f"Failed to load template {template_name}.yaml: {e}")
+        return None
 
 
 def _extract_field(text: str, patterns: list[str]) -> Optional[str]:
@@ -45,15 +49,16 @@ def _extract_line_items(text: str, pattern: str) -> list[dict]:
     return items
 
 
-def parse(text: str, customer_name: str) -> dict:
+def parse(text: str, template_name: str) -> dict:
     """
     Returns a dict of extracted fields. Missing fields are None.
     Confidence is a simple ratio of non-null required fields.
+    template_name is the YAML file stem (e.g. "evergy", not "evergy.yaml").
     """
-    tmpl = _load_template(customer_name)
+    tmpl = _load_template(template_name)
     if not tmpl:
-        log.warning(f"No template found for customer: {customer_name!r}")
-        return {"error": "no_template"}
+        log.warning(f"No template found: {template_name!r}")
+        return {"error": "no_template", "_confidence": 0.0}
 
     fields = tmpl.get("fields", {})
     required_fields = tmpl.get("required_fields", list(fields.keys()))
@@ -71,6 +76,6 @@ def parse(text: str, customer_name: str) -> dict:
     confidence = extracted / len(required_fields) if required_fields else 0.0
     result["_confidence"] = round(confidence, 2)
 
-    log.info(f"Parsed {customer_name}: confidence={confidence:.0%}, "
+    log.info(f"Parsed {template_name!r}: confidence={confidence:.0%}, "
              f"{extracted}/{len(required_fields)} required fields found.")
     return result

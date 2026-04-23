@@ -4,10 +4,13 @@ Main pipeline orchestrator.
   python main.py
 
 Prompts for how many days of emails to process (default: 1).
-Sender allowlist is checked BEFORE downloading attachments — unknown
-senders are skipped entirely with no files written to disk.
-After each email is successfully processed, moves it to the
-"Processed-Pipeline" folder so it won't be picked up again.
+The sender allowlist is loaded from config/address_book.json BEFORE
+downloading any attachments — unknown senders are skipped entirely.
+
+If a sender has no linked template yet, the pipeline still downloads and
+extracts text, saves a JSON with status="extracted_only", and moves the
+email to Processed. Add a YAML template later and it will parse on the
+next run.
 """
 import json
 import logging
@@ -25,8 +28,15 @@ from pipeline.json_output import build_output, save_json
 from pipeline.email_mover import move_to_processed
 from pipeline.security import validate_attachment, scrub_prompt_injection, is_allowed_sender
 from pipeline.template_suggester import suggest as suggest_template
-from config.settings import MOVE_AFTER_PROCESSING, TEMPLATES_DIR
-from database import db
+from config.settings import MOVE_AFTER_PROCESSING, TEMPLATES_DIR, ADDRESS_BOOK_PATH
+
+try:
+    from database import db
+except ImportError:
+    class _DBStub:
+        def already_processed(self, *args, **kwargs): return False
+        def record(self, *args, **kwargs): pass
+    db = _DBStub()
 
 setup_logging()
 log = logging.getLogger(__name__)
@@ -46,27 +56,40 @@ def _ask_days() -> int:
         return 1
 
 
-def _load_allowlists() -> tuple[set[str], set[str]]:
-    """Collect sender_domains and sender_emails from every customer template."""
+def _load_contacts() -> list[dict]:
+    """Load contacts from config/address_book.json."""
+    if not ADDRESS_BOOK_PATH.exists():
+        log.warning("config/address_book.json not found — all senders will be allowed.")
+        return []
+    try:
+        data = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+        contacts = data.get("contacts", [])
+        log.info(f"Loaded {len(contacts)} contact(s) from address_book.json")
+        return contacts
+    except Exception as e:
+        log.warning(f"Failed to load address_book.json: {e}")
+        return []
+
+
+def _contacts_to_allowlists(contacts: list[dict]) -> tuple[set[str], set[str]]:
+    """Extract domain and email sets for the sender allowlist check."""
     domains: set[str] = set()
     emails: set[str] = set()
-    for f in TEMPLATES_DIR.glob("*.json"):
-        try:
-            tmpl = json.loads(f.read_text(encoding="utf-8"))
-            for d in tmpl.get("sender_domains", []):
-                domains.add(d.lower())
-            for e in tmpl.get("sender_emails", []):
-                emails.add(e.lower())
-        except Exception:
-            pass
+    for c in contacts:
+        for d in c.get("domains", []):
+            domains.add(d.lower())
+        for e in c.get("emails", []):
+            emails.add(e.lower())
     if domains or emails:
         log.info(f"Sender allowlist — domains: {sorted(domains)}, emails: {sorted(emails)}")
     else:
-        log.warning("No sender allowlist found in templates — all senders will be allowed.")
+        log.warning("No sender allowlist configured — all senders will be allowed.")
     return domains, emails
 
 
-def process_attachment(client, message, attachment_path, allowed_domains, allowed_emails) -> bool:
+def process_attachment(
+    client, message, attachment_path, allowed_domains, allowed_emails, contacts
+) -> bool:
     """Returns True if processing succeeded (used to decide whether to move the email)."""
     msg_id = message["id"]
     filename = attachment_path.name
@@ -98,23 +121,42 @@ def process_attachment(client, message, attachment_path, allowed_domains, allowe
         text, is_native = extract_text(attachment_path)
         text = scrub_prompt_injection(text)
 
-        log.info(f"Classifying customer for: {filename}")
-        customer_name, class_confidence = classify(sender, text)
+        log.info(f"Classifying sender for: {filename}")
+        customer_name, class_confidence, template_name = classify(sender, text, contacts)
 
-        if not customer_name or class_confidence < 0.5:
+        if not customer_name:
             display_name = message.get("from", {}).get("emailAddress", {}).get("name", "")
             suggestion_path = suggest_template(sender, display_name, text)
             if suggestion_path:
                 log.warning(
-                    f"No template matched for {sender!r} — "
+                    f"No contact matched {sender!r} — "
                     f"draft saved to {suggestion_path.relative_to(Path.cwd())}. "
-                    "Review and copy to config/templates/ to activate."
+                    "Add sender to config/address_book.json to allow future processing."
                 )
 
-        log.info(f"Parsing with template: {customer_name!r}")
-        parsed = parse(text, customer_name) if customer_name else {"_confidence": 0.0}
+        # Determine whether we have a usable template
+        can_parse = False
+        if template_name:
+            template_path = TEMPLATES_DIR / f"{template_name}.yaml"
+            if template_path.exists():
+                can_parse = True
+            else:
+                log.warning(
+                    f"Template file '{template_name}.yaml' not found — "
+                    "extracting text only. Create the file to enable field parsing."
+                )
 
-        doc = build_output(parsed, customer_name, class_confidence, message, attachment_path)
+        if can_parse:
+            log.info(f"Parsing with template: {template_name!r}")
+            parsed = parse(text, template_name)
+            doc = build_output(parsed, customer_name, class_confidence, message, attachment_path)
+        else:
+            log.info(f"No template for {customer_name!r} — saving extracted text only.")
+            doc = build_output(
+                {}, customer_name, class_confidence, message, attachment_path,
+                status="extracted_only"
+            )
+
         json_path = save_json(doc, attachment_path)
 
         db.record(
@@ -131,7 +173,12 @@ def process_attachment(client, message, attachment_path, allowed_domains, allowe
             processed_at=doc.processed_at,
         )
 
-        if doc.needs_review:
+        if doc.status == "extracted_only":
+            log.info(
+                f"Extracted only (no template): {filename} | customer={doc.customer_name} | "
+                "Add a YAML template to enable field parsing."
+            )
+        elif doc.needs_review:
             log.warning(f"LOW CONFIDENCE ({doc.confidence:.0%}) - flagged for review: {filename}")
         else:
             log.info(f"Done: {filename} | customer={doc.customer_name} | conf={doc.confidence:.0%}")
@@ -155,7 +202,8 @@ def main():
     days = _ask_days()
     log.info(f"Pipeline starting — processing last {days} day(s) of emails.")
 
-    allowed_domains, allowed_emails = _load_allowlists()
+    contacts = _load_contacts()
+    allowed_domains, allowed_emails = _contacts_to_allowlists(contacts)
     client = GraphClient()
 
     total = 0
@@ -182,7 +230,9 @@ def main():
 
         all_succeeded = True
         for path in paths:
-            success = process_attachment(client, message, path, allowed_domains, allowed_emails)
+            success = process_attachment(
+                client, message, path, allowed_domains, allowed_emails, contacts
+            )
             if not success:
                 all_succeeded = False
                 blocked += 1

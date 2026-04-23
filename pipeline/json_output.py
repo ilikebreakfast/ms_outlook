@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -36,7 +36,8 @@ class ParsedDocument(BaseModel):
     message_id: str = ""
     sender_email: str = ""
     received_at: str = ""
-    confidence: float = 0.0
+    confidence: Optional[float] = None
+    status: Literal["parsed", "extracted_only", "low_confidence"] = "parsed"
     needs_review: bool = False
     processed_at: str = ""
 
@@ -52,14 +53,27 @@ def build_output(
     classification_confidence: float,
     message: dict,
     attachment_path: Path,
+    status: Optional[str] = None,
 ) -> ParsedDocument:
     line_items = [
         LineItem(**item) for item in parsed.get("line_items", [])
         if isinstance(item, dict)
     ]
 
-    parse_confidence = parsed.get("_confidence", 0.0)
-    combined_confidence = round((classification_confidence + parse_confidence) / 2, 2)
+    if status == "extracted_only":
+        # No template was run — confidence reflects only how sure we are of the sender
+        combined_confidence = round(classification_confidence, 2)
+        doc_status: Literal["parsed", "extracted_only", "low_confidence"] = "extracted_only"
+        needs_review = True
+    else:
+        parse_confidence = parsed.get("_confidence", 0.0)
+        combined_confidence = round((classification_confidence + parse_confidence) / 2, 2)
+        if combined_confidence < LOW_CONFIDENCE_THRESHOLD:
+            doc_status = "low_confidence"
+            needs_review = True
+        else:
+            doc_status = "parsed"
+            needs_review = False
 
     doc = ParsedDocument(
         customer_name=customer_name or parsed.get("customer_name"),
@@ -74,7 +88,8 @@ def build_output(
         sender_email=message.get("from", {}).get("emailAddress", {}).get("address", ""),
         received_at=message.get("receivedDateTime", ""),
         confidence=combined_confidence,
-        needs_review=combined_confidence < LOW_CONFIDENCE_THRESHOLD,
+        status=doc_status,
+        needs_review=needs_review,
         processed_at=datetime.utcnow().isoformat() + "Z",
     )
     return doc
