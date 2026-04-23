@@ -471,12 +471,12 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
 **Example JSON (fully parsed):**
 ```json
 {
-  "customer_name": "Evergy",
-  "abn": "56623005836",
-  "address": "1905 36 Walker Street Rhodes NSW 2138",
+  "customer_name": "ACME Corp",
+  "abn": "12345678901",
+  "address": "42 Example Street Sydney NSW 2000",
   "order_date": "07 Apr 2026",
   "requested_delivery_date": "24 Apr 2026",
-  "invoice_number": "INV281930",
+  "invoice_number": "INV001234",
   "line_items": [],
   "confidence": 0.93,
   "status": "parsed",
@@ -504,19 +504,19 @@ The raw extracted text is in `raw_text/<message_id>/`. Add a YAML template and t
 
 ## Personal email senders (hotmail, gmail, etc.)
 
-Business senders are identified by their email domain (e.g. `evergy.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
+Business senders are identified by their email domain (e.g. `acmecorp.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
 
 In `config/address_book.json`, use `emails` instead of `domains`:
 
 ```json
 {
-  "name": "Bonita Hua",
-  "emails": ["bonitahua@hotmail.com"],
-  "template": "bonitahua"
+  "name": "Jane Smith",
+  "emails": ["jane.smith@hotmail.com"],
+  "template": "janesmith"
 }
 ```
 
-The allowlist check works the same way — `bonitahua@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
+The allowlist check works the same way — `jane.smith@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
 
 **Matching priority:**
 
@@ -578,32 +578,72 @@ If the same unknown sender emails again before you activate their template, the 
 
 ## Adding a new customer
 
-### Step 1 — Add them to the address book
+### Step 1 — Discover who's been sending you emails
 
-Open `config/address_book.json` and add an entry under `"contacts"`:
+Run this to scan your mailbox and generate ready-to-paste address book entries:
+
+```bash
+python manage.py list-senders          # last 30 days (default)
+python manage.py list-senders --days 90
+```
+
+Output:
+```
+Scanned 47 email(s) — found 3 unique sender(s).
+
+Already in address_book.json (1):
+  ✓  ACME Corp <billing@acmecorp.com.au>
+
+New senders not yet in address_book.json (2):
+  +  New Supplier <orders@newsupplier.com.au>
+  +  Jane Smith <jane@gmail.com>
+
+────────────────────────────────────────────────────────────
+Add these to config/address_book.json under "contacts":
+────────────────────────────────────────────────────────────
+{
+  "name": "New Supplier",
+  "domains": ["newsupplier.com.au"],
+  "template": ""
+},
+{
+  "name": "Jane Smith",
+  "emails": ["jane@gmail.com"],
+  "template": ""
+},
+```
+
+Personal addresses (gmail, hotmail, etc.) automatically use `"emails"` instead of `"domains"`.
+
+### Step 2 — Add them to the address book
+
+Paste the generated entries into `config/address_book.json` under `"contacts"`. You can also add `"abns"` and `"keywords"` fields to improve matching accuracy:
 
 ```json
 {
-  "name": "ACME Corp",
-  "domains": ["acmecorp.com.au"],
+  "name": "New Supplier",
+  "domains": ["newsupplier.com.au"],
   "abns": ["12345678901"],
-  "keywords": ["acme", "purchase order"],
-  "template": "acme"
+  "keywords": ["supply", "purchase order"],
+  "template": "newsupplier"
 }
 ```
 
-Use `"emails"` instead of `"domains"` for personal senders (gmail, hotmail, etc.).
-
 The pipeline will now download and extract text from their emails immediately — even before you write a template.
 
-### Step 2 — Create a parsing template (optional)
+### Step 3 — Create a parsing template (optional)
 
-Copy `config/templates/example_new_customer.yaml`, rename to match the `"template"` value above (e.g. `acme.yaml`), and fill in the `fields` section with regex patterns for the data you want to extract.
+Copy `config/templates/example_new_customer.yaml`, rename to match the `"template"` value above (e.g. `newsupplier.yaml`), and fill in the `fields` section with regex patterns for the data you want to extract.
 
-**Tips:**
-- Run `python manage.py test-template acme <path-to-pdf>` to check which fields match
-- Add `--show-text` to see the extracted PDF text, which helps when writing patterns
-- Regex patterns use single backslashes in YAML (e.g. `\d+`, not `\\d+`)
+```bash
+# Check which fields match against a real PDF from that sender
+python manage.py test-template newsupplier invoice.pdf
+
+# Add --show-text to see the raw extracted text (useful for writing patterns)
+python manage.py test-template newsupplier invoice.pdf --show-text
+```
+
+Regex patterns use single backslashes in YAML (e.g. `\d+`, not `\\d+`).
 
 No code changes needed — new templates are picked up automatically on the next run.
 
@@ -644,7 +684,7 @@ tail -f logs/pipeline.log
 ```
 ms_outlook/
 ├── main.py                        ← run this
-├── manage.py                      ← management CLI (test-template, etc.)
+├── manage.py                      ← management CLI (list-senders, test-template)
 ├── requirements.txt
 ├── Dockerfile                     ← builds isolated container with ClamAV + Tesseract
 ├── docker-compose.yml             ← volume mounts, env wiring
@@ -655,7 +695,7 @@ ms_outlook/
 │   ├── address_book.json          ← sender allowlist + customer→template links
 │   ├── token_cache.bin            ← created on first login (gitignored)
 │   ├── templates/                 ← active customer YAML templates (parsing rules only)
-│   │   ├── evergy.yaml
+│   │   ├── acme.yaml
 │   │   ├── example_new_customer.yaml
 │   │   └── example_personal_contact.yaml
 │   └── suggested_templates/       ← auto-generated drafts (gitignored)
