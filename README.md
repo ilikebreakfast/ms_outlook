@@ -471,12 +471,12 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
 **Example JSON (fully parsed):**
 ```json
 {
-  "customer_name": "Evergy",
-  "abn": "56623005836",
-  "address": "1905 36 Walker Street Rhodes NSW 2138",
+  "customer_name": "ACME Corp",
+  "abn": "12345678901",
+  "address": "42 Example Street Sydney NSW 2000",
   "order_date": "07 Apr 2026",
   "requested_delivery_date": "24 Apr 2026",
-  "invoice_number": "INV281930",
+  "invoice_number": "INV001234",
   "line_items": [],
   "confidence": 0.93,
   "status": "parsed",
@@ -504,19 +504,19 @@ The raw extracted text is in `raw_text/<message_id>/`. Add a YAML template and t
 
 ## Personal email senders (hotmail, gmail, etc.)
 
-Business senders are identified by their email domain (e.g. `evergy.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
+Business senders are identified by their email domain (e.g. `acmecorp.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
 
 In `config/address_book.json`, use `emails` instead of `domains`:
 
 ```json
 {
-  "name": "Bonita Hua",
-  "emails": ["bonitahua@hotmail.com"],
-  "template": "bonitahua"
+  "name": "Jane Smith",
+  "emails": ["jane.smith@hotmail.com"],
+  "template": "janesmith"
 }
 ```
 
-The allowlist check works the same way — `bonitahua@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
+The allowlist check works the same way — `jane.smith@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
 
 **Matching priority:**
 
@@ -655,7 +655,7 @@ ms_outlook/
 │   ├── address_book.json          ← sender allowlist + customer→template links
 │   ├── token_cache.bin            ← created on first login (gitignored)
 │   ├── templates/                 ← active customer YAML templates (parsing rules only)
-│   │   ├── evergy.yaml
+│   │   ├── acme.yaml
 │   │   ├── example_new_customer.yaml
 │   │   └── example_personal_contact.yaml
 │   └── suggested_templates/       ← auto-generated drafts (gitignored)
