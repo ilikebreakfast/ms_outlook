@@ -1,12 +1,46 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Credentials and secrets
 .env
 config/token_cache.bin
-config/suggested_templates/
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Pipeline runtime output (may contain email content)
 attachments/
 raw_text/
 parsed/
 logs/
 database/
 *.db
+
+# Customer data — address book and real templates are private
+# Copy address_book.example.json → address_book.json and fill in your contacts
+config/address_book.json
+# Real customer templates (contain ABNs, email addresses, regex tuned to private docs)
+# Example templates (example_*.yaml) are committed as reference — real ones are not
+config/templates/*.yaml
+!config/templates/example_*.yaml
+
+# Auto-generated template drafts (may contain customer info)
+config/suggested_templates/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

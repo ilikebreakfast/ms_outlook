@@ -46,12 +46,17 @@ Outlook mailbox
     ├── 3. ABN found in document
     └── 4. Keyword matching
         │
-        ├─ Match found ──▶  Parse fields using customer template
-        │                   → customer_name, abn, address, invoice_number, dates, line_items
+        ├─ Match found, template linked ──▶  Parse fields using YAML template
+        │                                   → customer_name, abn, address, invoice_number, dates, line_items
         │
-        └─ No match ─────▶  Auto-generate suggested template
-                            → config/suggested_templates/<sender>.json
-                            Review, edit if needed, copy to config/templates/ to activate
+        ├─ Match found, no template yet ──▶  Save raw text only  (status: extracted_only)
+        │                                   → email still moved to Processed
+        │                                   → add a YAML template later to enable parsing
+        │
+        └─ No match ──────────────────────▶  Auto-generate suggested YAML template
+                                            → config/suggested_templates/<sender>.yaml
+                                            → includes _address_book_entry snippet to copy
+                                            Add to address_book.json + copy template to activate
         │
         ▼
   Save structured JSON  →  parsed/
@@ -273,6 +278,17 @@ Required for scanned PDFs and image files.
 tesseract --version
 ```
 
+> **"Tesseract is not installed or it's not in your PATH"** — `pytesseract` is just a Python wrapper; the actual Tesseract binary must be installed separately. Set the full path in `.env`:
+> ```env
+> # Windows
+> TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
+> # Mac (Homebrew)
+> TESSERACT_CMD=/usr/local/bin/tesseract
+> # Linux
+> TESSERACT_CMD=/usr/bin/tesseract
+> ```
+> If running via Docker, Tesseract is pre-installed in the container — no `.env` change needed.
+
 ---
 
 ## Setup
@@ -323,15 +339,21 @@ copy .env.example .env
 # Edit .env with your values
 ```
 
-**2. Build the image**
+**2. Build the image (first time only)**
 ```bash
 docker compose build
 ```
-This installs Tesseract, ClamAV, and downloads the latest virus signatures. Takes a few minutes on first build; subsequent builds are fast.
+This installs Tesseract, ClamAV, and downloads the latest virus signatures. Takes a few minutes the first time. You only need to re-run this if `Dockerfile` or `requirements.txt` changes.
 
 **3. Run**
 ```bash
 docker compose run --rm pipeline
+```
+For every run after the first, skip the build step — just run `docker compose run --rm pipeline` directly. The image is reused as-is.
+
+To refresh ClamAV signatures without a full rebuild:
+```bash
+docker compose run --rm pipeline freshclam
 ```
 
 Output files (`attachments/`, `raw_text/`, `parsed/`, `logs/`, `database/`) are written back to your local machine via volume mounts, so you can access them normally after the container exits.
@@ -446,40 +468,55 @@ raw_text/<message_id>/      extracted text  (e.g. INV001.txt)
 parsed/<message_id>/        structured JSON (e.g. INV001.json)
 ```
 
-**Example JSON:**
+**Example JSON (fully parsed):**
 ```json
 {
-  "customer_name": "Evergy",
-  "abn": "56623005836",
-  "address": "1905 36 Walker Street Rhodes NSW 2138",
+  "customer_name": "ACME Corp",
+  "abn": "12345678901",
+  "address": "42 Example Street Sydney NSW 2000",
   "order_date": "07 Apr 2026",
   "requested_delivery_date": "24 Apr 2026",
-  "invoice_number": "INV281930",
+  "invoice_number": "INV001234",
   "line_items": [],
   "confidence": 0.93,
+  "status": "parsed",
   "needs_review": false,
   "processed_at": "2026-04-22T03:00:00Z"
 }
 ```
 
+**Example JSON (sender in address book, no template yet):**
+```json
+{
+  "customer_name": "New Supplier",
+  "abn": null,
+  "invoice_number": null,
+  "line_items": [],
+  "confidence": 0.95,
+  "status": "extracted_only",
+  "needs_review": true,
+  "processed_at": "2026-04-22T03:00:00Z"
+}
+```
+The raw extracted text is in `raw_text/<message_id>/`. Add a YAML template and the next run will parse the fields.
+
 ---
 
 ## Personal email senders (hotmail, gmail, etc.)
 
-Business senders are identified by their email domain (e.g. `evergy.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
+Business senders are identified by their email domain (e.g. `acmecorp.com.au`). For personal senders, the domain is shared by millions of people and useless for identification — instead, use the exact email address.
 
-In your customer template, use `sender_emails` instead of `sender_domains`:
+In `config/address_book.json`, use `emails` instead of `domains`:
 
 ```json
 {
-  "customer_name": "Bonita Hua",
-  "sender_emails": ["bonitahua@hotmail.com"],
-  "sender_domains": [],
-  ...
+  "name": "Jane Smith",
+  "emails": ["jane.smith@hotmail.com"],
+  "template": "janesmith"
 }
 ```
 
-The security allowlist works the same way — `bonitahua@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
+The allowlist check works the same way — `jane.smith@hotmail.com` is allowed through even though `hotmail.com` isn't a trusted domain.
 
 **Matching priority:**
 
@@ -490,50 +527,50 @@ The security allowlist works the same way — `bonitahua@hotmail.com` is allowed
 | 3 | ABN in document | 90% | Either |
 | 4 | Keyword scoring | Variable | Fallback |
 
-See `config/templates/example_personal_contact.json` for a full example.
+See `config/templates/example_personal_contact.yaml` for a full template example.
 
 ---
 
 ## Suggested templates for unknown senders
 
-When an email comes in from a sender not in any template, the pipeline automatically generates a draft template and saves it to `config/suggested_templates/`. Nothing is parsed for that email, but you get a starting point to work from.
+When an email comes in from a sender not in `config/address_book.json`, the pipeline automatically generates a draft YAML template in `config/suggested_templates/`. Nothing is parsed for that email, but you get a starting point to work from.
 
 **What gets generated:**
 
-```json
-{
-  "_status": "SUGGESTED — review and copy to config/templates/ to activate",
-  "_generated_at": "2026-04-22 12:00 UTC",
-  "_sender_seen": "supplier@newcompany.com.au",
-  "_field_examples_found_in_document": {
-    "invoice_number_example": "INV00123",
-    "order_date_example": "15 Apr 2026",
-    "amounts_found": ["1,250.00", "85.00"],
-    "address_example": "42 Smith St Sydney NSW 2000"
-  },
-  "customer_name": "New Company",
-  "sender_emails": [],
-  "sender_domains": ["newcompany.com.au"],
-  "abns": ["12345678901"],
-  "keywords": ["newcompany", "order", "supply", ...],
-  "fields": {
-    "invoice_number": ["(?:Invoice|INV|PO)[\\s#:.]*(\\w{3,20})"],
-    ...
-  }
-}
+```yaml
+_status: SUGGESTED — review patterns, then copy to config/templates/ to activate
+_generated_at: '2026-04-22 12:00 UTC'
+_address_book_entry:          # <-- copy this into config/address_book.json
+  name: New Company
+  domains:
+    - newcompany.com.au
+  abns:
+    - '12345678901'
+  keywords: [newcompany, order, supply, ...]
+  template: supplier_at_newcompany_com_au
+_field_examples_found_in_document:   # actual values from the PDF
+  invoice_number_example: INV00123
+  order_date_example: 15 Apr 2026
+  amounts_found: ['1,250.00', '85.00']
+customer_name: New Company
+required_fields: [invoice_number, order_date]
+fields:
+  invoice_number:
+    - '(?:Invoice|INV|PO)[\s#:.]*(\w{3,20})'
+  ...
 ```
 
-The `_field_examples_found_in_document` section shows **actual values pulled from the PDF** so you can see what the regex needs to match without opening the document yourself.
+The `_field_examples_found_in_document` section shows **actual values pulled from the PDF** so you can see what the regex needs to match. Because templates now use YAML, regex patterns need only **single backslashes** — no more `\\d`, just `\d`.
 
 **To activate a suggested template:**
 
-1. Open `config/suggested_templates/<sender>.json`
-2. Check the field examples — adjust any regex patterns that look wrong
-3. Copy the file to `config/templates/`
-4. Remove the `_status`, `_generated_at`, `_sender_seen`, and `_field_examples_found_in_document` keys (they're just notes)
-5. Run the pipeline again — the sender will now be recognised
+1. Open `config/suggested_templates/<sender>.yaml`
+2. Copy the `_address_book_entry` block into `config/address_book.json` under `"contacts"`
+3. Adjust any regex patterns in `fields` that look wrong (use `--show-text` to see the raw PDF text)
+4. Copy the file to `config/templates/` (you can remove the `_status`, `_generated_at`, and `_field_examples_found_in_document` keys, but it still works with them present)
+5. Run the pipeline again — the sender will now be recognised and their attachments parsed
 
-If the same unknown sender emails again before you activate their template, the suggestion file is updated with any new field examples found — it doesn't overwrite your edits.
+If the same unknown sender emails again before you activate their template, the suggestion file is updated with any new field examples found — it won't overwrite your edits.
 
 > **Suggested templates are gitignored** — they won't be committed to the repo since they may contain customer-specific information.
 
@@ -541,13 +578,72 @@ If the same unknown sender emails again before you activate their template, the 
 
 ## Adding a new customer
 
-1. Copy `config/templates/example_new_customer.json`
-2. Rename it to your customer (e.g. `acme.json`)
-3. Fill in:
-   - `sender_domains` — the email domain(s) they send from (also used for the allowlist)
-   - `abns` — their ABN(s) as 11 digits, no spaces
-   - `keywords` — words that appear in their documents
-   - `fields` — regex patterns for each data field you want to extract
+### Step 1 — Discover who's been sending you emails
+
+Run this to scan your mailbox and generate ready-to-paste address book entries:
+
+```bash
+python manage.py list-senders          # last 30 days (default)
+python manage.py list-senders --days 90
+```
+
+Output:
+```
+Scanned 47 email(s) — found 3 unique sender(s).
+
+Already in address_book.json (1):
+  ✓  ACME Corp <billing@acmecorp.com.au>
+
+New senders not yet in address_book.json (2):
+  +  New Supplier <orders@newsupplier.com.au>
+  +  Jane Smith <jane@gmail.com>
+
+────────────────────────────────────────────────────────────
+Add these to config/address_book.json under "contacts":
+────────────────────────────────────────────────────────────
+{
+  "name": "New Supplier",
+  "domains": ["newsupplier.com.au"],
+  "template": ""
+},
+{
+  "name": "Jane Smith",
+  "emails": ["jane@gmail.com"],
+  "template": ""
+},
+```
+
+Personal addresses (gmail, hotmail, etc.) automatically use `"emails"` instead of `"domains"`.
+
+### Step 2 — Add them to the address book
+
+Paste the generated entries into `config/address_book.json` under `"contacts"`. You can also add `"abns"` and `"keywords"` fields to improve matching accuracy:
+
+```json
+{
+  "name": "New Supplier",
+  "domains": ["newsupplier.com.au"],
+  "abns": ["12345678901"],
+  "keywords": ["supply", "purchase order"],
+  "template": "newsupplier"
+}
+```
+
+The pipeline will now download and extract text from their emails immediately — even before you write a template.
+
+### Step 3 — Create a parsing template (optional)
+
+Copy `config/templates/example_new_customer.yaml`, rename to match the `"template"` value above (e.g. `newsupplier.yaml`), and fill in the `fields` section with regex patterns for the data you want to extract.
+
+```bash
+# Check which fields match against a real PDF from that sender
+python manage.py test-template newsupplier invoice.pdf
+
+# Add --show-text to see the raw extracted text (useful for writing patterns)
+python manage.py test-template newsupplier invoice.pdf --show-text
+```
+
+Regex patterns use single backslashes in YAML (e.g. `\d+`, not `\\d+`).
 
 No code changes needed — new templates are picked up automatically on the next run.
 
@@ -588,21 +684,22 @@ tail -f logs/pipeline.log
 ```
 ms_outlook/
 ├── main.py                        ← run this
+├── manage.py                      ← management CLI (list-senders, test-template)
 ├── requirements.txt
 ├── Dockerfile                     ← builds isolated container with ClamAV + Tesseract
 ├── docker-compose.yml             ← volume mounts, env wiring
-├── .dockerignore
 ├── .env                           ← your credentials (gitignored)
 ├── .env.example                   ← safe template to copy
 ├── config/
 │   ├── settings.py                ← loads .env, defines all config
+│   ├── address_book.json          ← sender allowlist + customer→template links
 │   ├── token_cache.bin            ← created on first login (gitignored)
-│   ├── templates/                 ← active customer templates
-│   │   ├── evergy.json
-│   │   ├── example_new_customer.json
-│   │   └── example_personal_contact.json
+│   ├── templates/                 ← active customer YAML templates (parsing rules only)
+│   │   ├── acme.yaml
+│   │   ├── example_new_customer.yaml
+│   │   └── example_personal_contact.yaml
 │   └── suggested_templates/       ← auto-generated drafts (gitignored)
-│       └── supplier_at_gmail.com.json
+│       └── supplier_at_newcompany_com_au.yaml
 ├── auth/
 │   └── graph_client.py            ← Microsoft login + API calls
 ├── pipeline/
@@ -610,13 +707,13 @@ ms_outlook/
 │   ├── attachment_downloader.py   ← download PDFs/images
 │   ├── security.py                ← all security checks (allowlist, AV, magic bytes, etc.)
 │   ├── text_extractor.py          ← extract text + OCR fallback
-│   ├── customer_classifier.py     ← identify customer
-│   ├── template_parser.py         ← extract fields using regex templates
+│   ├── customer_classifier.py     ← identify customer from address book
+│   ├── template_parser.py         ← extract fields using YAML templates
 │   ├── json_output.py             ← validate + save JSON
 │   ├── email_mover.py             ← move email after processing
 │   └── template_suggester.py      ← auto-generate draft templates for unknown senders
 ├── database/
-│   └── db.py                      ← SQLite (records every run, enables dedup)
+│   └── db.py                      ← SQLite (records every run, enables dedup) ⚠️ not yet implemented
 ├── utils/
 │   └── logger.py
 ├── attachments/                   ← original files (gitignored)
