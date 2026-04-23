@@ -2,13 +2,12 @@
 Validates and writes the final structured JSON output.
 Uses Pydantic for schema validation.
 """
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from config.settings import PARSED_DIR, LOW_CONFIDENCE_THRESHOLD
 
@@ -23,6 +22,10 @@ class LineItem(BaseModel):
 
 
 class ParsedDocument(BaseModel):
+    # Allow any extra fields from templates (amount_due, due_date, etc.)
+    # so custom fields appear in the JSON without modifying this model.
+    model_config = ConfigDict(extra="allow")
+
     customer_name: Optional[str] = None
     abn: Optional[str] = None
     address: Optional[str] = None
@@ -44,7 +47,7 @@ class ParsedDocument(BaseModel):
     @field_validator("needs_review", mode="before")
     @classmethod
     def _set_needs_review(cls, v):
-        return v  # set explicitly by caller
+        return v
 
 
 def build_output(
@@ -61,7 +64,6 @@ def build_output(
     ]
 
     if status == "extracted_only":
-        # No template was run — confidence reflects only how sure we are of the sender
         combined_confidence = round(classification_confidence, 2)
         doc_status: Literal["parsed", "extracted_only", "low_confidence"] = "extracted_only"
         needs_review = True
@@ -75,13 +77,16 @@ def build_output(
             doc_status = "parsed"
             needs_review = False
 
+    # Pass all template-extracted fields through — any field not in the
+    # model's explicit list is stored as an extra field and included in JSON.
+    template_fields = {
+        k: v for k, v in parsed.items()
+        if not k.startswith("_") and k != "line_items"
+    }
+
     doc = ParsedDocument(
+        **template_fields,
         customer_name=customer_name or parsed.get("customer_name"),
-        abn=parsed.get("abn"),
-        address=parsed.get("address"),
-        order_date=parsed.get("order_date"),
-        requested_delivery_date=parsed.get("requested_delivery_date"),
-        invoice_number=parsed.get("invoice_number"),
         line_items=line_items,
         source_file=str(attachment_path),
         message_id=message.get("id", ""),
