@@ -124,27 +124,12 @@ def process_attachment(
         log.info(f"Classifying sender for: {filename}")
         customer_name, class_confidence, template_name = classify(sender, text, contacts)
 
-        if not customer_name:
-            display_name = message.get("from", {}).get("emailAddress", {}).get("name", "")
-            suggestion_path = suggest_template(sender, display_name, text)
-            if suggestion_path:
-                log.warning(
-                    f"No contact matched {sender!r} — "
-                    f"draft saved to {suggestion_path.relative_to(Path.cwd())}. "
-                    "Add sender to config/address_book.json to allow future processing."
-                )
-
         # Determine whether we have a usable template
         can_parse = False
         if template_name:
             template_path = TEMPLATES_DIR / f"{template_name}.yaml"
             if template_path.exists():
                 can_parse = True
-            else:
-                log.warning(
-                    f"Template file '{template_name}.yaml' not found — "
-                    "extracting text only. Create the file to enable field parsing."
-                )
 
         if can_parse:
             log.info(f"Parsing with template: {template_name!r}")
@@ -156,6 +141,15 @@ def process_attachment(
                 {}, customer_name, class_confidence, message, attachment_path,
                 status="extracted_only"
             )
+            # Auto-generate a YAML template suggestion so the user has a starting point
+            display_name = message.get("from", {}).get("emailAddress", {}).get("name", "")
+            suggestion_path = suggest_template(sender, display_name, text)
+            if suggestion_path:
+                log.info(
+                    f"Template suggestion saved to "
+                    f"{suggestion_path.relative_to(Path.cwd())} — "
+                    "review patterns and copy to config/templates/ to enable parsing."
+                )
 
         json_path = save_json(doc, attachment_path)
 
