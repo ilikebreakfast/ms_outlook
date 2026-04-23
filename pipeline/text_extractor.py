@@ -31,9 +31,9 @@ MIN_CHARS_PER_PAGE = 50  # below this = likely scanned
 
 
 def _ocr_image(img: Image.Image) -> str:
-    # Tesseract only accepts RGB or greyscale — convert CMYK, P, RGBA, etc.
-    if img.mode not in ("RGB", "L"):
-        img = img.convert("RGB")
+    # Force full decode and normalise to RGB — Image.open() is lazy and
+    # some JPEGs (CMYK, YCbCr, unusual encodings) crash pytesseract otherwise.
+    img = img.convert("RGB")
     return pytesseract.image_to_string(img, lang="eng")
 
 
