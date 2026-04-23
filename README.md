@@ -368,6 +368,8 @@ Output files (`attachments/`, `raw_text/`, `parsed/`, `logs/`, `database/`) are 
 
 All settings go in `.env` (gitignored, never committed).
 
+### Core
+
 | Setting | Default | What it does |
 |---|---|---|
 | `MS_CLIENT_ID` | — | Azure app client ID **(required)** |
@@ -378,6 +380,26 @@ All settings go in `.env` (gitignored, never committed).
 | `CLAMAV_CMD` | `clamscan` | Full path to clamscan if not on PATH |
 | `MOVE_AFTER_PROCESSING` | `true` | Move emails after processing to prevent reprocessing |
 | `PROCESSED_FOLDER_NAME` | `Processed-Pipeline` | Destination folder name (auto-created if missing) |
+
+### Scheduling
+
+| Setting | Default | What it does |
+|---|---|---|
+| `DEFAULT_SCHEDULE_MINUTES` | `60` | Poll interval when running with `--schedule` or via the Docker scheduler service |
+
+### Automation
+
+| Setting | Default | What it does |
+|---|---|---|
+| `AUTO_APPROVE_CONFIDENCE` | `0` | When `> 0`, automatically promote a suggested template to active status if its field-extraction confidence meets this threshold. `0.85` is a reasonable starting point. `0` disables auto-approval entirely. |
+| `PERSONAL_EMAIL_DOMAINS` | *(built-in list)* | Extra comma-separated domains treated as personal (matched by exact email, not domain). Built-in: `gmail.com`, `hotmail.com`, `outlook.com`, `yahoo.com`, `live.com`, `icloud.com`, `bigpond.com`, `optusnet.com.au` |
+
+### Notifications
+
+| Setting | Default | What it does |
+|---|---|---|
+| `WEBHOOK_URL` | *(blank)* | POST a run summary here after every pipeline run. Supports Slack, Teams, n8n, and any webhook-accepting service. |
+| `ALERT_WEBHOOK_URL` | *(falls back to `WEBHOOK_URL`)* | Separate URL for urgent alerts: auth failures, large review queue, new unknown senders. |
 
 `LOW_CONFIDENCE_THRESHOLD` (default `0.6`) is in `config/settings.py` — documents below this score are flagged `needs_review: true`.
 
@@ -393,7 +415,7 @@ The pipeline processes emails from the internet, which means it will encounter p
 
 | Threat | Defence |
 |---|---|
-| Phishing from unknown senders | Sender allowlist checked **before any download** — unknown senders are skipped entirely, no files written to disk |
+| Phishing from unknown senders | Sender allowlist checked **before any download** — unknown senders are skipped entirely, no files written to disk. If `address_book.json` is missing or corrupt, **all senders are denied** (fail-closed). |
 | Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file |
 | Malicious PDF with embedded JavaScript | PDF structure scan — rejects any PDF containing `/JS`, `/JavaScript`, `/OpenAction`, `/Launch`, `/EmbeddedFile`, `/XFA` |
 | Zip-bomb / memory exhaustion | File size limit (default 20 MB) |
@@ -440,21 +462,70 @@ This means that even if a zero-day exploit in PyMuPDF or pdfplumber was triggere
 ## Running
 
 ```bash
-# Native
+# Native — interactive (prompts for days on a real terminal)
 python main.py
 
-# Docker
-docker compose run --rm pipeline
+# Native — non-interactive (safe to call from scripts/cron)
+python main.py --days 1
+
+# Docker — one-shot run
+docker compose run --rm pipeline --days 1
 ```
 
-You'll be prompted:
+**CLI flags:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--days N` | `1` (or prompt on TTY) | How many days of emails to process |
+| `--schedule MINUTES` | off | Run continuously, polling every N minutes |
+| `--check-auth` | off | Verify token health and exit — no emails processed |
+| `--dry-run` | off | Classify emails but write no files and move nothing |
+| `--allow-all-senders` | off | Skip the sender allowlist (testing only) |
+
+When `--days` is not set and you are on a real terminal, the prompt still appears:
 ```
 How many days of emails to process? [default: 1]:
 ```
+When called from a script (no TTY), it defaults silently to 1 day.
 
-- Press **Enter** for the last 24 hours (safe default for daily runs).
-- Type a number e.g. `7` to go back further.
-- Filtering happens at the Graph API — your full inbox is not fetched.
+---
+
+## Scheduled / Automated Runs
+
+### Native (cron / Task Scheduler)
+
+```bash
+# Verify the token is cached before scheduling
+python main.py --check-auth
+
+# Cron example: run every hour, process last 1 day
+0 * * * * cd /path/to/ms_outlook && python main.py --days 1 >> logs/cron.log 2>&1
+```
+
+If the token expires (~90 days inactivity), the pipeline will log an error and send a webhook alert (if configured) rather than hanging waiting for a browser.
+
+### Docker — scheduler service
+
+```bash
+# Start the background scheduler (runs every DEFAULT_SCHEDULE_MINUTES minutes)
+docker compose up -d scheduler
+
+# Follow logs
+docker compose logs -f scheduler
+
+# Stop
+docker compose down scheduler
+```
+
+The `scheduler` service runs non-interactively with `restart: unless-stopped`.
+It requires a valid `config/token_cache.bin` already on disk — authenticate first by running the `pipeline` service at least once:
+
+```bash
+docker compose run --rm pipeline --check-auth   # prompts login if needed
+docker compose up -d scheduler                   # then start the daemon
+```
+
+Set `DEFAULT_SCHEDULE_MINUTES` in `.env` to control frequency (default: `60`).
 
 ---
 
@@ -531,6 +602,81 @@ See `config/templates/example_personal_contact.yaml` for a full template example
 
 ---
 
+## Management CLI
+
+`manage.py` provides commands for day-to-day operations without editing JSON files or querying SQLite directly.
+
+```bash
+python manage.py <command> [options]
+```
+
+### Customer onboarding
+
+```bash
+# Scan your mailbox and see who's been sending emails with attachments
+python manage.py list-senders
+python manage.py list-senders --days 90
+
+# Add a sender to address_book.json without opening a text editor
+python manage.py add-sender billing@acme.com.au
+python manage.py add-sender billing@acme.com.au --name "ACME Corp" --template acme
+
+# Show all auto-generated template suggestions waiting for review
+python manage.py list-suggestions
+
+# Promote a suggestion to active status (copies template + updates address book)
+python manage.py approve-suggestion billing@acme.com.au
+```
+
+### Template testing
+
+```bash
+# Test a YAML template against a real PDF
+python manage.py test-template acme invoice.pdf
+
+# Show the raw extracted text (useful when writing regex patterns)
+python manage.py test-template acme invoice.pdf --show-text
+
+# Check confidence trend for a template over recent runs
+python manage.py analyze-template acme
+python manage.py analyze-template acme --last 10
+```
+
+### Review queue
+
+Documents flagged `needs_review: true` are automatically added to the review queue.
+
+```bash
+# List documents awaiting review
+python manage.py review-queue
+
+# Mark a document as reviewed (use the ID from review-queue output)
+python manage.py resolve-review 3
+python manage.py resolve-review 3 --dismiss    # mark as dismissed instead
+python manage.py resolve-review 3 --by "Alice"
+```
+
+### Health check
+
+```bash
+# Check token, database, address book, and last run status in one command
+python manage.py health
+```
+
+Sample output:
+```
+  [OK]  Auth token: account=you@outlook.com
+  [OK]  Database: 47 total processed, 0 errors, 2 pending review
+  [OK]  Address book: 5 contact(s)
+  [OK]  Last run: 2026-04-23T08:00:01 UTC — 3 attachment(s), avg confidence=0.91
+  [--]  Pending suggestions: 1 (run list-suggestions)
+
+Issues (1):
+  - 1 suggested templates need review
+```
+
+---
+
 ## Suggested templates for unknown senders
 
 When an email comes in from a sender not in `config/address_book.json`, the pipeline automatically generates a draft YAML template in `config/suggested_templates/`. Nothing is parsed for that email, but you get a starting point to work from.
@@ -564,11 +710,22 @@ The `_field_examples_found_in_document` section shows **actual values pulled fro
 
 **To activate a suggested template:**
 
+**Option A — one command (recommended):**
+```bash
+python manage.py approve-suggestion supplier@newcompany.com.au
+```
+This copies the template to `config/templates/` and adds the sender to `address_book.json` in one step.
+
+**Option B — manual:**
 1. Open `config/suggested_templates/<sender>.yaml`
 2. Copy the `_address_book_entry` block into `config/address_book.json` under `"contacts"`
 3. Adjust any regex patterns in `fields` that look wrong (use `--show-text` to see the raw PDF text)
-4. Copy the file to `config/templates/` (you can remove the `_status`, `_generated_at`, and `_field_examples_found_in_document` keys, but it still works with them present)
+4. Copy the file to `config/templates/`
 5. Run the pipeline again — the sender will now be recognised and their attachments parsed
+
+**Option C — fully automatic:**
+
+Set `AUTO_APPROVE_CONFIDENCE=0.85` in `.env`. When the pipeline generates a suggestion and the sniffed field examples indicate ≥ 85% confidence, the template is promoted automatically without any manual step. A webhook alert is still sent so you know it happened.
 
 If the same unknown sender emails again before you activate their template, the suggestion file is updated with any new field examples found — it won't overwrite your edits.
 
@@ -617,7 +774,13 @@ Personal addresses (gmail, hotmail, etc.) automatically use `"emails"` instead o
 
 ### Step 2 — Add them to the address book
 
-Paste the generated entries into `config/address_book.json` under `"contacts"`. You can also add `"abns"` and `"keywords"` fields to improve matching accuracy:
+**Quickest way — no text editor needed:**
+```bash
+python manage.py add-sender orders@newsupplier.com.au --name "New Supplier" --template newsupplier
+python manage.py add-sender jane@gmail.com --name "Jane Smith"
+```
+
+**Or paste directly** into `config/address_book.json` under `"contacts"`. You can add `"abns"` and `"keywords"` to improve matching accuracy:
 
 ```json
 {
@@ -652,11 +815,26 @@ No code changes needed — new templates are picked up automatically on the next
 ## Checking results
 
 ```bash
-# Blocked / failed attachments
-sqlite3 database/pipeline.db "SELECT attachment_filename, error FROM processed_documents WHERE error IS NOT NULL;"
+# Overall health (token, DB, address book, last run)
+python manage.py health
 
 # Documents flagged for manual review
-sqlite3 database/pipeline.db "SELECT attachment_filename, customer_name, confidence FROM processed_documents WHERE needs_review=1;"
+python manage.py review-queue
+
+# Mark a review item as resolved (ID from review-queue output)
+python manage.py resolve-review 3
+
+# Confidence trend for a template (detect vendor format changes)
+python manage.py analyze-template acme
+```
+
+**Run metrics** are written to `logs/metrics.json` after every run and optionally POSTed to `WEBHOOK_URL`. If set, you'll get a Slack/Teams notification automatically.
+
+**Direct SQLite queries** (if you need more detail):
+
+```bash
+# Blocked / failed attachments
+sqlite3 database/pipeline.db "SELECT attachment_filename, error FROM processed_documents WHERE error IS NOT NULL;"
 
 # All recent runs
 sqlite3 database/pipeline.db "SELECT * FROM processed_documents ORDER BY processed_at DESC LIMIT 20;"
@@ -674,8 +852,9 @@ tail -f logs/pipeline.log
 - Mark emails as read
 - Delete emails
 - Write back to any external system
-- Send any data outside your machine
 - Commit your credentials (`.env` is gitignored)
+
+> **Webhooks:** if `WEBHOOK_URL` is set in `.env`, the pipeline will POST a run summary to that URL after each run. This is opt-in and off by default. The payload contains counts and confidence averages — it does not include email content, attachment text, or personal data.
 
 ---
 
@@ -683,25 +862,25 @@ tail -f logs/pipeline.log
 
 ```
 ms_outlook/
-├── main.py                        ← run this
-├── manage.py                      ← management CLI (list-senders, test-template)
+├── main.py                        ← run this  (--days, --schedule, --check-auth, --dry-run)
+├── manage.py                      ← management CLI  (see Management CLI section)
 ├── requirements.txt
 ├── Dockerfile                     ← builds isolated container with ClamAV + Tesseract
-├── docker-compose.yml             ← volume mounts, env wiring
+├── docker-compose.yml             ← pipeline (one-shot) + scheduler (daemon) services
 ├── .env                           ← your credentials (gitignored)
 ├── .env.example                   ← safe template to copy
 ├── config/
 │   ├── settings.py                ← loads .env, defines all config
-│   ├── address_book.json          ← sender allowlist + customer→template links
+│   ├── address_book.json          ← sender allowlist + customer→template links (gitignored)
+│   ├── address_book.example.json  ← copy this to address_book.json to get started
 │   ├── token_cache.bin            ← created on first login (gitignored)
 │   ├── templates/                 ← active customer YAML templates (parsing rules only)
-│   │   ├── acme.yaml
 │   │   ├── example_new_customer.yaml
 │   │   └── example_personal_contact.yaml
 │   └── suggested_templates/       ← auto-generated drafts (gitignored)
 │       └── supplier_at_newcompany_com_au.yaml
 ├── auth/
-│   └── graph_client.py            ← Microsoft login + API calls
+│   └── graph_client.py            ← Microsoft login + Graph API (with retry)
 ├── pipeline/
 │   ├── email_reader.py            ← fetch emails filtered by date range
 │   ├── attachment_downloader.py   ← download PDFs/images
@@ -711,15 +890,18 @@ ms_outlook/
 │   ├── template_parser.py         ← extract fields using YAML templates
 │   ├── json_output.py             ← validate + save JSON
 │   ├── email_mover.py             ← move email after processing
-│   └── template_suggester.py      ← auto-generate draft templates for unknown senders
+│   ├── template_suggester.py      ← auto-generate + auto-approve draft templates
+│   └── metrics.py                 ← run metrics (logs/metrics.json + webhook POST)
 ├── database/
-│   └── db.py                      ← SQLite (records every run, enables dedup) ⚠️ not yet implemented
+│   └── db.py                      ← SQLite: processed_documents, review_queue, template_stats
 ├── utils/
 │   └── logger.py
 ├── attachments/                   ← original files (gitignored)
 ├── raw_text/                      ← extracted text (gitignored)
 ├── parsed/                        ← JSON output (gitignored)
-├── logs/                          ← log files (gitignored)
+├── logs/
+│   ├── pipeline.log               ← rotating log (gitignored)
+│   └── metrics.json               ← last run summary (gitignored)
 └── database/
-    └── pipeline.db                ← auto-created (gitignored)
+    └── pipeline.db                ← auto-created on first run (gitignored)
 ```
