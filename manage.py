@@ -3,14 +3,22 @@ Management utility for the ms_outlook pipeline.
 
 Commands:
   python manage.py test-template <template_name> <pdf_or_image_path> [--show-text]
+  python manage.py list-senders [--days 30]
 
 Examples:
-  python manage.py test-template evergy invoice.pdf
-  python manage.py test-template bonitahua scan.png --show-text
+  python manage.py test-template acme invoice.pdf
+  python manage.py test-template acme scan.png --show-text
+  python manage.py list-senders
+  python manage.py list-senders --days 90
 """
 import argparse
 import sys
 from pathlib import Path
+
+_PERSONAL_DOMAINS = {
+    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com",
+    "live.com", "icloud.com", "bigpond.com", "optusnet.com.au",
+}
 
 
 def cmd_test_template(args) -> int:
@@ -21,7 +29,6 @@ def cmd_test_template(args) -> int:
         print(f"Error: file not found: {file_path}")
         return 1
 
-    # Lazy imports so errors (missing deps, bad .env) are reported cleanly
     try:
         from pipeline.text_extractor import extract_text
         from pipeline.template_parser import _load_template, _extract_field, _extract_line_items
@@ -98,6 +105,104 @@ def cmd_test_template(args) -> int:
     return 0
 
 
+def cmd_list_senders(args) -> int:
+    days = args.days
+
+    try:
+        import json
+        from auth.graph_client import GraphClient
+        from pipeline.email_reader import fetch_unread_with_attachments
+        from config.settings import ADDRESS_BOOK_PATH
+    except Exception as e:
+        print(f"Error loading pipeline modules: {e}")
+        return 1
+
+    # Load existing contacts so we can mark already-known senders
+    known_domains: set[str] = set()
+    known_emails: set[str] = set()
+    if ADDRESS_BOOK_PATH.exists():
+        try:
+            data = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+            for c in data.get("contacts", []):
+                for d in c.get("domains", []):
+                    known_domains.add(d.lower())
+                for e in c.get("emails", []):
+                    known_emails.add(e.lower())
+        except Exception:
+            pass
+
+    print(f"\nConnecting to Outlook... (scanning last {days} day(s))")
+    try:
+        client = GraphClient()
+    except Exception as e:
+        print(f"Error connecting to Outlook: {e}")
+        return 1
+
+    # Collect unique senders from emails that have attachments
+    senders: dict[str, str] = {}  # email -> display name
+    email_count = 0
+    for message in fetch_unread_with_attachments(client, days=days):
+        addr = message.get("from", {}).get("emailAddress", {})
+        email = addr.get("address", "").lower().strip()
+        name = addr.get("name", "").strip()
+        if email:
+            senders[email] = name
+        email_count += 1
+
+    if not senders:
+        print(f"No emails with attachments found in the last {days} day(s).")
+        return 0
+
+    print(f"Scanned {email_count} email(s) — found {len(senders)} unique sender(s).\n")
+
+    new_senders: dict[str, str] = {}
+    known_senders: dict[str, str] = {}
+    for email, name in sorted(senders.items()):
+        domain = email.split("@")[-1]
+        if email in known_emails or domain in known_domains:
+            known_senders[email] = name
+        else:
+            new_senders[email] = name
+
+    if known_senders:
+        print(f"Already in address_book.json ({len(known_senders)}):")
+        for email, name in sorted(known_senders.items()):
+            label = f"{name} <{email}>" if name else email
+            print(f"  ✓  {label}")
+        print()
+
+    if not new_senders:
+        print("All senders are already in your address book.")
+        return 0
+
+    print(f"New senders not yet in address_book.json ({len(new_senders)}):")
+    for email, name in sorted(new_senders.items()):
+        label = f"{name} <{email}>" if name else email
+        print(f"  +  {label}")
+
+    print()
+    print("─" * 60)
+    print('Add these to config/address_book.json under "contacts":')
+    print("─" * 60)
+
+    for email, name in sorted(new_senders.items()):
+        domain = email.split("@")[-1]
+        customer_name = name if name else email.split("@")[0]
+        is_personal = domain in _PERSONAL_DOMAINS
+        entry: dict = {"name": customer_name}
+        if is_personal:
+            entry["emails"] = [email]
+        else:
+            entry["domains"] = [domain]
+        entry["template"] = ""
+        print(json.dumps(entry, indent=2) + ",")
+
+    print()
+    print('Tip: set "template" to the stem of a .yaml file in config/templates/')
+    print("     or leave blank to extract text only until you build the template.")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="ms_outlook pipeline management utilities",
@@ -110,17 +215,28 @@ def main():
         "test-template",
         help="Test a YAML template against a PDF or image file",
     )
-    test_tmpl.add_argument("template_name", help="Template name without .yaml (e.g. evergy)")
+    test_tmpl.add_argument("template_name", help="Template name without .yaml (e.g. acme)")
     test_tmpl.add_argument("file", help="Path to a PDF or image file")
     test_tmpl.add_argument(
         "--show-text", action="store_true",
         help="Print the first 3000 chars of extracted text (useful for writing patterns)"
     )
 
+    list_snd = subparsers.add_parser(
+        "list-senders",
+        help="List unique senders with attachments and generate address_book.json entries",
+    )
+    list_snd.add_argument(
+        "--days", type=int, default=30,
+        help="How many days back to scan (default: 30)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "test-template":
         sys.exit(cmd_test_template(args))
+    elif args.command == "list-senders":
+        sys.exit(cmd_list_senders(args))
     else:
         parser.print_help()
         sys.exit(0)
