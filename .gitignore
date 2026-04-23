@@ -28,6 +28,14 @@ logs/
 database/
 *.db
 
+# Customer data — address book and real templates are private
+# Copy address_book.example.json → address_book.json and fill in your contacts
+config/address_book.json
+# Real customer templates (contain ABNs, email addresses, regex tuned to private docs)
+# Example templates (example_*.yaml) are committed as reference — real ones are not
+config/templates/*.yaml
+!config/templates/example_*.yaml
+
 # Auto-generated template drafts (may contain customer info)
 config/suggested_templates/
 
