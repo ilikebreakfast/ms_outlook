@@ -75,7 +75,22 @@ def parse(text: str, template_name: str) -> dict:
     extracted = sum(1 for f in required_fields if result.get(f))
     confidence = extracted / len(required_fields) if required_fields else 0.0
     result["_confidence"] = round(confidence, 2)
+    result["_required_fields_matched"] = extracted
+    result["_required_fields_total"] = len(required_fields)
 
     log.info(f"Parsed {template_name!r}: confidence={confidence:.0%}, "
              f"{extracted}/{len(required_fields)} required fields found.")
+
+    # Record stat for trend analysis — best-effort, never fatal
+    try:
+        from database import db
+        db.record_template_stat(
+            template_name=template_name,
+            confidence=round(confidence, 4),
+            required_fields_matched=extracted,
+            required_fields_total=len(required_fields),
+        )
+    except Exception:
+        pass
+
     return result

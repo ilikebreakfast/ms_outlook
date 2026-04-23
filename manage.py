@@ -2,24 +2,35 @@
 Management utility for the ms_outlook pipeline.
 
 Commands:
-  python manage.py test-template <template_name> <pdf_or_image_path> [--show-text]
+  python manage.py test-template <name> <file> [--show-text]
   python manage.py list-senders [--days 30]
+  python manage.py add-sender <email> [--name NAME] [--template STEM]
+  python manage.py list-suggestions
+  python manage.py approve-suggestion <email>
+  python manage.py review-queue [--all]
+  python manage.py resolve-review <queue_id> [--dismiss]
+  python manage.py analyze-template <name> [--last N]
+  python manage.py health
 
 Examples:
-  python manage.py test-template acme invoice.pdf
-  python manage.py test-template acme scan.png --show-text
-  python manage.py list-senders
-  python manage.py list-senders --days 90
+  python manage.py test-template acme invoice.pdf --show-text
+  python manage.py add-sender billing@acme.com.au --name "ACME Corp" --template acme
+  python manage.py list-suggestions
+  python manage.py approve-suggestion billing@acme.com.au
+  python manage.py review-queue
+  python manage.py resolve-review 3
+  python manage.py analyze-template acme --last 10
+  python manage.py health
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
-_PERSONAL_DOMAINS = {
-    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com",
-    "live.com", "icloud.com", "bigpond.com", "optusnet.com.au",
-}
 
+# ---------------------------------------------------------------------------
+# Existing commands
+# ---------------------------------------------------------------------------
 
 def cmd_test_template(args) -> int:
     template_name: str = args.template_name
@@ -79,14 +90,14 @@ def cmd_test_template(args) -> int:
         patterns_list = patterns if isinstance(patterns, list) else [patterns]
         value = _extract_field(text, patterns_list)
         results[field_name] = value
-        status_icon = "✓" if value else "✗"
+        status_icon = "OK" if value else "--"
         required_marker = " *" if field_name in required_fields else ""
         display_value = value[:50] if value else "(no match)"
         print(f"  {field_name + required_marker:<26} {status_icon:<6} {display_value}")
 
     line_items_pattern = tmpl.get("line_items_pattern", "")
     line_items = _extract_line_items(text, line_items_pattern) if line_items_pattern else []
-    print(f"\n  {'line_items':<26} {'✓' if line_items else '✗':<6} {len(line_items)} item(s) found")
+    print(f"\n  {'line_items':<26} {'OK' if line_items else '--':<6} {len(line_items)} item(s) found")
 
     extracted_required = sum(1 for f in required_fields if results.get(f))
     confidence = extracted_required / len(required_fields) if required_fields else 0.0
@@ -109,15 +120,13 @@ def cmd_list_senders(args) -> int:
     days = args.days
 
     try:
-        import json
         from auth.graph_client import GraphClient
         from pipeline.email_reader import fetch_unread_with_attachments
-        from config.settings import ADDRESS_BOOK_PATH
+        from config.settings import ADDRESS_BOOK_PATH, PERSONAL_EMAIL_DOMAINS
     except Exception as e:
         print(f"Error loading pipeline modules: {e}")
         return 1
 
-    # Load existing contacts so we can mark already-known senders
     known_domains: set[str] = set()
     known_emails: set[str] = set()
     if ADDRESS_BOOK_PATH.exists():
@@ -138,8 +147,7 @@ def cmd_list_senders(args) -> int:
         print(f"Error connecting to Outlook: {e}")
         return 1
 
-    # Collect unique senders from emails that have attachments
-    senders: dict[str, str] = {}  # email -> display name
+    senders: dict[str, str] = {}
     email_count = 0
     for message in fetch_unread_with_attachments(client, days=days):
         addr = message.get("from", {}).get("emailAddress", {})
@@ -168,7 +176,7 @@ def cmd_list_senders(args) -> int:
         print(f"Already in address_book.json ({len(known_senders)}):")
         for email, name in sorted(known_senders.items()):
             label = f"{name} <{email}>" if name else email
-            print(f"  ✓  {label}")
+            print(f"  [OK]  {label}")
         print()
 
     if not new_senders:
@@ -178,17 +186,18 @@ def cmd_list_senders(args) -> int:
     print(f"New senders not yet in address_book.json ({len(new_senders)}):")
     for email, name in sorted(new_senders.items()):
         label = f"{name} <{email}>" if name else email
-        print(f"  +  {label}")
+        print(f"  [+]  {label}")
 
     print()
     print("─" * 60)
     print('Add these to config/address_book.json under "contacts":')
+    print('Or run: python manage.py add-sender <email> [--name NAME]')
     print("─" * 60)
 
     for email, name in sorted(new_senders.items()):
         domain = email.split("@")[-1]
         customer_name = name if name else email.split("@")[0]
-        is_personal = domain in _PERSONAL_DOMAINS
+        is_personal = domain in PERSONAL_EMAIL_DOMAINS
         entry: dict = {"name": customer_name}
         if is_personal:
             entry["emails"] = [email]
@@ -203,40 +212,427 @@ def cmd_list_senders(args) -> int:
     return 0
 
 
-def main():
+# ---------------------------------------------------------------------------
+# New commands
+# ---------------------------------------------------------------------------
+
+def cmd_add_sender(args) -> int:
+    """
+    Atomically add a new sender to config/address_book.json.
+    Determines personal vs business automatically from the email domain.
+    """
+    try:
+        from config.settings import ADDRESS_BOOK_PATH, PERSONAL_EMAIL_DOMAINS
+    except Exception as e:
+        print(f"Error loading settings: {e}")
+        return 1
+
+    email = args.email.strip().lower()
+    domain = email.split("@")[-1] if "@" in email else ""
+    is_personal = domain in PERSONAL_EMAIL_DOMAINS
+    customer_name = args.name or (email.split("@")[0].replace(".", " ").title())
+
+    entry: dict = {"name": customer_name}
+    if is_personal:
+        entry["emails"] = [email]
+    else:
+        entry["domains"] = [domain]
+    if args.template:
+        entry["template"] = args.template
+
+    if not ADDRESS_BOOK_PATH.exists():
+        print(f"Error: {ADDRESS_BOOK_PATH} not found. Create it first.")
+        return 1
+
+    try:
+        book = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Error reading address_book.json: {e}")
+        return 1
+
+    contacts = book.setdefault("contacts", [])
+    # Duplicate check
+    for c in contacts:
+        if email in [e.lower() for e in c.get("emails", [])]:
+            print(f"Sender {email} is already in address_book.json (matched by email).")
+            return 0
+        if domain and domain in [d.lower() for d in c.get("domains", [])]:
+            print(f"Domain {domain} is already in address_book.json (contact: {c.get('name')}).")
+            return 0
+
+    contacts.append(entry)
+    ADDRESS_BOOK_PATH.write_text(
+        json.dumps(book, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"Added {customer_name} ({email}) to address_book.json.")
+    if args.template:
+        print(f"  Template: {args.template}.yaml (must exist in config/templates/)")
+    return 0
+
+
+def cmd_list_suggestions(args) -> int:
+    """List all pending suggested templates with a preview of sniffed fields."""
+    try:
+        from config.settings import SUGGESTED_TEMPLATES_DIR
+        import yaml
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+
+    if not SUGGESTED_TEMPLATES_DIR.exists():
+        print("No suggested_templates directory found — no suggestions yet.")
+        return 0
+
+    files = sorted(SUGGESTED_TEMPLATES_DIR.glob("*.yaml"))
+    if not files:
+        print("No suggested templates found.")
+        return 0
+
+    print(f"\nSuggested templates ({len(files)}):\n")
+    print(f"  {'File':<40} {'Customer':<25} {'ABN':<14} {'Examples'}")
+    print("─" * 100)
+
+    for f in files:
+        try:
+            tmpl = yaml.safe_load(f.read_text(encoding="utf-8"))
+            name = tmpl.get("customer_name", "?")
+            entry = tmpl.get("_address_book_entry", {})
+            abn = entry.get("abns", [""])[0] if entry.get("abns") else ""
+            examples = tmpl.get("_field_examples_found_in_document", {})
+            ex_str = ", ".join(f"{k}={v}" for k, v in list(examples.items())[:2]) if examples else "none"
+            print(f"  {f.name:<40} {name:<25} {abn:<14} {ex_str}")
+        except Exception:
+            print(f"  {f.name:<40} (could not parse)")
+
+    print(f"\nTo approve: python manage.py approve-suggestion <sender_email>")
+    return 0
+
+
+def cmd_approve_suggestion(args) -> int:
+    """
+    Approve a suggested template: copy it to config/templates/ and add the
+    _address_book_entry to config/address_book.json.
+    """
+    try:
+        from config.settings import SUGGESTED_TEMPLATES_DIR, TEMPLATES_DIR, ADDRESS_BOOK_PATH
+        import yaml, re
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+
+    sender_email = args.email.strip().lower()
+    safe = re.sub(r"[^\w@.\-]", "_", sender_email).replace("@", "_at_")
+    src = SUGGESTED_TEMPLATES_DIR / f"{safe}.yaml"
+
+    if not src.exists():
+        print(f"Error: no suggestion found for {sender_email}")
+        print(f"  Expected: {src}")
+        available = list(SUGGESTED_TEMPLATES_DIR.glob("*.yaml")) if SUGGESTED_TEMPLATES_DIR.exists() else []
+        if available:
+            print(f"  Available: {', '.join(f.name for f in available)}")
+        return 1
+
+    try:
+        tmpl = yaml.safe_load(src.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Error loading suggestion: {e}")
+        return 1
+
+    # Copy to active templates
+    dest = TEMPLATES_DIR / src.name
+    TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        yaml.dump(tmpl, default_flow_style=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    print(f"Template copied to: {dest}")
+
+    # Add address_book_entry
+    entry = tmpl.get("_address_book_entry", {})
+    if not entry:
+        print("Warning: no _address_book_entry found in suggestion — skipping address book update.")
+        return 0
+
+    if not ADDRESS_BOOK_PATH.exists():
+        print(f"Error: {ADDRESS_BOOK_PATH} not found.")
+        return 1
+
+    try:
+        book = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Error reading address_book.json: {e}")
+        return 1
+
+    contacts = book.setdefault("contacts", [])
+    existing_names = {c.get("name") for c in contacts}
+    if entry.get("name") in existing_names:
+        print(f"Contact {entry.get('name')!r} already in address_book.json — skipping.")
+    else:
+        contacts.append(entry)
+        ADDRESS_BOOK_PATH.write_text(
+            json.dumps(book, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(f"Added {entry.get('name')!r} to address_book.json.")
+
+    print(f"\nDone. {entry.get('name', sender_email)} is now active.")
+    print(f"Next pipeline run will download, extract, and parse their attachments.")
+    return 0
+
+
+def cmd_review_queue(args) -> int:
+    """Show documents flagged for manual review."""
+    try:
+        from database import db
+    except Exception as e:
+        print(f"Error loading database: {e}")
+        return 1
+
+    status = "all" if args.all else "pending"
+    rows = db.get_review_queue(status="pending") if status == "pending" else (
+        db.get_review_queue("pending") + db.get_review_queue("resolved") + db.get_review_queue("dismissed")
+    )
+
+    if not rows:
+        print("No items in review queue" + (" (pending)" if not args.all else "") + ".")
+        return 0
+
+    print(f"\nReview queue ({len(rows)} item(s)):\n")
+    print(f"  {'ID':<5} {'Status':<12} {'Customer':<20} {'Conf':<6} {'File':<35} {'Reason'}")
+    print("─" * 100)
+    for r in rows:
+        conf = f"{r['confidence']:.0%}" if r['confidence'] is not None else "n/a"
+        fname = Path(r['attachment_filename']).name if r['attachment_filename'] else "?"
+        print(
+            f"  {r['queue_id']:<5} {r['status']:<12} {(r['customer_name'] or '?'):<20} "
+            f"{conf:<6} {fname:<35} {r['reason'] or ''}"
+        )
+
+    print(f"\nTo resolve: python manage.py resolve-review <ID>")
+    print(f"To dismiss: python manage.py resolve-review <ID> --dismiss")
+    return 0
+
+
+def cmd_resolve_review(args) -> int:
+    """Mark a review queue item as resolved or dismissed."""
+    try:
+        from database import db
+    except Exception as e:
+        print(f"Error loading database: {e}")
+        return 1
+
+    status = "dismissed" if args.dismiss else "resolved"
+    ok = db.resolve_review(args.id, resolved_by=args.by or "", status=status)
+    if ok:
+        print(f"Queue item {args.id} marked as {status}.")
+        return 0
+    else:
+        print(f"Queue item {args.id} not found.")
+        return 1
+
+
+def cmd_analyze_template(args) -> int:
+    """Show confidence trend for a template over recent runs."""
+    try:
+        from database import db
+    except Exception as e:
+        print(f"Error loading database: {e}")
+        return 1
+
+    rows = db.get_template_stats(args.template_name, last_n=args.last)
+
+    if not rows:
+        print(f"No stats found for template: {args.template_name!r}")
+        print("Stats are recorded after each pipeline run that uses this template.")
+        return 0
+
+    confidences = [r["confidence"] for r in rows]
+    avg = sum(confidences) / len(confidences)
+    mn = min(confidences)
+    mx = max(confidences)
+
+    print(f"\nTemplate: {args.template_name}  |  Last {len(rows)} run(s)\n")
+    print(f"  Average confidence: {avg:.0%}")
+    print(f"  Min: {mn:.0%}   Max: {mx:.0%}")
+    print()
+    print(f"  {'Run at (UTC)':<28} {'Confidence':<12} {'Fields matched'}")
+    print("─" * 65)
+    for r in rows:
+        matched = f"{r['required_fields_matched']}/{r['required_fields_total']}"
+        bar_len = int(r["confidence"] * 20)
+        bar = "#" * bar_len + "-" * (20 - bar_len)
+        print(f"  {r['run_at'][:19]:<28} {r['confidence']:.0%}  [{bar}]  {matched}")
+
+    # Drift alert
+    if len(rows) >= 5:
+        recent_avg = sum(confidences[:5]) / 5
+        baseline_avg = sum(confidences) / len(confidences)
+        drift = baseline_avg - recent_avg
+        if drift > 0.15:
+            print(
+                f"\n  WARNING: Recent average ({recent_avg:.0%}) is {drift:.0%} below "
+                f"overall baseline ({baseline_avg:.0%}). "
+                "The vendor may have changed their document format."
+            )
+    return 0
+
+
+def cmd_health(args) -> int:
+    """Check overall pipeline health: token, DB, disk, review queue."""
+    from pathlib import Path
+
+    issues = []
+
+    # Token health
+    try:
+        from auth.graph_client import check_token_health
+        h = check_token_health()
+        if h["valid"]:
+            print(f"  [OK]  Auth token: account={h['account']}")
+        else:
+            print(f"  [!!]  Auth token: not cached — run interactively to authenticate")
+            issues.append("no cached token")
+    except Exception as e:
+        print(f"  [!!]  Auth check failed: {e}")
+        issues.append(str(e))
+
+    # Database health
+    try:
+        from database import db
+        stats = db.get_run_stats()
+        print(
+            f"  [OK]  Database: {stats['total_processed']} total processed, "
+            f"{stats['total_errors']} errors, "
+            f"{stats['pending_review']} pending review"
+        )
+        if stats["pending_review"] > 0:
+            issues.append(f"{stats['pending_review']} documents pending review")
+    except Exception as e:
+        print(f"  [!!]  Database: {e}")
+        issues.append(f"db error: {e}")
+
+    # Address book
+    try:
+        from config.settings import ADDRESS_BOOK_PATH
+        if ADDRESS_BOOK_PATH.exists():
+            book = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+            count = len(book.get("contacts", []))
+            print(f"  [OK]  Address book: {count} contact(s)")
+        else:
+            print(f"  [!!]  Address book: not found at {ADDRESS_BOOK_PATH}")
+            issues.append("address_book.json missing")
+    except Exception as e:
+        print(f"  [!!]  Address book: {e}")
+        issues.append(str(e))
+
+    # Last metrics
+    try:
+        from pipeline.metrics import read_last_metrics
+        m = read_last_metrics()
+        if m:
+            print(
+                f"  [OK]  Last run: {m.get('run_finished_at', '?')[:19]} UTC — "
+                f"{m.get('total_attachments', 0)} attachment(s), "
+                f"avg confidence={m.get('avg_confidence_this_run', 'n/a')}"
+            )
+        else:
+            print("  [--]  No previous run metrics found (pipeline has not run yet)")
+    except Exception as e:
+        print(f"  [!!]  Metrics: {e}")
+
+    # Pending suggestions
+    try:
+        from config.settings import SUGGESTED_TEMPLATES_DIR
+        if SUGGESTED_TEMPLATES_DIR.exists():
+            pending = list(SUGGESTED_TEMPLATES_DIR.glob("*.yaml"))
+            if pending:
+                print(f"  [--]  Pending suggestions: {len(pending)} (run list-suggestions)")
+                issues.append(f"{len(pending)} suggested templates need review")
+            else:
+                print(f"  [OK]  Suggested templates: none pending")
+    except Exception:
+        pass
+
+    print()
+    if issues:
+        print(f"Issues ({len(issues)}):")
+        for i in issues:
+            print(f"  - {i}")
+        return 1
+    else:
+        print("All checks passed.")
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI wiring
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="ms_outlook pipeline management utilities",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    subparsers = parser.add_subparsers(dest="command", metavar="command")
+    sub = parser.add_subparsers(dest="command", metavar="command")
 
-    test_tmpl = subparsers.add_parser(
-        "test-template",
-        help="Test a YAML template against a PDF or image file",
-    )
-    test_tmpl.add_argument("template_name", help="Template name without .yaml (e.g. acme)")
-    test_tmpl.add_argument("file", help="Path to a PDF or image file")
-    test_tmpl.add_argument(
-        "--show-text", action="store_true",
-        help="Print the first 3000 chars of extracted text (useful for writing patterns)"
-    )
+    # test-template
+    p = sub.add_parser("test-template", help="Test a YAML template against a PDF or image file")
+    p.add_argument("template_name", help="Template stem e.g. acme")
+    p.add_argument("file", help="Path to PDF or image file")
+    p.add_argument("--show-text", action="store_true", help="Print first 3000 chars of extracted text")
 
-    list_snd = subparsers.add_parser(
-        "list-senders",
-        help="List unique senders with attachments and generate address_book.json entries",
-    )
-    list_snd.add_argument(
-        "--days", type=int, default=30,
-        help="How many days back to scan (default: 30)",
-    )
+    # list-senders
+    p = sub.add_parser("list-senders", help="List unique senders with attachments in your mailbox")
+    p.add_argument("--days", type=int, default=30, help="Days back to scan (default: 30)")
+
+    # add-sender
+    p = sub.add_parser("add-sender", help="Add a sender to address_book.json directly")
+    p.add_argument("email", help="Sender email address")
+    p.add_argument("--name", help="Display name (inferred from email if omitted)")
+    p.add_argument("--template", help="Template stem to link (e.g. acme — must exist in config/templates/)")
+
+    # list-suggestions
+    sub.add_parser("list-suggestions", help="List pending auto-generated template suggestions")
+
+    # approve-suggestion
+    p = sub.add_parser("approve-suggestion", help="Promote a suggested template to active status")
+    p.add_argument("email", help="Sender email the suggestion was generated for")
+
+    # review-queue
+    p = sub.add_parser("review-queue", help="Show documents flagged for manual review")
+    p.add_argument("--all", action="store_true", help="Include resolved and dismissed items")
+
+    # resolve-review
+    p = sub.add_parser("resolve-review", help="Mark a review queue item as resolved")
+    p.add_argument("id", type=int, help="Queue item ID (from review-queue)")
+    p.add_argument("--dismiss", action="store_true", help="Mark as dismissed instead of resolved")
+    p.add_argument("--by", help="Name or identifier of the person resolving the item")
+
+    # analyze-template
+    p = sub.add_parser("analyze-template", help="Show confidence trend for a template")
+    p.add_argument("template_name", help="Template stem e.g. acme")
+    p.add_argument("--last", type=int, default=20, help="Number of recent runs to show (default: 20)")
+
+    # health
+    sub.add_parser("health", help="Check token, database, address book, and last run status")
 
     args = parser.parse_args()
 
-    if args.command == "test-template":
-        sys.exit(cmd_test_template(args))
-    elif args.command == "list-senders":
-        sys.exit(cmd_list_senders(args))
+    dispatch = {
+        "test-template":    cmd_test_template,
+        "list-senders":     cmd_list_senders,
+        "add-sender":       cmd_add_sender,
+        "list-suggestions": cmd_list_suggestions,
+        "approve-suggestion": cmd_approve_suggestion,
+        "review-queue":     cmd_review_queue,
+        "resolve-review":   cmd_resolve_review,
+        "analyze-template": cmd_analyze_template,
+        "health":           cmd_health,
+    }
+
+    fn = dispatch.get(args.command)
+    if fn:
+        sys.exit(fn(args))
     else:
         parser.print_help()
         sys.exit(0)

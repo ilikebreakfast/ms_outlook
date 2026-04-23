@@ -1,34 +1,81 @@
 services:
+  # ---------------------------------------------------------------------------
+  # One-shot pipeline run (original behaviour).
+  # Usage: docker compose run --rm pipeline
+  # ---------------------------------------------------------------------------
   pipeline:
     build: .
     image: ms_outlook_pipeline
 
-    # Keeps stdin open so the "how many days?" prompt works
+    # Keep stdin open for the interactive "how many days?" prompt and first-time
+    # device-code authentication flow.
     stdin_open: true
     tty: true
 
-    # Load credentials from your local .env (never copied into the image)
     env_file:
       - .env
 
-    # Override specific settings for the container environment
     environment:
-      TESSERACT_CMD: tesseract          # already on PATH inside container
-      CLAMAV_ENABLED: "true"            # ClamAV is installed in the image
+      TESSERACT_CMD: tesseract
+      CLAMAV_ENABLED: "true"
       CLAMAV_CMD: clamscan
 
     volumes:
-      # Persist output and login token between runs
       - ./attachments:/app/attachments
       - ./raw_text:/app/raw_text
       - ./parsed:/app/parsed
       - ./logs:/app/logs
       - ./database:/app/database
       - ./config/token_cache.bin:/app/config/token_cache.bin
-
-      # Mount templates so you can edit them without rebuilding the image
       - ./config/templates:/app/config/templates
+      - ./config/suggested_templates:/app/config/suggested_templates
+      - ./config/address_book.json:/app/config/address_book.json
 
-    # No network access needed after auth — the pipeline only calls Graph API.
-    # Remove this if you hit connectivity issues.
-    # network_mode: none
+  # ---------------------------------------------------------------------------
+  # Scheduler: runs the pipeline every DEFAULT_SCHEDULE_MINUTES minutes.
+  # Requires an already-authenticated token_cache.bin (run `pipeline` first).
+  #
+  # Usage:
+  #   docker compose up scheduler          # foreground, Ctrl+C to stop
+  #   docker compose up -d scheduler       # background daemon
+  #   docker compose logs -f scheduler     # follow logs
+  #   docker compose down scheduler        # stop
+  #
+  # Set DEFAULT_SCHEDULE_MINUTES in .env to control frequency (default: 60).
+  # Set WEBHOOK_URL in .env to receive Slack/Teams notifications after each run.
+  # ---------------------------------------------------------------------------
+  scheduler:
+    build: .
+    image: ms_outlook_pipeline
+
+    # No TTY — this service runs non-interactively. If the token expires,
+    # a webhook alert is sent (ALERT_WEBHOOK_URL) and the run is skipped
+    # rather than hanging waiting for browser login.
+    stdin_open: false
+    tty: false
+
+    env_file:
+      - .env
+
+    environment:
+      TESSERACT_CMD: tesseract
+      CLAMAV_ENABLED: "true"
+      CLAMAV_CMD: clamscan
+
+    command: >
+      python main.py
+      --days 1
+      --schedule ${DEFAULT_SCHEDULE_MINUTES:-60}
+
+    volumes:
+      - ./attachments:/app/attachments
+      - ./raw_text:/app/raw_text
+      - ./parsed:/app/parsed
+      - ./logs:/app/logs
+      - ./database:/app/database
+      - ./config/token_cache.bin:/app/config/token_cache.bin
+      - ./config/templates:/app/config/templates
+      - ./config/suggested_templates:/app/config/suggested_templates
+      - ./config/address_book.json:/app/config/address_book.json
+
+    restart: unless-stopped

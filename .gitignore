@@ -25,7 +25,9 @@ attachments/
 raw_text/
 parsed/
 logs/
-database/
+database/*.db
+database/*.db-wal
+database/*.db-shm
 *.db
 
 # Customer data — address book and real templates are private

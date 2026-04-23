@@ -51,3 +51,38 @@ CLAMAV_CMD     = os.getenv("CLAMAV_CMD", "clamscan")
 
 # --- Confidence ---
 LOW_CONFIDENCE_THRESHOLD = 0.6
+
+# --- Classification: personal email domains ---
+# Senders on these domains are matched by exact email address, not by domain,
+# because the domain is shared by millions of unrelated people.
+# Override via PERSONAL_EMAIL_DOMAINS env var (comma-separated) to add more.
+_extra_personal = os.getenv("PERSONAL_EMAIL_DOMAINS", "")
+PERSONAL_EMAIL_DOMAINS: frozenset[str] = frozenset(
+    d.strip().lower()
+    for d in (
+        "gmail.com,hotmail.com,outlook.com,yahoo.com,"
+        "live.com,icloud.com,bigpond.com,optusnet.com.au,"
+        + _extra_personal
+    ).split(",")
+    if d.strip()
+)
+
+# --- Automation: customer onboarding ---
+# Set AUTO_APPROVE_CONFIDENCE=0.85 to automatically promote a suggested template
+# to config/templates/ and its address_book_entry to address_book.json when
+# field-extraction confidence meets or exceeds this threshold.
+# 0 (default) disables auto-approval entirely.
+AUTO_APPROVE_CONFIDENCE = float(os.getenv("AUTO_APPROVE_CONFIDENCE", "0"))
+
+# --- Notifications ---
+# Optional webhook URL (Slack incoming webhook, n8n, Teams, etc.).
+# If set, a run-summary POST is sent after every pipeline run.
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+
+# Separate channel for urgent alerts (auth failures, large review queue, etc.).
+# Falls back to WEBHOOK_URL if not set.
+ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "") or WEBHOOK_URL
+
+# --- Scheduling (used when --schedule flag is passed to main.py) ---
+# Default poll interval in minutes when running in scheduled/daemon mode.
+DEFAULT_SCHEDULE_MINUTES = int(os.getenv("DEFAULT_SCHEDULE_MINUTES", "60"))

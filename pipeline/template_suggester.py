@@ -21,9 +21,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import requests
 import yaml
 
-from config.settings import SUGGESTED_TEMPLATES_DIR
+from config.settings import (
+    SUGGESTED_TEMPLATES_DIR, PERSONAL_EMAIL_DOMAINS,
+    AUTO_APPROVE_CONFIDENCE, ALERT_WEBHOOK_URL,
+    TEMPLATES_DIR, ADDRESS_BOOK_PATH,
+)
 from pipeline.customer_classifier import extract_abn
 
 log = logging.getLogger(__name__)
@@ -38,11 +43,6 @@ STOP_WORDS = {
     "what", "would", "about", "could", "other", "after", "first", "well",
     "page", "date", "total", "amount", "please", "dear", "regards", "thank",
     "invoice", "bill", "payment", "account", "number", "due",
-}
-
-_PERSONAL_DOMAINS = {
-    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com",
-    "live.com", "icloud.com", "bigpond.com", "optusnet.com.au",
 }
 
 _DATE_RE = re.compile(
@@ -99,7 +99,7 @@ def _sniff_fields(text: str) -> dict:
 
 
 def _build_template(sender_email: str, display_name: str, text: str) -> dict:
-    is_personal = sender_email.split("@")[-1].lower() in _PERSONAL_DOMAINS
+    is_personal = sender_email.split("@")[-1].lower() in PERSONAL_EMAIL_DOMAINS
     abn = extract_abn(text)
     keywords = _extract_keywords(text)
     sniffed = _sniff_fields(text)
@@ -144,17 +144,94 @@ def _build_template(sender_email: str, display_name: str, text: str) -> dict:
     return template
 
 
+def _auto_approve(dest: Path, template: dict) -> bool:
+    """
+    Attempt to auto-approve a suggestion when AUTO_APPROVE_CONFIDENCE > 0.
+    Copies the template to config/templates/ and appends the address_book_entry
+    to config/address_book.json atomically.
+    Returns True if approval succeeded.
+    """
+    if AUTO_APPROVE_CONFIDENCE <= 0:
+        return False
+
+    sniffed = template.get("_field_examples_found_in_document", {})
+    required_fields = template.get("required_fields", [])
+    matched = sum(
+        1 for f in required_fields
+        if sniffed.get(f"{f}_example") or sniffed.get(f)
+    )
+    confidence = matched / len(required_fields) if required_fields else 0.0
+
+    if confidence < AUTO_APPROVE_CONFIDENCE:
+        log.debug(
+            f"Auto-approve skipped for {dest.stem}: "
+            f"confidence {confidence:.0%} < threshold {AUTO_APPROVE_CONFIDENCE:.0%}"
+        )
+        return False
+
+    try:
+        # Copy template to active templates directory
+        active_path = TEMPLATES_DIR / dest.name
+        TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+        active_path.write_text(
+            yaml.dump(template, default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+
+        # Append address_book_entry to address_book.json
+        entry = template.get("_address_book_entry", {})
+        if entry and ADDRESS_BOOK_PATH.exists():
+            book = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+            # Avoid duplicates
+            existing_names = {c.get("name") for c in book.get("contacts", [])}
+            if entry.get("name") not in existing_names:
+                book.setdefault("contacts", []).append(entry)
+                ADDRESS_BOOK_PATH.write_text(
+                    json.dumps(book, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                log.info(
+                    f"Auto-approved template for {entry.get('name', dest.stem)}: "
+                    f"confidence={confidence:.0%}. Added to address_book.json and config/templates/."
+                )
+        return True
+    except Exception as exc:
+        log.warning(f"Auto-approve failed for {dest.stem}: {exc}")
+        return False
+
+
+def _send_suggestion_alert(sender_email: str, dest: Path, auto_approved: bool) -> None:
+    """Fire-and-forget webhook when a new suggestion is created."""
+    if not ALERT_WEBHOOK_URL:
+        return
+    action = "auto-approved and activated" if auto_approved else "saved — awaiting manual review"
+    msg = (
+        f"[ms_outlook] New sender: {sender_email} — "
+        f"suggested template {action}: {dest.name}"
+    )
+    try:
+        import requests as _req
+        _req.post(ALERT_WEBHOOK_URL, json={"text": msg}, timeout=5)
+    except Exception:
+        pass
+
+
 def suggest(sender_email: str, display_name: str, text: str) -> Optional[Path]:
     """
     Generate or update a suggested YAML template for an unrecognised sender.
+    If AUTO_APPROVE_CONFIDENCE > 0 and field confidence meets the threshold,
+    the template is automatically promoted to config/templates/ and the sender
+    is added to address_book.json.
     Returns the path to the suggestion file, or None if generation failed.
     """
+    import json  # local import to avoid circular at module level
     SUGGESTED_TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
     filename = _safe_filename(sender_email) + ".yaml"
     dest = SUGGESTED_TEMPLATES_DIR / filename
+    is_new = not dest.exists()
 
-    if dest.exists():
+    if not is_new:
         try:
             existing = yaml.safe_load(dest.read_text(encoding="utf-8"))
             existing["_generated_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
@@ -167,7 +244,10 @@ def suggest(sender_email: str, display_name: str, text: str) -> Optional[Path]:
                 abns = entry.setdefault("abns", [])
                 if abn not in abns:
                     abns.append(abn)
-            dest.write_text(yaml.dump(existing, default_flow_style=False, allow_unicode=True), encoding="utf-8")
+            dest.write_text(
+                yaml.dump(existing, default_flow_style=False, allow_unicode=True),
+                encoding="utf-8",
+            )
             log.info(f"Updated existing suggestion: {dest.name}")
             return dest
         except Exception as e:
@@ -175,8 +255,16 @@ def suggest(sender_email: str, display_name: str, text: str) -> Optional[Path]:
 
     try:
         template = _build_template(sender_email, display_name, text)
-        dest.write_text(yaml.dump(template, default_flow_style=False, allow_unicode=True), encoding="utf-8")
+        dest.write_text(
+            yaml.dump(template, default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )
         log.info(f"Suggested template saved: {dest}")
+
+        auto_approved = _auto_approve(dest, template)
+        if is_new:
+            _send_suggestion_alert(sender_email, dest, auto_approved)
+
         return dest
     except Exception as e:
         log.warning(f"Failed to generate suggestion for {sender_email}: {e}")
