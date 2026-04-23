@@ -81,7 +81,7 @@ def build_output(
     # model's explicit list is stored as an extra field and included in JSON.
     template_fields = {
         k: v for k, v in parsed.items()
-        if not k.startswith("_") and k != "line_items"
+        if not k.startswith("_") and k not in ("line_items", "customer_name")
     }
 
     doc = ParsedDocument(
