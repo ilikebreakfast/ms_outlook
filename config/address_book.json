@@ -1,0 +1,18 @@
+{
+  "_comment": "Add known senders here. The pipeline checks this file before downloading any attachments. If 'template' matches a file in config/templates/<name>.yaml, fields will be parsed. Omit 'template' (or leave the YAML file missing) to extract and save the raw text only — the email is still moved to Processed.",
+  "contacts": [
+    {
+      "name": "Evergy",
+      "domains": ["evergy.com.au"],
+      "abns": ["56623005836"],
+      "keywords": ["evergy", "electricity bill", "centralised services", "NMI"],
+      "template": "evergy"
+    },
+    {
+      "name": "Bonita Hua",
+      "emails": ["bonitahua@hotmail.com"],
+      "keywords": ["bonita"],
+      "template": "bonitahua"
+    }
+  ]
+}

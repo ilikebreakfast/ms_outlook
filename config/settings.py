@@ -35,6 +35,7 @@ LOGS_DIR        = ROOT / "logs"
 DB_PATH         = ROOT / "database" / "pipeline.db"
 TEMPLATES_DIR           = ROOT / "config" / "templates"
 SUGGESTED_TEMPLATES_DIR = ROOT / "config" / "suggested_templates"
+ADDRESS_BOOK_PATH       = ROOT / "config" / "address_book.json"
 
 # --- OCR ---
 TESSERACT_CMD = os.getenv("TESSERACT_CMD", "tesseract")

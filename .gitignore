@@ -1,12 +1,38 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Credentials and secrets
 .env
 config/token_cache.bin
-config/suggested_templates/
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Pipeline runtime output (may contain email content)
 attachments/
 raw_text/
 parsed/
 logs/
 database/
 *.db
+
+# Auto-generated template drafts (may contain customer info)
+config/suggested_templates/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

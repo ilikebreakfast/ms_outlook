@@ -1,0 +1,23 @@
+# EXAMPLE TEMPLATE — copy and rename for a personal email sender (gmail, hotmail, etc.).
+# Use sender's 'emails' (not 'domains') in address_book.json for personal addresses.
+# 1. Add to config/address_book.json:
+#    { "name": "Jane Smith", "emails": ["jane@hotmail.com"], "template": "janesmith" }
+# 2. Adjust regex patterns below to match their document format
+# 3. Test with: python manage.py test-template <this_filename_without_yaml> <pdf_path>
+customer_name: Jane Smith
+required_fields: [invoice_number, order_date]
+fields:
+  customer_name:
+    - 'Jane\s+Smith'
+    - 'J\.?\s*Smith'
+  abn:
+    - 'ABN[:\s]+(\d[\d\s]{9,12}\d)'
+  address:
+    - '(\d+\s+\w+.*?(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4})'
+  order_date:
+    - '(?:Order|Invoice|Date)[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})'
+  requested_delivery_date:
+    - '(?:Deliver(?:y)?\s+(?:By|Date))[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})'
+  invoice_number:
+    - '(?:Invoice|INV|PO|Ref)[\s#:.]*(\w{3,20})'
+line_items_pattern: '(?P<qty>\d+(?:\.\d+)?)\s+(?P<description>[A-Za-z][\w\s,.-]{3,60})\s+\$?(?P<unit_price>[\d,]+\.\d{2})\s+\$?(?P<total>[\d,]+\.\d{2})'

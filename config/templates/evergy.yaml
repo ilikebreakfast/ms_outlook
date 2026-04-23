@@ -1,0 +1,20 @@
+customer_name: Evergy
+required_fields: [invoice_number, abn, order_date]
+fields:
+  customer_name:
+    - '(Joel.*?Wu)'
+  abn:
+    - 'ABN\s+(\d{2}\s?\d{3}\s?\d{3}\s?\d{3})'
+  address:
+    - '(\d+\s+\w+.*?(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4})'
+  order_date:
+    - 'bill issue date[:\s]+(\d{1,2}\s+\w+\s+\d{4})'
+  requested_delivery_date:
+    - 'due.*?by\s+(\d{1,2}\s+\w+\s+\d{4})'
+    - 'payment by\s+(\d{1,2}\s+\w+\s+\d{4})'
+  invoice_number:
+    - 'INV(\d+)'
+    - 'invoice.*?(INV\d+)'
+  amount_due:
+    - '\$([\d,]+\.\d{2})'
+line_items_pattern: ''
