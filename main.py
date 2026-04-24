@@ -303,8 +303,26 @@ def process_attachment(
                 f"Extracted only (no template): {filename} | customer={doc.customer_name} | "
                 "Add a YAML template to enable field parsing."
             )
+            pipeline_metrics.notify_low_confidence(
+                customer_name=doc.customer_name,
+                filename=filename,
+                confidence=doc.confidence,
+                status=doc.status,
+                sender_email=sender,
+                json_path=str(json_path),
+                template_name=template_name,
+            )
         elif doc.needs_review:
             log.warning(f"LOW CONFIDENCE ({doc.confidence:.0%}) - flagged for review: {filename}")
+            pipeline_metrics.notify_low_confidence(
+                customer_name=doc.customer_name,
+                filename=filename,
+                confidence=doc.confidence,
+                status=doc.status,
+                sender_email=sender,
+                json_path=str(json_path),
+                template_name=template_name,
+            )
         else:
             log.info(f"Done: {filename} | customer={doc.customer_name} | conf={doc.confidence:.0%}")
 

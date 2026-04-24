@@ -16,7 +16,7 @@ from typing import Optional
 
 import requests
 
-from config.settings import LOGS_DIR, WEBHOOK_URL, ALERT_WEBHOOK_URL
+from config.settings import LOGS_DIR, WEBHOOK_URL, ALERT_WEBHOOK_URL, REVIEW_WEBHOOK_URL
 
 log = logging.getLogger(__name__)
 
@@ -98,6 +98,44 @@ def _post_webhook(
     except Exception as exc:
         # Webhook failure must never crash the pipeline
         log.warning(f"Webhook POST failed ({url}): {exc}")
+
+
+def notify_low_confidence(
+    *,
+    customer_name: str,
+    filename: str,
+    confidence: float,
+    status: str,
+    sender_email: str,
+    json_path: str,
+    template_name: Optional[str],
+) -> None:
+    """
+    Fire a per-document webhook when confidence falls below threshold.
+    Uses REVIEW_WEBHOOK_URL if set, otherwise falls back to ALERT_WEBHOOK_URL.
+    No-op if neither is configured.
+    """
+    url = REVIEW_WEBHOOK_URL or ALERT_WEBHOOK_URL
+    if not url:
+        return
+
+    payload = {
+        "event": "low_confidence_document",
+        "customer_name": customer_name,
+        "filename": filename,
+        "confidence": round(confidence, 3),
+        "status": status,
+        "sender_email": sender_email,
+        "json_path": json_path,
+        "template_name": template_name,
+        "hint": "Run /review-invoices in Claude Code to re-extract missing fields.",
+    }
+    text = (
+        f"[ms_outlook] Low-confidence document — "
+        f"{customer_name} | {filename} | "
+        f"confidence: {confidence:.0%} | status: {status}"
+    )
+    _post_webhook(url, payload, alert=True, alert_reason=text)
 
 
 def read_last_metrics() -> Optional[dict]:

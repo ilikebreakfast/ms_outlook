@@ -83,6 +83,11 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 # Falls back to WEBHOOK_URL if not set.
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "") or WEBHOOK_URL
 
+# Per-document webhook: fires immediately when a document is processed below
+# LOW_CONFIDENCE_THRESHOLD or has no template (extracted_only).
+# Falls back to ALERT_WEBHOOK_URL if not set. Leave blank to disable.
+REVIEW_WEBHOOK_URL = os.getenv("REVIEW_WEBHOOK_URL", "") or ALERT_WEBHOOK_URL
+
 # --- Claude AI reviewer (fallback for low-confidence / no-template results) ---
 # Set ANTHROPIC_API_KEY and CLAUDE_REVIEW_ENABLED=true to activate.
 # Claude Haiku is used to minimise token cost; only invoked when regex confidence
