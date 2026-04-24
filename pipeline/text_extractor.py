@@ -6,6 +6,7 @@ Strategy:
   2. If extracted text is too short (<50 chars per page), assume scanned.
   3. Fall back to PyMuPDF -> render page as image -> Tesseract OCR.
   4. For image files (.png/.jpg/etc), go straight to Tesseract.
+  5. For Excel files (.xlsx, .xls), flatten to tab-separated text.
 
 Saves raw text to raw_text/ for audit.
 """
@@ -27,7 +28,7 @@ pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 PDF_EXTENSION = ".pdf"
-EXCEL_EXTENSIONS = {".xlsx"}
+EXCEL_EXTENSIONS = {".xlsx", ".xls"}
 MIN_CHARS_PER_PAGE = 50  # below this = likely scanned
 
 
@@ -38,35 +39,61 @@ def _ocr_image(img: Image.Image) -> str:
     return pytesseract.image_to_string(img, lang="eng")
 
 
+def _pdf_full_ocr(path: Path) -> str:
+    """OCR every page of a PDF via PyMuPDF. Used when pdfplumber/pdfminer fails."""
+    doc = fitz.open(str(path))
+    pages_text = []
+    mat = fitz.Matrix(2.0, 2.0)
+    for page in doc:
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        pages_text.append(_ocr_image(img))
+    return "\n\n".join(pages_text)
+
+
 def _extract_pdf_native(path: Path) -> Tuple[str, bool]:
     """Returns (text, is_native). is_native=False means OCR fallback used."""
-    pages_text = []
-    used_ocr = False
+    try:
+        pages_text = []
+        used_ocr = False
 
-    with pdfplumber.open(path) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            if len(text.strip()) >= MIN_CHARS_PER_PAGE:
-                pages_text.append(text)
-            else:
-                log.debug(f"Page {page.page_number} sparse, using OCR.")
-                used_ocr = True
-                # Render via PyMuPDF for better OCR quality
-                doc = fitz.open(str(path))
-                mat = fitz.Matrix(2.0, 2.0)  # 2x scale = higher DPI
-                pix = doc[page.page_number - 1].get_pixmap(matrix=mat)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                pages_text.append(_ocr_image(img))
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                if len(text.strip()) >= MIN_CHARS_PER_PAGE:
+                    pages_text.append(text)
+                else:
+                    log.debug(f"Page {page.page_number} sparse, using OCR.")
+                    used_ocr = True
+                    # Render via PyMuPDF for better OCR quality
+                    doc = fitz.open(str(path))
+                    mat = fitz.Matrix(2.0, 2.0)  # 2x scale = higher DPI
+                    pix = doc[page.page_number - 1].get_pixmap(matrix=mat)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    pages_text.append(_ocr_image(img))
 
-    return "\n\n".join(pages_text), not used_ocr
+        return "\n\n".join(pages_text), not used_ocr
+
+    except Exception as e:
+        # pdfminer / pdfplumber can raise on malformed or encrypted PDFs.
+        # Fall back to full OCR via PyMuPDF which is more tolerant.
+        log.warning(f"pdfplumber failed for {path.name} ({e}), falling back to full OCR.")
+        try:
+            return _pdf_full_ocr(path), False
+        except Exception as e2:
+            log.error(f"OCR fallback also failed for {path.name}: {e2}")
+            raise
 
 
 def extract_excel_text(path: Path) -> str:
     """
     Convert an Excel workbook to a flat text representation for classification
     and template field matching. Each sheet is rendered as tab-separated rows.
-    Saves result to raw_text/ alongside PDF outputs.
+    Supports both .xlsx (openpyxl) and legacy .xls (xlrd).
     """
+    ext = path.suffix.lower()
+    if ext == ".xls":
+        return _extract_xls_text(path)
     import openpyxl
     wb = openpyxl.load_workbook(path, data_only=True)
     parts = []
@@ -74,6 +101,24 @@ def extract_excel_text(path: Path) -> str:
         parts.append(f"[Sheet: {sheet.title}]")
         for row in sheet.iter_rows(values_only=True):
             cells = [str(c) if c is not None else "" for c in row]
+            line = "\t".join(cells).rstrip()
+            if line:
+                parts.append(line)
+    return "\n".join(parts)
+
+
+def _extract_xls_text(path: Path) -> str:
+    """Flatten a legacy .xls workbook to tab-separated text using xlrd."""
+    try:
+        import xlrd
+    except ImportError:
+        raise ImportError("xlrd is required for .xls files: pip install xlrd")
+    wb = xlrd.open_workbook(str(path))
+    parts = []
+    for sheet in wb.sheets():
+        parts.append(f"[Sheet: {sheet.name}]")
+        for row_idx in range(sheet.nrows):
+            cells = [str(sheet.cell_value(row_idx, col)) for col in range(sheet.ncols)]
             line = "\t".join(cells).rstrip()
             if line:
                 parts.append(line)
@@ -94,7 +139,7 @@ def extract_text(attachment_path: Path) -> Tuple[str, bool]:
         is_native = False
     elif ext in EXCEL_EXTENSIONS:
         text = extract_excel_text(attachment_path)
-        is_native = True
+        is_native = True  # no OCR involved
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 

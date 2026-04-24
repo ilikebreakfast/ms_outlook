@@ -33,10 +33,11 @@ from pipeline.json_output import build_output, save_json
 from pipeline.email_mover import move_to_processed
 from pipeline.security import validate_attachment, scrub_prompt_injection, is_allowed_sender
 from pipeline.template_suggester import suggest as suggest_template
+from pipeline.claude_reviewer import review as claude_review
 from pipeline import metrics as pipeline_metrics
 from config.settings import (
     MOVE_AFTER_PROCESSING, TEMPLATES_DIR, ADDRESS_BOOK_PATH,
-    DEFAULT_SCHEDULE_MINUTES,
+    DEFAULT_SCHEDULE_MINUTES, CLAUDE_REVIEW_ENABLED, CLAUDE_REVIEW_THRESHOLD,
 )
 
 from database import db
@@ -199,10 +200,30 @@ def process_attachment(
 
         if can_parse:
             log.info(f"Parsing with template: {template_name!r}")
-            if attachment_path.suffix.lower() == ".xlsx":
+            if attachment_path.suffix.lower() in (".xlsx", ".xls"):
                 parsed = parse_xlsx(attachment_path, template_name)
             else:
                 parsed = parse(text, template_name)
+
+            # Claude review fallback: supplement regex when confidence is low
+            if (
+                CLAUDE_REVIEW_ENABLED
+                and parsed.get("_confidence", 0.0) < CLAUDE_REVIEW_THRESHOLD
+            ):
+                log.info(
+                    f"Regex confidence {parsed.get('_confidence', 0.0):.0%} below threshold "
+                    f"— invoking Claude reviewer for {filename}"
+                )
+                claude_result = claude_review(
+                    text=text,
+                    template_name=template_name,
+                    attachment_path=attachment_path,
+                    is_native=is_native,
+                    existing_fields=parsed,
+                )
+                if claude_result and claude_result.get("_confidence", 0.0) > parsed.get("_confidence", 0.0):
+                    parsed = claude_result
+
             doc = build_output(parsed, customer_name, class_confidence, message, attachment_path)
             # Record template stats for drift detection
             if not dry_run:
@@ -218,10 +239,30 @@ def process_attachment(
                 )
         else:
             log.info(f"No template for {customer_name!r} — saving extracted text only.")
-            doc = build_output(
-                {}, customer_name, class_confidence, message, attachment_path,
-                status="extracted_only",
-            )
+
+            # Claude review for extracted_only: attempt field extraction without a template
+            if CLAUDE_REVIEW_ENABLED:
+                log.info(f"Invoking Claude reviewer for no-template sender: {filename}")
+                claude_result = claude_review(
+                    text=text,
+                    template_name=None,
+                    attachment_path=attachment_path,
+                    is_native=is_native,
+                    existing_fields={},
+                )
+            else:
+                claude_result = None
+
+            if claude_result:
+                doc = build_output(
+                    claude_result, customer_name, class_confidence, message, attachment_path
+                )
+            else:
+                doc = build_output(
+                    {}, customer_name, class_confidence, message, attachment_path,
+                    status="extracted_only",
+                )
+
             display_name = message.get("from", {}).get("emailAddress", {}).get("name", "")
             suggestion_path = suggest_template(sender, display_name, text)
             if suggestion_path:

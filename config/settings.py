@@ -25,7 +25,7 @@ FALLBACK_TOKEN_PATH = Path(_fallback_raw) if _fallback_raw else None
 # --- Mailbox ---
 TARGET_FOLDER = os.getenv("TARGET_FOLDER") or None
 
-ATTACHMENT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".xlsx"}
+ATTACHMENT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".xlsx", ".xls"}
 
 # --- Storage ---
 ATTACHMENTS_DIR = ROOT / "attachments"
@@ -82,6 +82,14 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 # Separate channel for urgent alerts (auth failures, large review queue, etc.).
 # Falls back to WEBHOOK_URL if not set.
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "") or WEBHOOK_URL
+
+# --- Claude AI reviewer (fallback for low-confidence / no-template results) ---
+# Set ANTHROPIC_API_KEY and CLAUDE_REVIEW_ENABLED=true to activate.
+# Claude Haiku is used to minimise token cost; only invoked when regex confidence
+# falls below CLAUDE_REVIEW_THRESHOLD (default: same as LOW_CONFIDENCE_THRESHOLD).
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_REVIEW_ENABLED = os.getenv("CLAUDE_REVIEW_ENABLED", "false").lower() == "true"
+CLAUDE_REVIEW_THRESHOLD = float(os.getenv("CLAUDE_REVIEW_THRESHOLD", str(LOW_CONFIDENCE_THRESHOLD)))
 
 # --- Scheduling (used when --schedule flag is passed to main.py) ---
 # Default poll interval in minutes when running in scheduled/daemon mode.
