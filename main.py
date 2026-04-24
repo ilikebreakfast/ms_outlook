@@ -19,7 +19,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from utils.logger import setup_logging
@@ -178,7 +178,7 @@ def process_attachment(
                 attachment_filename=filename,
                 sender_email=sender,
                 received_at=received,
-                processed_at=datetime.utcnow().isoformat() + "Z",
+                processed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 error="BLOCKED: " + " | ".join(issues),
             )
         return False
@@ -274,7 +274,7 @@ def process_attachment(
                 attachment_filename=filename,
                 sender_email=sender,
                 received_at=received,
-                processed_at=datetime.utcnow().isoformat() + "Z",
+                processed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 error=str(exc),
             )
         return False
@@ -288,7 +288,7 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
     """
     Execute one full pipeline pass. Returns a stats dict for metrics/logging.
     """
-    run_started_at = datetime.utcnow().isoformat() + "Z"
+    run_started_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     log.info(
         f"Pipeline starting — processing last {days} day(s) of emails."
         + (" [DRY RUN]" if dry_run else "")

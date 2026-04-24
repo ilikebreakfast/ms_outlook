@@ -19,7 +19,7 @@ Usage (same interface as the original stub so main.py needs no changes):
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -156,7 +156,7 @@ def record(
     replaced — this handles re-runs after a previous error.
     """
     if not processed_at:
-        processed_at = datetime.utcnow().isoformat() + "Z"
+        processed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     with _connect() as conn:
         cursor = conn.execute(
@@ -224,7 +224,7 @@ def record_template_stat(
             """,
             (
                 template_name,
-                datetime.utcnow().isoformat() + "Z",
+                datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 confidence,
                 required_fields_matched,
                 required_fields_total,
@@ -264,7 +264,7 @@ def get_review_queue(status: str = "pending") -> list[dict]:
 
 def resolve_review(queue_id: int, resolved_by: str = "", status: str = "resolved") -> bool:
     """Mark a review queue item resolved or dismissed."""
-    resolved_at = datetime.utcnow().isoformat() + "Z"
+    resolved_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     with _connect() as conn:
         cursor = conn.execute(
             """

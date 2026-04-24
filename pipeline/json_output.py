@@ -3,7 +3,7 @@ Validates and writes the final structured JSON output.
 Uses Pydantic for schema validation.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -95,7 +95,7 @@ def build_output(
         confidence=combined_confidence,
         status=doc_status,
         needs_review=needs_review,
-        processed_at=datetime.utcnow().isoformat() + "Z",
+        processed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     )
     return doc
 

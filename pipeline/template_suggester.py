@@ -17,7 +17,7 @@ Existing suggestions are updated (not overwritten) to preserve manual edits.
 import logging
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -118,7 +118,7 @@ def _build_template(sender_email: str, display_name: str, text: str) -> dict:
 
     template: dict = {
         "_status": "SUGGESTED — review patterns, then copy to config/templates/ to activate",
-        "_generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        "_generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "_address_book_entry": address_book_entry,
         "customer_name": customer_name,
         "required_fields": ["invoice_number", "order_date"],
@@ -234,7 +234,7 @@ def suggest(sender_email: str, display_name: str, text: str) -> Optional[Path]:
     if not is_new:
         try:
             existing = yaml.safe_load(dest.read_text(encoding="utf-8"))
-            existing["_generated_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+            existing["_generated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             sniffed = _sniff_fields(text)
             if sniffed:
                 existing["_field_examples_found_in_document"] = sniffed

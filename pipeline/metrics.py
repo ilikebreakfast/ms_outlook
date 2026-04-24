@@ -10,7 +10,7 @@ It can be scraped by a monitoring tool or read by `manage.py health`.
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -42,7 +42,7 @@ def emit(
     """
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    run_finished_at = datetime.utcnow().isoformat() + "Z"
+    run_finished_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     payload = {
         "run_started_at": run_started_at,
         "run_finished_at": run_finished_at,
