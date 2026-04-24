@@ -22,19 +22,20 @@ Outlook mailbox
   └─────────────────────────────────────────────────────────────┘
         │
         ▼
-  Download PDFs / images  →  saved to  attachments/
+  Download PDFs / images / Excel files  →  saved to  attachments/
         │
         ▼
   File-level security checks
     ├── File size limit
-    ├── Magic byte validation (real file type check)
-    ├── PDF structure scan (embedded JS, auto-actions)
+    ├── Magic byte validation (real file type check, including .xlsx ZIP header)
+    ├── PDF structure scan (embedded JS, auto-actions — skipped for Excel)
     └── ClamAV antivirus scan (if enabled)
         │
         ▼
   Extract text
     ├── Native PDF (pdfplumber)
-    └── Scanned PDF or image (PyMuPDF → Tesseract OCR)  →  saved to  raw_text/
+    ├── Scanned PDF or image (PyMuPDF → Tesseract OCR)
+    └── Excel .xlsx (openpyxl → tab-separated flat text)  →  saved to  raw_text/
         │
         ▼
   Prompt injection scrubbing (sanitise text before parsing)
@@ -265,6 +266,9 @@ Python 3.10 or later. Check with:
 python --version
 ```
 
+### openpyxl (Excel support)
+Required for `.xlsx` attachments. Installed automatically via `requirements.txt` (`pip install -r requirements.txt`). No binary install needed.
+
 ### Tesseract OCR
 Required for scanned PDFs and image files.
 
@@ -416,8 +420,8 @@ The pipeline processes emails from the internet, which means it will encounter p
 | Threat | Defence |
 |---|---|
 | Phishing from unknown senders | Sender allowlist checked **before any download** — unknown senders are skipped entirely, no files written to disk. If `address_book.json` is missing or corrupt, **all senders are denied** (fail-closed). |
-| Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file |
-| Malicious PDF with embedded JavaScript | PDF structure scan — rejects PDFs containing `/JS`, `/JavaScript`, `/Launch`, `/XFA`. `/AA` and `/OpenAction` are only blocked when an execution payload is also present (standalone triggers in legitimate POS receipts are allowed through as warnings). |
+| Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file. `.xlsx` files are validated against the ZIP magic bytes (`PK\x03\x04`) that OOXML requires. |
+| Malicious PDF with embedded JavaScript | PDF structure scan — rejects PDFs containing `/JS`, `/JavaScript`, `/Launch`, `/XFA`. `/AA` and `/OpenAction` are only blocked when an execution payload is also present (standalone triggers in legitimate POS receipts are allowed through as warnings). Excel files skip the PDF scan entirely. |
 | Zip-bomb / memory exhaustion | File size limit (default 20 MB) |
 | Malware in attachments | ClamAV antivirus scan (when enabled) |
 | Path traversal in filenames (`../../evil.py`) | Filename sanitisation — strips directory components |
@@ -840,6 +844,46 @@ python manage.py test-template newsupplier invoice.pdf --show-text
 
 Regex patterns use single backslashes in YAML (e.g. `\d+`, not `\\d+`).
 
+#### Excel (.xlsx) templates
+
+For Excel attachments, use `fields_xlsx` and `line_items_xlsx` instead of (or alongside) regex `fields`. The parser searches for a cell matching the label string and returns the adjacent cell value.
+
+```yaml
+required_fields: [po_number, delivery_date]
+
+# Cell-label lookup: searches all cells for the label, returns adjacent cell value
+fields_xlsx:
+  po_number:     "PO Number"
+  delivery_date: "Delivery Date"
+  company_name:  "Company Name"
+  total_amount:  "Total (inc GST)"
+
+# Fallback regex on flat text for any fields not found via fields_xlsx
+fields:
+  po_number:
+    - 'PO[\s#:]+([A-Z0-9\-]+)'
+
+# Structured line item extraction using column headers
+line_items_xlsx:
+  sheet: 0               # sheet index (0-based) or name string
+  header_row: 1          # 1-indexed row containing column headers
+  columns:
+    product_code: "Item Code"
+    description:  "Description"
+    qty:          "Quantity"
+    uom:          "UOM"
+    unit_price:   "Unit Price"
+    subtotal:     "Sub Total"
+    total:        "Total"
+  skip_if_empty: "product_code"   # skip rows where this column is blank
+```
+
+Test Excel templates the same way as PDF:
+```bash
+python manage.py test-template mysupplier order.xlsx
+python manage.py test-template mysupplier order.xlsx --show-text
+```
+
 No code changes needed — new templates are picked up automatically on the next run.
 
 ---
@@ -920,9 +964,9 @@ ms_outlook/
 │   ├── email_reader.py            ← fetch emails filtered by date range
 │   ├── attachment_downloader.py   ← download to YYYY-MM-DD_domain_hash/ folders
 │   ├── security.py                ← allowlist, magic bytes, PDF scan, ClamAV
-│   ├── text_extractor.py          ← extract text + OCR fallback
+│   ├── text_extractor.py          ← extract text: native PDF, OCR fallback, Excel (openpyxl)
 │   ├── customer_classifier.py     ← identify customer from address book
-│   ├── template_parser.py         ← extract fields using YAML templates (supports line_items_patterns list)
+│   ├── template_parser.py         ← parse() for PDF/image regex; parse_xlsx() for Excel (fields_xlsx + line_items_xlsx)
 │   ├── json_output.py             ← validate + save JSON (LineItem: product_code, uom, subtotal)
 │   ├── email_mover.py             ← move email after processing
 │   ├── template_suggester.py      ← auto-generate drafts with table format detection
