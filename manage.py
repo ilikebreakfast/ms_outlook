@@ -95,8 +95,8 @@ def cmd_test_template(args) -> int:
         display_value = value[:50] if value else "(no match)"
         print(f"  {field_name + required_marker:<26} {status_icon:<6} {display_value}")
 
-    line_items_pattern = tmpl.get("line_items_pattern", "")
-    line_items = _extract_line_items(text, line_items_pattern) if line_items_pattern else []
+    line_patterns = tmpl.get("line_items_patterns") or tmpl.get("line_items_pattern", "")
+    line_items = _extract_line_items(text, line_patterns) if line_patterns else []
     print(f"\n  {'line_items':<26} {'OK' if line_items else '--':<6} {len(line_items)} item(s) found")
 
     extracted_required = sum(1 for f in required_fields if results.get(f))

@@ -46,24 +46,40 @@ STOP_WORDS = {
 }
 
 _DATE_RE = re.compile(
-    r"(?:invoice|order|bill|issue|date|issued)[^\n]{0,20}?"
-    r"(\d{1,2}[\s/\-]\w{2,9}[\s/\-]\d{2,4}|\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})",
+    r"(?:invoice|order|bill|issue|date|issued|created)[^\n]{0,20}?"
+    r"(\d{1,2}[\s/\-.]\w{2,9}[\s/\-.]\d{2,4}|\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}"
+    r"|\d{1,2}\.\d{2}\.\d{4}|\d{2}-[A-Z]{3}-\d{2})",
     re.IGNORECASE,
 )
 _DELIVERY_RE = re.compile(
-    r"(?:due|deliver|required|by)[^\n]{0,20}?"
-    r"(\d{1,2}[\s/\-]\w{2,9}[\s/\-]\d{2,4}|\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})",
+    r"(?:due|deliver|required|by|dispatch)[^\n]{0,20}?"
+    r"(\d{1,2}[\s/\-.]\w{2,9}[\s/\-.]\d{2,4}|\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}"
+    r"|\d{1,2}\.\d{2}\.\d{4})",
     re.IGNORECASE,
 )
 _INVOICE_RE = re.compile(
-    r"(?:invoice|inv|order|po|ref|reference)[^\n]{0,10}?[#:\s]([A-Z0-9\-]{3,20})",
+    r"(?:invoice|inv|order|po|ref|reference)\s*(?:number|no\.?|#)?[:\s#]*([A-Z0-9][A-Z0-9\-]{2,24})",
     re.IGNORECASE,
 )
-_AMOUNT_RE = re.compile(r"\$\s*([\d,]+\.\d{2})")
+_AMOUNT_RE = re.compile(r"(?:\$|AUD)\s*([\d,]+\.\d{2})")
 _ADDRESS_RE = re.compile(
     r"(\d{1,5}\s+\w[\w\s,\.]{5,60}(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4})",
     re.IGNORECASE,
 )
+_ABN_LABEL_RE = re.compile(r"ABN[\s:\-]+([\d\s]{11,14})", re.IGNORECASE)
+_SUBTOTAL_RE = re.compile(
+    r"(?:sub[\-\s]?total|amount\s*\(net\))[:\s]+([\d,]+\.\d{2})", re.IGNORECASE
+)
+_TOTAL_RE = re.compile(
+    r"(?:total\s+amount|amount\s*\(gross\)|grand\s+total|total\s+incl)[^\n]{0,30}?([\d,]+\.\d{2})",
+    re.IGNORECASE,
+)
+# Table header keywords that indicate a line-items section
+_TABLE_HEADER_RE = re.compile(
+    r"\b(qty|quantity)\b.{0,40}\b(code|item|product)\b.{0,40}\b(price|cost|total)\b",
+    re.IGNORECASE,
+)
+_PIPE_ROW_RE = re.compile(r"^[^|]+\|[^|]+\|", re.MULTILINE)
 
 
 def _extract_keywords(text: str, top_n: int = 8) -> list[str]:
@@ -77,8 +93,34 @@ def _safe_filename(sender_email: str) -> str:
     return safe.replace("@", "_at_")
 
 
+def _sniff_line_item_format(text: str) -> tuple[str, list[str]]:
+    """
+    Detect the line-item table format and return (format_type, suggested_patterns).
+    format_type: 'pipe', 'tabular', or 'unknown'
+    """
+    pipe_lines = [l for l in text.splitlines() if l.count("|") >= 2 and len(l) > 10]
+    if len(pipe_lines) >= 2:
+        return "pipe", [
+            r"(?P<product_code>\d{4,})\s*\|\s*(?P<description>[^|]+?)"
+            r"\s*\|\s*(?P<qty>[\d.]+)\s*\|\s*(?P<unit_price>[\d.]+)"
+            r"\s*\|\s*(?P<total>[\d,]+\.\d{2})"
+        ]
+
+    if _TABLE_HEADER_RE.search(text):
+        return "tabular", [
+            r"^(?P<qty>[\d.]+)\s+(?P<uom>\w+)\s+(?P<product_code>\d{4,})"
+            r"\s+(?P<description>.+?)\s+(?P<unit_price>[\d.]+)"
+            r"\s+(?P<total>[\d,]+\.\d{2})$"
+        ]
+
+    return "unknown", [
+        r"(?P<qty>\d+(?:\.\d+)?)\s+(?P<description>[A-Za-z][\w\s,.-]{3,60})"
+        r"\s+\$?(?P<unit_price>[\d,]+\.\d{2})\s+\$?(?P<total>[\d,]+\.\d{2})"
+    ]
+
+
 def _sniff_fields(text: str) -> dict:
-    """Detect example field values in the document to help the user write patterns."""
+    """Detect example field values in the document to help write patterns."""
     found = {}
     m = _DATE_RE.search(text)
     if m:
@@ -95,6 +137,17 @@ def _sniff_fields(text: str) -> dict:
     m = _ADDRESS_RE.search(text)
     if m:
         found["address_example"] = m.group(1).strip()
+    m = _ABN_LABEL_RE.search(text)
+    if m:
+        found["abn_example"] = re.sub(r"\s", "", m.group(1)).strip()
+    m = _SUBTOTAL_RE.search(text)
+    if m:
+        found["subtotal_example"] = m.group(1).strip()
+    m = _TOTAL_RE.search(text)
+    if m:
+        found["total_example"] = m.group(1).strip()
+    fmt, _ = _sniff_line_item_format(text)
+    found["line_item_format_detected"] = fmt
     return found
 
 
@@ -116,26 +169,46 @@ def _build_template(sender_email: str, display_name: str, text: str) -> dict:
     if keywords:
         address_book_entry["keywords"] = keywords
 
+    _, line_item_patterns = _sniff_line_item_format(text)
+
     template: dict = {
         "_status": "SUGGESTED — review patterns, then copy to config/templates/ to activate",
         "_generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "_address_book_entry": address_book_entry,
         "customer_name": customer_name,
-        "required_fields": ["invoice_number", "order_date"],
+        "required_fields": ["po_number", "delivery_date"],
         "fields": {
             "customer_name": [re.escape(customer_name) if customer_name else "FILL_IN_CUSTOMER_NAME"],
-            "abn": [r"ABN[:\s]+([\d\s]{11,14})"],
+            "company_abn": [r"ABN[\s:\-]+([\d\s]{11,14})"],
             "address": [r"(\d+\s+\w+.*?(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4})"],
-            "order_date": [r"(?:Invoice|Order|Bill|Issue)\s*Date[:\s]+(\d{1,2}[\s/\-]\w{2,9}[\s/\-]\d{2,4})"],
-            "requested_delivery_date": [r"(?:Due|Deliver(?:y)?\s*(?:By|Date))[:\s]+(\d{1,2}[\s/\-]\w{2,9}[\s/\-]\d{2,4})"],
-            "invoice_number": [r"(?:Invoice|INV|Order|PO|Ref)[\s#:.]*(\w{3,20})"],
+            "po_number": [
+                r"(?:PO\s*Number|Order\s*(?:Number|No\.?|#)|REF)[:\s#]*([A-Z0-9][A-Z0-9\-]{2,24})",
+                r"Order\s*:\s*([A-Z]\d+)",
+            ],
+            "order_date": [
+                r"(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On|date)?[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})",
+                r"(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On|date)?[:\s]+(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
+            ],
+            "delivery_date": [
+                r"(?:Delivery\s+Date|Date\s+of\s+Delivery|Deliver\s+By)[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})",
+                r"(?:Delivery\s+Date|Date\s+of\s+Delivery|Deliver\s+By)[:\s]+(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
+            ],
+            "company_name": [
+                r"Company\s+Name[:\s]+(.+?)(?:,\s*ABN|\n|$)",
+                r"Customer[:\s]+(.+?)(?:\n|,)",
+                r"Ship\s+To[:\s]+(.+?)(?:\n|,)",
+            ],
+            "subtotal": [
+                r"(?:Sub[\-\s]?Total|Amount\s*\(net\))[:\s]+([\d,]+\.\d{2})",
+            ],
+            "tax_amount": [
+                r"(?:^Tax|Total\s+GST|GST\s+Amount)[:\s]+([\d,]+\.\d{2})",
+            ],
+            "total_amount": [
+                r"(?:Total\s+Amount|Amount\s*\(gross\)|Grand\s+Total|Total\s+Incl)[^\n]{0,30}?([\d,]+\.\d{2})",
+            ],
         },
-        "line_items_pattern": (
-            r"(?P<qty>\d+(?:\.\d+)?)\s+"
-            r"(?P<description>[A-Za-z][\w\s,.-]{3,60})\s+"
-            r"\$?(?P<unit_price>[\d,]+\.\d{2})\s+"
-            r"\$?(?P<total>[\d,]+\.\d{2})"
-        ),
+        "line_items_patterns": line_item_patterns,
     }
 
     if sniffed:

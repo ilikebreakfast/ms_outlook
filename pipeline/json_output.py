@@ -15,15 +15,18 @@ log = logging.getLogger(__name__)
 
 
 class LineItem(BaseModel):
-    qty: Optional[str] = None
+    product_code: Optional[str] = None
     description: Optional[str] = None
+    qty: Optional[str] = None
+    uom: Optional[str] = None
     unit_price: Optional[str] = None
+    subtotal: Optional[str] = None
     total: Optional[str] = None
 
 
 class ParsedDocument(BaseModel):
-    # Allow any extra fields from templates (amount_due, due_date, etc.)
-    # so custom fields appear in the JSON without modifying this model.
+    # Allow any extra fields from templates so custom fields appear in JSON
+    # without modifying this model.
     model_config = ConfigDict(extra="allow")
 
     customer_name: Optional[str] = None
@@ -32,6 +35,15 @@ class ParsedDocument(BaseModel):
     order_date: Optional[str] = None
     requested_delivery_date: Optional[str] = None
     invoice_number: Optional[str] = None
+    # Purchase order / invoice fields (also flow through from templates as extras,
+    # but declared here for IDE visibility and JSON key ordering)
+    po_number: Optional[str] = None
+    delivery_date: Optional[str] = None
+    company_name: Optional[str] = None
+    company_abn: Optional[str] = None
+    subtotal: Optional[str] = None
+    tax_amount: Optional[str] = None
+    total_amount: Optional[str] = None
     line_items: List[LineItem] = []
 
     # Pipeline metadata

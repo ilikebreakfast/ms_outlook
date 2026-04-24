@@ -36,16 +36,30 @@ def _extract_field(text: str, patterns: list[str]) -> Optional[str]:
     return None
 
 
-def _extract_line_items(text: str, pattern: str) -> list[dict]:
+def _extract_line_items(text: str, pattern_or_patterns) -> list[dict]:
     """
-    Extracts line items using a regex with named groups:
-    qty, description, unit_price, total
+    Extracts line items using one or more regex patterns with named groups.
+    Supports both a single pattern string and a list of patterns (line_items_patterns).
+    Each pattern should use named groups: product_code, description, qty, uom,
+    unit_price, subtotal, total — any subset is fine.
+    Results from all patterns are merged; duplicate rows are deduplicated.
     """
-    if not pattern:
-        return []
-    items = []
-    for match in re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE):
-        items.append({k: v.strip() if v else None for k, v in match.groupdict().items()})
+    patterns = (
+        pattern_or_patterns
+        if isinstance(pattern_or_patterns, list)
+        else [pattern_or_patterns]
+    )
+    seen: set = set()
+    items: list[dict] = []
+    for pattern in patterns:
+        if not pattern:
+            continue
+        for match in re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE):
+            item = {k: v.strip() if v else None for k, v in match.groupdict().items()}
+            key = frozenset(item.items())
+            if key not in seen:
+                seen.add(key)
+                items.append(item)
     return items
 
 
@@ -67,9 +81,9 @@ def parse(text: str, template_name: str) -> dict:
     for field_name, patterns in fields.items():
         result[field_name] = _extract_field(text, patterns if isinstance(patterns, list) else [patterns])
 
-    result["line_items"] = _extract_line_items(
-        text, tmpl.get("line_items_pattern", "")
-    )
+    # Support both line_items_patterns (list) and legacy line_items_pattern (string)
+    line_patterns = tmpl.get("line_items_patterns") or tmpl.get("line_items_pattern", "")
+    result["line_items"] = _extract_line_items(text, line_patterns)
 
     # Confidence = fraction of required fields that were extracted
     extracted = sum(1 for f in required_fields if result.get(f))

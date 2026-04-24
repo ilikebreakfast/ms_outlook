@@ -417,7 +417,7 @@ The pipeline processes emails from the internet, which means it will encounter p
 |---|---|
 | Phishing from unknown senders | Sender allowlist checked **before any download** — unknown senders are skipped entirely, no files written to disk. If `address_book.json` is missing or corrupt, **all senders are denied** (fail-closed). |
 | Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file |
-| Malicious PDF with embedded JavaScript | PDF structure scan — rejects any PDF containing `/JS`, `/JavaScript`, `/OpenAction`, `/Launch`, `/EmbeddedFile`, `/XFA` |
+| Malicious PDF with embedded JavaScript | PDF structure scan — rejects PDFs containing `/JS`, `/JavaScript`, `/Launch`, `/XFA`. `/AA` and `/OpenAction` are only blocked when an execution payload is also present (standalone triggers in legitimate POS receipts are allowed through as warnings). |
 | Zip-bomb / memory exhaustion | File size limit (default 20 MB) |
 | Malware in attachments | ClamAV antivirus scan (when enabled) |
 | Path traversal in filenames (`../../evil.py`) | Filename sanitisation — strips directory components |
@@ -533,10 +533,12 @@ Set `DEFAULT_SCHEDULE_MINUTES` in `.env` to control frequency (default: `60`).
 
 For each processed attachment you get three files:
 
+Folders are named `YYYY-MM-DD_<sender-domain>_<hash>/` — one folder per email, human-readable:
+
 ```
-attachments/<message_id>/   original file (e.g. INV001.pdf)
-raw_text/<message_id>/      extracted text  (e.g. INV001.txt)
-parsed/<message_id>/        structured JSON (e.g. INV001.json)
+attachments/2026-04-24_acmecorp-com-au_a3f1b2c4/   original files
+raw_text/2026-04-24_acmecorp-com-au_a3f1b2c4/       extracted text
+parsed/2026-04-24_acmecorp-com-au_a3f1b2c4/         structured JSON
 ```
 
 **Example JSON (fully parsed):**
@@ -546,9 +548,24 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
   "abn": "12345678901",
   "address": "42 Example Street Sydney NSW 2000",
   "order_date": "07 Apr 2026",
-  "requested_delivery_date": "24 Apr 2026",
-  "invoice_number": "INV001234",
-  "line_items": [],
+  "po_number": "PO-20260407",
+  "delivery_date": "24 Apr 2026",
+  "company_name": "Buyer Pty Ltd",
+  "company_abn": "98765432100",
+  "subtotal": "1500.00",
+  "tax_amount": "0.00",
+  "total_amount": "1500.00",
+  "line_items": [
+    {
+      "product_code": "100793",
+      "description": "Burger patty wagyu 180g frozen",
+      "qty": "4.000",
+      "uom": "piece/unit",
+      "unit_price": "71.26",
+      "subtotal": null,
+      "total": "285.03"
+    }
+  ],
   "confidence": 0.93,
   "status": "parsed",
   "needs_review": false,
@@ -561,7 +578,7 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
 {
   "customer_name": "New Supplier",
   "abn": null,
-  "invoice_number": null,
+  "po_number": null,
   "line_items": [],
   "confidence": 0.95,
   "status": "extracted_only",
@@ -569,7 +586,7 @@ parsed/<message_id>/        structured JSON (e.g. INV001.json)
   "processed_at": "2026-04-22T03:00:00Z"
 }
 ```
-The raw extracted text is in `raw_text/<message_id>/`. Add a YAML template and the next run will parse the fields.
+The raw extracted text is in `raw_text/<folder>/`. Add a YAML template and the next run will parse the fields.
 
 ---
 
@@ -794,9 +811,24 @@ python manage.py add-sender jane@gmail.com --name "Jane Smith"
 
 The pipeline will now download and extract text from their emails immediately — even before you write a template.
 
-### Step 3 — Create a parsing template (optional)
+### Step 3 — Create a parsing template
 
-Copy `config/templates/example_new_customer.yaml`, rename to match the `"template"` value above (e.g. `newsupplier.yaml`), and fill in the `fields` section with regex patterns for the data you want to extract.
+**Quickest way — use the `/generate-template` Claude Code skill:**
+
+Open Claude Code in this project directory and run:
+```
+/generate-template newsupplier.com.au          # org domain
+/generate-template jane@gmail.com              # personal email
+/generate-template newsupplier                 # contact already in address book
+```
+
+Claude will read the raw text files for that sender, analyse the document structure, write a
+YAML template with correct regex patterns, test it against your actual PDFs, and iterate until
+all required fields extract successfully. The skill handles up to 5 different document layouts
+from the same sender (each gets its own `line_items_patterns` entry).
+
+**Or write manually:** Copy `config/templates/example_new_customer.yaml`, rename to match the
+`"template"` value above (e.g. `newsupplier.yaml`), and fill in the `fields` section.
 
 ```bash
 # Check which fields match against a real PDF from that sender
@@ -879,18 +911,21 @@ ms_outlook/
 │   │   └── example_personal_contact.yaml
 │   └── suggested_templates/       ← auto-generated drafts (gitignored)
 │       └── supplier_at_newcompany_com_au.yaml
+├── .claude/
+│   └── commands/
+│       └── generate-template.md   ← /generate-template skill (Claude Code)
 ├── auth/
 │   └── graph_client.py            ← Microsoft login + Graph API (with retry)
 ├── pipeline/
 │   ├── email_reader.py            ← fetch emails filtered by date range
-│   ├── attachment_downloader.py   ← download PDFs/images
-│   ├── security.py                ← all security checks (allowlist, AV, magic bytes, etc.)
+│   ├── attachment_downloader.py   ← download to YYYY-MM-DD_domain_hash/ folders
+│   ├── security.py                ← allowlist, magic bytes, PDF scan, ClamAV
 │   ├── text_extractor.py          ← extract text + OCR fallback
 │   ├── customer_classifier.py     ← identify customer from address book
-│   ├── template_parser.py         ← extract fields using YAML templates
-│   ├── json_output.py             ← validate + save JSON
+│   ├── template_parser.py         ← extract fields using YAML templates (supports line_items_patterns list)
+│   ├── json_output.py             ← validate + save JSON (LineItem: product_code, uom, subtotal)
 │   ├── email_mover.py             ← move email after processing
-│   ├── template_suggester.py      ← auto-generate + auto-approve draft templates
+│   ├── template_suggester.py      ← auto-generate drafts with table format detection
 │   └── metrics.py                 ← run metrics (logs/metrics.json + webhook POST)
 ├── database/
 │   └── db.py                      ← SQLite: processed_documents, review_queue, template_stats

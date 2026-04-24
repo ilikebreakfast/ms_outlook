@@ -82,9 +82,9 @@ Email Fetch (email_reader.py)
       "template": "evergy"
     },
     {
-      "name": "Bonita Hua",
-      "emails": ["bonitahua@hotmail.com"],
-      "template": "bonitahua"
+      "name": "Jane Smith",
+      "emails": ["jane.smith@example.com"],
+      "template": "janesmith"
     }
   ]
 }

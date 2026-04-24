@@ -42,11 +42,16 @@ MAGIC_BYTES: dict[str, list[bytes]] = {
 PDF_FATAL_PATTERNS: list[tuple[bytes, str]] = [
     (b"/JavaScript", "embedded JavaScript"),
     (b"/JS",         "embedded JavaScript (short form)"),
-    (b"/AA",         "auto-action (runs on open)"),
-    (b"/OpenAction", "OpenAction (runs on open)"),
     (b"/Launch",     "Launch action (executes external program)"),
     (b"/XFA",        "XFA form (XML Forms Architecture, commonly abused)"),
 ]
+
+# PDF action triggers that are only dangerous when paired with an execution payload.
+# Standalone /AA or /OpenAction in POS receipts, print dialogs, and page-navigation
+# PDFs are legitimate and produce false positives. Block only when a JS/Launch
+# payload is also present.
+PDF_ACTION_TRIGGERS: list[bytes] = [b"/AA", b"/OpenAction"]
+PDF_EXEC_PAYLOADS: list[bytes] = [b"/JavaScript", b"/JS", b"/Launch"]
 
 # PDF keywords that are suspicious but appear in many legitimate documents.
 # These are logged as warnings but do NOT block processing.
@@ -55,6 +60,8 @@ PDF_FATAL_PATTERNS: list[tuple[bytes, str]] = [
 #                   Blocking on this produces too many false positives.
 PDF_WARN_PATTERNS: list[tuple[bytes, str]] = [
     (b"/EmbeddedFile", "embedded file attachment (informational — not blocked)"),
+    (b"/AA",           "auto-action trigger (no executable payload detected — informational)"),
+    (b"/OpenAction",   "OpenAction trigger (no executable payload detected — informational)"),
 ]
 
 # Prompt injection phrases to scrub from extracted text before parsing
@@ -133,8 +140,22 @@ def scan_pdf_structure(path: Path) -> tuple[list[str], list[str]]:
         for pattern, label in PDF_FATAL_PATTERNS:
             if pattern in data:
                 fatal_issues.append(f"Blocked — dangerous PDF structure: {label}")
+        # Action triggers (/AA, /OpenAction) are only fatal when an execution payload
+        # (/JS, /JavaScript, /Launch) is also present. Standalone triggers appear in
+        # legitimate POS receipts and print-dialog PDFs.
+        has_exec_payload = any(p in data for p in PDF_EXEC_PAYLOADS)
+        for trigger in PDF_ACTION_TRIGGERS:
+            if trigger in data:
+                if has_exec_payload:
+                    fatal_issues.append(
+                        f"Blocked — dangerous PDF structure: {trigger.decode()} with executable payload"
+                    )
+                # warn-only path: find the matching label from PDF_WARN_PATTERNS
         for pattern, label in PDF_WARN_PATTERNS:
             if pattern in data:
+                # Skip action triggers that were already escalated to fatal above
+                if pattern in PDF_ACTION_TRIGGERS and has_exec_payload:
+                    continue
                 warnings.append(f"PDF note: {label}")
     except Exception as exc:
         fatal_issues.append(f"Could not scan PDF structure: {exc}")

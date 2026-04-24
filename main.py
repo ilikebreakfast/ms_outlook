@@ -320,7 +320,12 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
             paths = []
             log.info(f"[DRY RUN] Would download attachments for: {subject!r}")
         else:
-            paths = download_attachments(client, message["id"])
+            paths = download_attachments(
+                client,
+                message["id"],
+                sender=sender,
+                received=message.get("receivedDateTime", ""),
+            )
 
         if not paths and not dry_run:
             log.info(f"No supported attachments in: {subject!r}")
