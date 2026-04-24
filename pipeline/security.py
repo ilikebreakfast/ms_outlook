@@ -38,15 +38,23 @@ MAGIC_BYTES: dict[str, list[bytes]] = {
     ".bmp":  [b"BM"],
 }
 
-# PDF internal keywords that indicate active/dangerous content
-PDF_DANGER_PATTERNS = [
-    b"/JavaScript",
-    b"/JS",
-    b"/AA",          # auto-action (runs on open)
-    b"/OpenAction",  # runs on open
-    b"/Launch",      # launches external program
-    b"/EmbeddedFile",
-    b"/XFA",         # XML Forms Architecture — complex, often abused
+# PDF keywords that can execute code or exfiltrate data — always block.
+PDF_FATAL_PATTERNS: list[tuple[bytes, str]] = [
+    (b"/JavaScript", "embedded JavaScript"),
+    (b"/JS",         "embedded JavaScript (short form)"),
+    (b"/AA",         "auto-action (runs on open)"),
+    (b"/OpenAction", "OpenAction (runs on open)"),
+    (b"/Launch",     "Launch action (executes external program)"),
+    (b"/XFA",        "XFA form (XML Forms Architecture, commonly abused)"),
+]
+
+# PDF keywords that are suspicious but appear in many legitimate documents.
+# These are logged as warnings but do NOT block processing.
+#   /EmbeddedFile — present in ZUGFeRD/Factur-X invoices, POS receipts,
+#                   and PDFs with embedded fonts or ICC colour profiles.
+#                   Blocking on this produces too many false positives.
+PDF_WARN_PATTERNS: list[tuple[bytes, str]] = [
+    (b"/EmbeddedFile", "embedded file attachment (informational — not blocked)"),
 ]
 
 # Prompt injection phrases to scrub from extracted text before parsing
@@ -105,24 +113,32 @@ def check_magic_bytes(path: Path) -> Optional[str]:
 # 4. PDF structure scan
 # ---------------------------------------------------------------------------
 
-def scan_pdf_structure(path: Path) -> list[str]:
+def scan_pdf_structure(path: Path) -> tuple[list[str], list[str]]:
     """
-    Reads raw PDF bytes and flags dangerous internal structures.
-    Returns a list of warning strings (empty = clean).
+    Reads raw PDF bytes and checks for dangerous or suspicious structures.
     Does NOT parse or execute anything.
+
+    Returns:
+        (fatal_issues, warnings)
+        fatal_issues — patterns that indicate code execution risk; caller should block.
+        warnings     — informational patterns that appear in legitimate PDFs; log only.
     """
     if path.suffix.lower() != ".pdf":
-        return []
+        return [], []
 
-    warnings = []
+    fatal_issues: list[str] = []
+    warnings: list[str] = []
     try:
         data = path.read_bytes()
-        for pattern in PDF_DANGER_PATTERNS:
+        for pattern, label in PDF_FATAL_PATTERNS:
             if pattern in data:
-                warnings.append(f"Dangerous PDF keyword found: {pattern.decode(errors='replace')}")
+                fatal_issues.append(f"Blocked — dangerous PDF structure: {label}")
+        for pattern, label in PDF_WARN_PATTERNS:
+            if pattern in data:
+                warnings.append(f"PDF note: {label}")
     except Exception as exc:
-        warnings.append(f"Could not scan PDF structure: {exc}")
-    return warnings
+        fatal_issues.append(f"Could not scan PDF structure: {exc}")
+    return fatal_issues, warnings
 
 
 # ---------------------------------------------------------------------------
@@ -220,10 +236,10 @@ def validate_attachment(path: Path, sender_email: str, allowed_domains: set[str]
         issues.append(magic_err)
         fatal = True
 
-    pdf_warnings = scan_pdf_structure(path)
-    issues.extend(pdf_warnings)
-    if pdf_warnings:
-        # Treat embedded JS / auto-actions as fatal — do not process
+    pdf_fatal, pdf_warnings = scan_pdf_structure(path)
+    issues.extend(pdf_fatal)
+    issues.extend(pdf_warnings)   # warnings land in the log but don't block
+    if pdf_fatal:
         fatal = True
 
     av_err = scan_with_clamav(path)
