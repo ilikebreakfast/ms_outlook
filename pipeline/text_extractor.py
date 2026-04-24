@@ -27,6 +27,7 @@ pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 PDF_EXTENSION = ".pdf"
+EXCEL_EXTENSIONS = {".xlsx"}
 MIN_CHARS_PER_PAGE = 50  # below this = likely scanned
 
 
@@ -60,6 +61,25 @@ def _extract_pdf_native(path: Path) -> Tuple[str, bool]:
     return "\n\n".join(pages_text), not used_ocr
 
 
+def extract_excel_text(path: Path) -> str:
+    """
+    Convert an Excel workbook to a flat text representation for classification
+    and template field matching. Each sheet is rendered as tab-separated rows.
+    Saves result to raw_text/ alongside PDF outputs.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(path, data_only=True)
+    parts = []
+    for sheet in wb.worksheets:
+        parts.append(f"[Sheet: {sheet.title}]")
+        for row in sheet.iter_rows(values_only=True):
+            cells = [str(c) if c is not None else "" for c in row]
+            line = "\t".join(cells).rstrip()
+            if line:
+                parts.append(line)
+    return "\n".join(parts)
+
+
 def extract_text(attachment_path: Path) -> Tuple[str, bool]:
     """
     Main entry point. Returns (raw_text, is_native_pdf).
@@ -72,6 +92,9 @@ def extract_text(attachment_path: Path) -> Tuple[str, bool]:
     elif ext in IMAGE_EXTENSIONS:
         text = _ocr_image(Image.open(attachment_path))
         is_native = False
+    elif ext in EXCEL_EXTENSIONS:
+        text = extract_excel_text(attachment_path)
+        is_native = True
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 

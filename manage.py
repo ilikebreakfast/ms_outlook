@@ -41,9 +41,13 @@ def cmd_test_template(args) -> int:
         return 1
 
     try:
-        from pipeline.text_extractor import extract_text
-        from pipeline.template_parser import _load_template, _extract_field, _extract_line_items
+        from pipeline.text_extractor import extract_text, extract_excel_text
+        from pipeline.template_parser import (
+            _load_template, _extract_field, _extract_line_items,
+            _extract_xlsx_line_items, _find_cell_value, parse_xlsx,
+        )
         from config.settings import TEMPLATES_DIR, LOW_CONFIDENCE_THRESHOLD
+        import openpyxl
     except Exception as e:
         print(f"Error loading pipeline modules: {e}")
         return 1
@@ -59,15 +63,20 @@ def cmd_test_template(args) -> int:
         print(f"Error: failed to load template: {template_name}")
         return 1
 
+    is_excel = file_path.suffix.lower() == ".xlsx"
+
     print(f"\nExtracting text from: {file_path.name}")
     try:
-        text, is_native = extract_text(file_path)
+        if is_excel:
+            text = extract_excel_text(file_path)
+            print(f"Extraction method: Excel (openpyxl) | {len(text)} chars extracted")
+        else:
+            text, is_native = extract_text(file_path)
+            extraction_method = "native PDF" if is_native else "OCR"
+            print(f"Extraction method: {extraction_method} | {len(text)} chars extracted")
     except Exception as e:
         print(f"Error extracting text: {e}")
         return 1
-
-    extraction_method = "native PDF" if is_native else "OCR"
-    print(f"Extraction method: {extraction_method} | {len(text)} chars extracted")
 
     if args.show_text:
         print("\n" + "─" * 60)
@@ -77,6 +86,7 @@ def cmd_test_template(args) -> int:
         print("─" * 60)
 
     fields = tmpl.get("fields", {})
+    fields_xlsx = tmpl.get("fields_xlsx", {})
     required_fields = tmpl.get("required_fields", list(fields.keys()))
 
     print(f"\nTemplate: {template_name}  |  Customer: {tmpl.get('customer_name', '?')}")
@@ -86,7 +96,20 @@ def cmd_test_template(args) -> int:
     print("─" * 70)
 
     results = {}
+    if is_excel and fields_xlsx:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws = wb.worksheets[0]
+        for field_name, label in fields_xlsx.items():
+            value = _find_cell_value(ws, label)
+            results[field_name] = value
+            status_icon = "OK" if value else "--"
+            required_marker = " *" if field_name in required_fields else ""
+            display_value = (value[:50] if value else "(no match)")
+            print(f"  {field_name + required_marker:<26} {status_icon:<6} {display_value}")
+
     for field_name, patterns in fields.items():
+        if field_name in results and results[field_name]:
+            continue  # already found via fields_xlsx
         patterns_list = patterns if isinstance(patterns, list) else [patterns]
         value = _extract_field(text, patterns_list)
         results[field_name] = value
@@ -95,8 +118,16 @@ def cmd_test_template(args) -> int:
         display_value = value[:50] if value else "(no match)"
         print(f"  {field_name + required_marker:<26} {status_icon:<6} {display_value}")
 
-    line_patterns = tmpl.get("line_items_patterns") or tmpl.get("line_items_pattern", "")
-    line_items = _extract_line_items(text, line_patterns) if line_patterns else []
+    if is_excel:
+        xlsx_li_config = tmpl.get("line_items_xlsx")
+        if xlsx_li_config:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            line_items = _extract_xlsx_line_items(wb, xlsx_li_config)
+        else:
+            line_items = []
+    else:
+        line_patterns = tmpl.get("line_items_patterns") or tmpl.get("line_items_pattern", "")
+        line_items = _extract_line_items(text, line_patterns) if line_patterns else []
     print(f"\n  {'line_items':<26} {'OK' if line_items else '--':<6} {len(line_items)} item(s) found")
 
     extracted_required = sum(1 for f in required_fields if results.get(f))

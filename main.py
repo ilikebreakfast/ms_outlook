@@ -28,7 +28,7 @@ from pipeline.email_reader import fetch_unread_with_attachments
 from pipeline.attachment_downloader import download_attachments
 from pipeline.text_extractor import extract_text
 from pipeline.customer_classifier import classify
-from pipeline.template_parser import parse
+from pipeline.template_parser import parse, parse_xlsx
 from pipeline.json_output import build_output, save_json
 from pipeline.email_mover import move_to_processed
 from pipeline.security import validate_attachment, scrub_prompt_injection, is_allowed_sender
@@ -199,7 +199,10 @@ def process_attachment(
 
         if can_parse:
             log.info(f"Parsing with template: {template_name!r}")
-            parsed = parse(text, template_name)
+            if attachment_path.suffix.lower() == ".xlsx":
+                parsed = parse_xlsx(attachment_path, template_name)
+            else:
+                parsed = parse(text, template_name)
             doc = build_output(parsed, customer_name, class_confidence, message, attachment_path)
             # Record template stats for drift detection
             if not dry_run:

@@ -36,6 +36,7 @@ MAGIC_BYTES: dict[str, list[bytes]] = {
     ".jpeg": [b"\xff\xd8\xff"],
     ".tiff": [b"II*\x00", b"MM\x00*"],
     ".bmp":  [b"BM"],
+    ".xlsx": [b"PK\x03\x04"],  # OOXML = ZIP container
 }
 
 # PDF keywords that can execute code or exfiltrate data — always block.

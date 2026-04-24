@@ -61,17 +61,22 @@ patterns that account for OCR artefacts (split words, inconsistent spacing, merg
 ### Step 1 — Discover raw text
 
 Find folders in `raw_text/` whose name contains the sender's domain or a matching slug.
-Read ALL `.txt` files found. If none exist, check `attachments/` for PDF files and note
+Read ALL `.txt` files found. If none exist, check `attachments/` for PDF or Excel files and note
 that you'll need to run the pipeline first to generate raw text.
+
+For Excel attachments (`.xlsx`), raw text is a tab-separated flat dump of every sheet.
+Open the actual `.xlsx` file (or read the flat text) to see real column headers — these are
+used for `fields_xlsx` and `line_items_xlsx` instead of regex patterns.
 
 ### Step 2 — Analyse each document
 
-For each text file, identify:
+For each file, identify:
 - **Document type**: PO, invoice, picking slip, stock order, etc.
-- **Column layout of line items**: pipe-delimited (`|`) vs space-aligned columns vs positional
-- **Column order**: note what appears in each column (code first? qty first? description?)
-- **Header field locations**: exact surrounding text for each field (use this for regex anchors)
-- **OCR artefacts**: split words, extra spaces inside numbers, merged columns
+- **File format**: PDF/image (use regex) vs Excel `.xlsx` (use `fields_xlsx` + `line_items_xlsx`)
+- **Column layout of line items**: pipe-delimited (`|`) vs space-aligned columns vs positional (PDF);
+  or exact column header strings (Excel)
+- **Header field locations**: exact surrounding text or label cells for each field
+- **OCR artefacts** (PDF only): split words, extra spaces inside numbers, merged columns
 
 ### Step 3 — Determine template name
 
