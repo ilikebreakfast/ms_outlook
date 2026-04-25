@@ -33,9 +33,10 @@ Outlook mailbox
         │
         ▼
   Extract text
-    ├── Native PDF (pdfplumber)
+    ├── Native PDF (pdfplumber, with full-OCR fallback if pdfplumber fails)
     ├── Scanned PDF or image (PyMuPDF → Tesseract OCR)
-    └── Excel .xlsx (openpyxl → tab-separated flat text)  →  saved to  raw_text/
+    ├── Excel .xlsx (openpyxl → tab-separated flat text)
+    └── Excel .xls  (xlrd  → tab-separated flat text)    →  saved to  raw_text/
         │
         ▼
   Prompt injection scrubbing (sanitise text before parsing)
@@ -49,8 +50,11 @@ Outlook mailbox
         │
         ├─ Match found, template linked ──▶  Parse fields using YAML template
         │                                   → customer_name, abn, address, invoice_number, dates, line_items
+        │                                   → [optional] Claude AI reviewer supplements regex
+        │                                     when confidence < CLAUDE_REVIEW_THRESHOLD
         │
         ├─ Match found, no template yet ──▶  Save raw text only  (status: extracted_only)
+        │                                   → [optional] Claude AI reviewer attempts field extraction
         │                                   → email still moved to Processed
         │                                   → add a YAML template later to enable parsing
         │
@@ -61,6 +65,10 @@ Outlook mailbox
         │
         ▼
   Save structured JSON  →  parsed/
+        │
+        ▼
+  [If confidence low or no template]
+  Fire per-document webhook → REVIEW_WEBHOOK_URL  (instant Slack/Teams/n8n alert)
   Record in SQLite      →  database/pipeline.db
   Log everything        →  logs/pipeline.log
         │
@@ -70,6 +78,8 @@ Outlook mailbox
 ```
 
 Documents below 60% confidence are flagged `needs_review: true` in the JSON.
+If `REVIEW_WEBHOOK_URL` is set, a webhook fires immediately for each such document.
+Run `/review-invoices` in Claude Code to re-extract missing fields using your subscription.
 
 ---
 
@@ -266,8 +276,8 @@ Python 3.10 or later. Check with:
 python --version
 ```
 
-### openpyxl (Excel support)
-Required for `.xlsx` attachments. Installed automatically via `requirements.txt` (`pip install -r requirements.txt`). No binary install needed.
+### openpyxl and xlrd (Excel support)
+Required for `.xlsx` and legacy `.xls` attachments respectively. Both are installed automatically via `requirements.txt` (`pip install -r requirements.txt`). No binary install needed.
 
 ### Tesseract OCR
 Required for scanned PDFs and image files.
@@ -404,8 +414,23 @@ All settings go in `.env` (gitignored, never committed).
 |---|---|---|
 | `WEBHOOK_URL` | *(blank)* | POST a run summary here after every pipeline run. Supports Slack, Teams, n8n, and any webhook-accepting service. |
 | `ALERT_WEBHOOK_URL` | *(falls back to `WEBHOOK_URL`)* | Separate URL for urgent alerts: auth failures, large review queue, new unknown senders. |
+| `REVIEW_WEBHOOK_URL` | *(falls back to `ALERT_WEBHOOK_URL`)* | Per-document webhook — fires **immediately** when a single document is processed below `LOW_CONFIDENCE_THRESHOLD` or has no template (`extracted_only`). Payload includes customer, filename, confidence, status, and a hint to run `/review-invoices`. Use a different channel from `ALERT_WEBHOOK_URL` if you want to separate operational alerts from review requests. |
 
 `LOW_CONFIDENCE_THRESHOLD` (default `0.6`) is in `config/settings.py` — documents below this score are flagged `needs_review: true`.
+
+### Claude AI reviewer (optional)
+
+An optional second-pass reviewer that uses Claude Haiku to supplement regex extraction when confidence is low, or to extract fields from documents with no template. Requires an Anthropic API key — completely separate from your Claude Code subscription.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | *(blank)* | Anthropic API key. Get one at [console.anthropic.com](https://console.anthropic.com/). Leave blank to disable. |
+| `CLAUDE_REVIEW_ENABLED` | `false` | Set to `true` to enable. No-op if `ANTHROPIC_API_KEY` is not set. |
+| `CLAUDE_REVIEW_THRESHOLD` | `0.6` | Regex confidence below which Claude is invoked. Lower (e.g. `0.4`) means Claude only runs on very poor matches; higher (e.g. `0.8`) means it runs more aggressively. |
+
+**How it works:** Claude Haiku is invoked after the regex template parser when `parsed_confidence < CLAUDE_REVIEW_THRESHOLD`. It receives the extracted text and, for scanned documents with sparse text, also receives images of the first few PDF pages (vision). It returns a JSON object of extracted fields; if its confidence is higher than the regex result, it replaces it. Cost is minimal — Haiku is only called on problem documents, and the system prompt is cached across calls.
+
+**If the key is not set or `CLAUDE_REVIEW_ENABLED=false`:** the pipeline runs exactly as before — no error, no delay, just no Claude fallback.
 
 > **Credentials changed?** Delete `config/token_cache.bin` before the next run so MSAL prompts a fresh login with the updated permissions.
 
@@ -698,6 +723,38 @@ Issues (1):
 
 ---
 
+## Claude Code skills
+
+Two slash commands are available when you open this project in Claude Code. They use your Claude Code **subscription** — no separate API key needed.
+
+### `/generate-template <sender>`
+
+Reads raw text files for a sender, writes a YAML template with correct regex patterns, and tests it against your actual PDFs until all required fields extract successfully.
+
+```
+/generate-template newsupplier.com.au    # by domain
+/generate-template jane@gmail.com        # by exact email
+/generate-template newsupplier           # by address book name
+```
+
+### `/review-invoices [threshold] [--fix]`
+
+Scans `parsed/` for documents that were flagged for review (low confidence, no template, or `extracted_only`), re-extracts missing fields using Claude's understanding of the raw text, and reports what it found.
+
+```
+/review-invoices              # review all flagged documents (default threshold from settings.py)
+/review-invoices 0.8          # review everything below 80% confidence
+/review-invoices 0.5 --fix    # review below 50% and write improvements back to the JSON files
+```
+
+With `--fix`, Claude fills in only null fields — it never overwrites existing values. It sets `_claude_reviewed: true` and recalculates `_confidence`. If the new confidence meets the threshold, `needs_review` is cleared.
+
+After reviewing, the skill also identifies systematic template failures (e.g. a field consistently missed by regex across multiple documents) and suggests specific regex pattern additions.
+
+> **Tip:** set `REVIEW_WEBHOOK_URL` to a Slack or Teams channel and you'll get an immediate ping whenever a document lands below the confidence threshold. Run `/review-invoices` from that notification to fix it.
+
+---
+
 ## Suggested templates for unknown senders
 
 When an email comes in from a sender not in `config/address_book.json`, the pipeline automatically generates a draft YAML template in `config/suggested_templates/`. Nothing is parsed for that email, but you get a starting point to work from.
@@ -930,7 +987,12 @@ tail -f logs/pipeline.log
 - Write back to any external system
 - Commit your credentials (`.env` is gitignored)
 
-> **Webhooks:** if `WEBHOOK_URL` is set in `.env`, the pipeline will POST a run summary to that URL after each run. This is opt-in and off by default. The payload contains counts and confidence averages — it does not include email content, attachment text, or personal data.
+> **Webhooks:** Three optional webhook URLs can be set in `.env`. All are opt-in and off by default.
+> - `WEBHOOK_URL` — run summary POSTed after each pipeline run (counts, averages)
+> - `ALERT_WEBHOOK_URL` — urgent alerts: auth failures, large review queue
+> - `REVIEW_WEBHOOK_URL` — fires **immediately** when a single document is processed below the confidence threshold or has no template
+>
+> None of these payloads include email content, attachment text, or personal data — only counts, filenames, confidence scores, and customer names.
 
 ---
 
@@ -957,20 +1019,22 @@ ms_outlook/
 │       └── supplier_at_newcompany_com_au.yaml
 ├── .claude/
 │   └── commands/
-│       └── generate-template.md   ← /generate-template skill (Claude Code)
+│       ├── generate-template.md   ← /generate-template skill (Claude Code)
+│       └── review-invoices.md     ← /review-invoices skill (Claude Code subscription)
 ├── auth/
 │   └── graph_client.py            ← Microsoft login + Graph API (with retry)
 ├── pipeline/
 │   ├── email_reader.py            ← fetch emails filtered by date range
 │   ├── attachment_downloader.py   ← download to YYYY-MM-DD_domain_hash/ folders
 │   ├── security.py                ← allowlist, magic bytes, PDF scan, ClamAV
-│   ├── text_extractor.py          ← extract text: native PDF, OCR fallback, Excel (openpyxl)
+│   ├── text_extractor.py          ← extract text: native PDF (pdfplumber, full-OCR fallback), Excel (.xlsx openpyxl / .xls xlrd)
 │   ├── customer_classifier.py     ← identify customer from address book
 │   ├── template_parser.py         ← parse() for PDF/image regex; parse_xlsx() for Excel (fields_xlsx + line_items_xlsx)
 │   ├── json_output.py             ← validate + save JSON (LineItem: product_code, uom, subtotal)
 │   ├── email_mover.py             ← move email after processing
 │   ├── template_suggester.py      ← auto-generate drafts with table format detection
-│   └── metrics.py                 ← run metrics (logs/metrics.json + webhook POST)
+│   ├── claude_reviewer.py         ← optional Claude Haiku fallback (requires ANTHROPIC_API_KEY)
+│   └── metrics.py                 ← run metrics (metrics.json + run/alert/per-doc webhooks)
 ├── database/
 │   └── db.py                      ← SQLite: processed_documents, review_queue, template_stats
 ├── utils/
