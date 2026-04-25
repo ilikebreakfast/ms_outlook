@@ -3,6 +3,8 @@ Management utility for the ms_outlook pipeline.
 
 Commands:
   python manage.py test-template <name> <file> [--show-text]
+  python manage.py parse-pdf <file> [--save] [--show-text]
+  python manage.py parse-text <template> <txt_file>
   python manage.py list-senders [--days 30]
   python manage.py add-sender <email> [--name NAME] [--template STEM]
   python manage.py list-suggestions
@@ -13,7 +15,17 @@ Commands:
   python manage.py health
 
 Examples:
+  # Full test: extract from PDF then parse with template
   python manage.py test-template acme invoice.pdf --show-text
+
+  # Step 1 only: extract text from a PDF (prints it, optionally saves to raw_text/)
+  python manage.py parse-pdf invoice.pdf
+  python manage.py parse-pdf invoice.pdf --save --show-text
+
+  # Step 2 only: run a template against already-extracted text
+  python manage.py parse-text acme raw_text/abc123/invoice.txt
+  python manage.py parse-text acme raw_text/abc123/invoice.txt --show-text
+
   python manage.py add-sender billing@acme.com.au --name "ACME Corp" --template acme
   python manage.py list-suggestions
   python manage.py approve-suggestion billing@acme.com.au
@@ -507,6 +519,181 @@ def cmd_analyze_template(args) -> int:
     return 0
 
 
+def cmd_parse_pdf(args) -> int:
+    """
+    Extract text from a PDF or image file and print it.
+    Optionally save to raw_text/ (same as the pipeline would).
+
+    Useful for:
+      - Seeing exactly what text the pipeline extracts before writing regex patterns
+      - Diagnosing OCR quality on scanned documents
+      - Producing the .txt file that cmd_parse_text then reads
+    """
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(f"Error: file not found: {file_path}")
+        return 1
+
+    try:
+        from pipeline.text_extractor import extract_text
+    except Exception as e:
+        print(f"Error loading pipeline modules: {e}")
+        return 1
+
+    print(f"Extracting text from: {file_path.name} ...")
+    try:
+        text, is_native = extract_text(file_path) if args.save else _extract_no_save(file_path)
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+
+    method = "native PDF" if is_native else "OCR"
+    print(f"Method: {method} | {len(text)} chars")
+
+    if args.save:
+        from config.settings import RAW_TEXT_DIR
+        out_dir = RAW_TEXT_DIR / file_path.parent.name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / (file_path.stem + ".txt")
+        out_path.write_text(text, encoding="utf-8")
+        print(f"Saved: {out_path}")
+
+    if args.show_text or not args.save:
+        limit = args.chars if hasattr(args, "chars") else 3000
+        print("\n" + "─" * 60)
+        print(text[:limit] + ("..." if len(text) > limit else ""))
+        print("─" * 60)
+
+    return 0
+
+
+def _extract_no_save(path):
+    """Extract text without writing to raw_text/ — for parse-pdf without --save."""
+    import pdfplumber, fitz, pytesseract
+    from PIL import Image
+    from config.settings import TESSERACT_CMD
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+
+    ext = path.suffix.lower()
+    IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
+    MIN_CHARS = 50
+
+    def ocr(img):
+        return pytesseract.image_to_string(img.convert("RGB"), lang="eng")
+
+    if ext == ".pdf":
+        pages = []
+        used_ocr = False
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text() or ""
+                if len(t.strip()) >= MIN_CHARS:
+                    pages.append(t)
+                else:
+                    used_ocr = True
+                    doc = fitz.open(str(path))
+                    pix = doc[page.page_number - 1].get_pixmap(matrix=fitz.Matrix(2, 2))
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    pages.append(ocr(img))
+        return "\n\n".join(pages), not used_ocr
+    elif ext in IMAGE_EXTS:
+        return ocr(Image.open(path)), False
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+
+def cmd_parse_text(args) -> int:
+    """
+    Run a YAML template's regex patterns against an already-extracted text file.
+    Skips PDF/OCR entirely — reads the .txt directly.
+
+    The text file is typically in raw_text/<message_id>/<filename>.txt
+    but can be any plain-text file.
+    """
+    txt_path = Path(args.txt_file)
+    if not txt_path.exists():
+        print(f"Error: file not found: {txt_path}")
+        return 1
+
+    try:
+        from pipeline.template_parser import _load_template, _extract_field, _extract_line_items
+        from config.settings import TEMPLATES_DIR, LOW_CONFIDENCE_THRESHOLD
+    except Exception as e:
+        print(f"Error loading pipeline modules: {e}")
+        return 1
+
+    template_path = TEMPLATES_DIR / f"{args.template_name}.yaml"
+    if not template_path.exists():
+        print(f"Error: template not found: {template_path}")
+        available = [p.stem for p in TEMPLATES_DIR.glob("*.yaml")]
+        if available:
+            print(f"  Available: {', '.join(sorted(available))}")
+        return 1
+
+    tmpl = _load_template(args.template_name)
+    if not tmpl:
+        print(f"Error: failed to load template: {args.template_name}")
+        return 1
+
+    text = txt_path.read_text(encoding="utf-8", errors="replace")
+    print(f"Text file: {txt_path}  ({len(text)} chars)")
+
+    if args.show_text:
+        print("\n" + "─" * 60)
+        print("TEXT:")
+        print("─" * 60)
+        limit = 3000
+        print(text[:limit] + ("..." if len(text) > limit else ""))
+        print("─" * 60)
+
+    fields = tmpl.get("fields", {})
+    required_fields = tmpl.get("required_fields", list(fields.keys()))
+
+    print(f"\nTemplate: {args.template_name}  |  Customer: {tmpl.get('customer_name', '?')}")
+    print(f"Required fields: {', '.join(required_fields) or '(none)'}")
+    print()
+    print(f"  {'Field':<28} {'Status':<6} Value")
+    print("─" * 72)
+
+    results = {}
+    for field_name, patterns in fields.items():
+        patterns_list = patterns if isinstance(patterns, list) else [patterns]
+        value = _extract_field(text, patterns_list)
+        results[field_name] = value
+        marker = " *" if field_name in required_fields else ""
+        status = "OK" if value else "--"
+        display = (value[:52] + "…") if value and len(value) > 52 else (value or "(no match)")
+        print(f"  {field_name + marker:<28} {status:<6} {display}")
+
+    line_items_pattern = tmpl.get("line_items_pattern", "")
+    line_items = _extract_line_items(text, line_items_pattern) if line_items_pattern else []
+    print(f"  {'line_items':<28} {'OK' if line_items else '--':<6} {len(line_items)} item(s)")
+
+    extracted = sum(1 for f in required_fields if results.get(f))
+    confidence = extracted / len(required_fields) if required_fields else 0.0
+
+    print()
+    print("─" * 72)
+    print(f"Required fields matched:  {extracted}/{len(required_fields)}")
+    print(f"Parse confidence:         {confidence:.0%}")
+
+    if confidence < LOW_CONFIDENCE_THRESHOLD:
+        print(f"Status: LOW CONFIDENCE — would be flagged for review (threshold {LOW_CONFIDENCE_THRESHOLD:.0%})")
+    else:
+        print("Status: OK")
+
+    if line_items:
+        print(f"\nLine items ({len(line_items)}):")
+        for i, item in enumerate(line_items[:5], 1):
+            parts = "  ".join(f"{k}={v}" for k, v in item.items() if v)
+            print(f"  {i}. {parts}")
+        if len(line_items) > 5:
+            print(f"  ... and {len(line_items) - 5} more")
+
+    print("\n* = required field")
+    return 0
+
+
 def cmd_health(args) -> int:
     """Check overall pipeline health: token, DB, disk, review queue."""
     from pathlib import Path
@@ -647,6 +834,19 @@ def main() -> None:
     # health
     sub.add_parser("health", help="Check token, database, address book, and last run status")
 
+    # parse-pdf
+    p = sub.add_parser("parse-pdf", help="Extract text from a PDF or image and print it")
+    p.add_argument("file", help="Path to PDF or image file")
+    p.add_argument("--save", action="store_true", help="Save extracted text to raw_text/")
+    p.add_argument("--show-text", action="store_true", help="Print extracted text (default when --save not set)")
+    p.add_argument("--chars", type=int, default=3000, help="Max chars to print (default: 3000)")
+
+    # parse-text
+    p = sub.add_parser("parse-text", help="Run a template against an already-extracted text file")
+    p.add_argument("template_name", help="Template stem e.g. acme")
+    p.add_argument("txt_file", help="Path to .txt file (e.g. raw_text/abc123/invoice.txt)")
+    p.add_argument("--show-text", action="store_true", help="Print the text before parsing")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -659,6 +859,8 @@ def main() -> None:
         "resolve-review":   cmd_resolve_review,
         "analyze-template": cmd_analyze_template,
         "health":           cmd_health,
+        "parse-pdf":        cmd_parse_pdf,
+        "parse-text":       cmd_parse_text,
     }
 
     fn = dispatch.get(args.command)
