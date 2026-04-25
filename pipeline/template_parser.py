@@ -174,13 +174,19 @@ def parse_xlsx(path: Path, template_name: str) -> dict:
         result["line_items"] = []
 
     extracted = sum(1 for f in required_fields if result.get(f))
-    confidence = extracted / len(required_fields) if required_fields else 0.0
+    total_slots = len(required_fields)
+    min_li = tmpl.get("min_line_items", 0)
+    if min_li:
+        total_slots += 1
+        if len(result.get("line_items", [])) >= min_li:
+            extracted += 1
+    confidence = extracted / total_slots if total_slots else 0.0
     result["_confidence"] = round(confidence, 2)
     result["_required_fields_matched"] = extracted
-    result["_required_fields_total"] = len(required_fields)
+    result["_required_fields_total"] = total_slots
 
     log.info(f"Parsed xlsx {template_name!r}: confidence={confidence:.0%}, "
-             f"{extracted}/{len(required_fields)} required fields found.")
+             f"{extracted}/{total_slots} required slots filled.")
     return result
 
 
@@ -206,15 +212,22 @@ def parse(text: str, template_name: str) -> dict:
     line_patterns = tmpl.get("line_items_patterns") or tmpl.get("line_items_pattern", "")
     result["line_items"] = _extract_line_items(text, line_patterns)
 
-    # Confidence = fraction of required fields that were extracted
+    # Confidence = fraction of required fields that were extracted.
+    # min_line_items (if set) counts as one additional required slot.
     extracted = sum(1 for f in required_fields if result.get(f))
-    confidence = extracted / len(required_fields) if required_fields else 0.0
+    total_slots = len(required_fields)
+    min_li = tmpl.get("min_line_items", 0)
+    if min_li:
+        total_slots += 1
+        if len(result["line_items"]) >= min_li:
+            extracted += 1
+    confidence = extracted / total_slots if total_slots else 0.0
     result["_confidence"] = round(confidence, 2)
     result["_required_fields_matched"] = extracted
-    result["_required_fields_total"] = len(required_fields)
+    result["_required_fields_total"] = total_slots
 
     log.info(f"Parsed {template_name!r}: confidence={confidence:.0%}, "
-             f"{extracted}/{len(required_fields)} required fields found.")
+             f"{extracted}/{total_slots} required slots filled.")
 
     # Record stat for trend analysis — best-effort, never fatal
     try:

@@ -50,7 +50,7 @@ CLAMAV_ENABLED = os.getenv("CLAMAV_ENABLED", "false").lower() == "true"
 CLAMAV_CMD     = os.getenv("CLAMAV_CMD", "clamscan")
 
 # --- Confidence ---
-LOW_CONFIDENCE_THRESHOLD = 0.6
+LOW_CONFIDENCE_THRESHOLD = 0.8
 
 # --- Classification: personal email domains ---
 # Senders on these domains are matched by exact email address, not by domain,

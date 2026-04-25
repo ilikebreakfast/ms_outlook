@@ -79,7 +79,7 @@ Outlook mailbox
   (so it won't be picked up again on the next run)
 ```
 
-Documents below 60% confidence are flagged `needs_review: true` in the JSON.
+Documents below 80% confidence are flagged `needs_review: true` in the JSON.
 If `REVIEW_WEBHOOK_URL` is set, a webhook fires immediately for each such document.
 Run `/review-invoices` in Claude Code to re-extract missing fields using your subscription.
 
@@ -421,7 +421,7 @@ All settings go in `.env` (gitignored, never committed).
 | `ALERT_WEBHOOK_URL` | *(falls back to `WEBHOOK_URL`)* | Separate URL for urgent alerts: auth failures, large review queue, new unknown senders. |
 | `REVIEW_WEBHOOK_URL` | *(falls back to `ALERT_WEBHOOK_URL`)* | Per-document webhook — fires **immediately** when a single document is processed below `LOW_CONFIDENCE_THRESHOLD` or has no template (`extracted_only`). Payload includes customer, filename, confidence, status, and a hint to run `/review-invoices`. Use a different channel from `ALERT_WEBHOOK_URL` if you want to separate operational alerts from review requests. |
 
-`LOW_CONFIDENCE_THRESHOLD` (default `0.6`) is in `config/settings.py` — documents below this score are flagged `needs_review: true`.
+`LOW_CONFIDENCE_THRESHOLD` (default `0.8`) is in `config/settings.py` — documents below this score are flagged `needs_review: true`.
 
 ### Claude AI reviewer (optional)
 
@@ -431,7 +431,7 @@ An optional second-pass reviewer that uses Claude Haiku to supplement regex extr
 |---|---|---|
 | `ANTHROPIC_API_KEY` | *(blank)* | Anthropic API key. Get one at [console.anthropic.com](https://console.anthropic.com/). Leave blank to disable. |
 | `CLAUDE_REVIEW_ENABLED` | `false` | Set to `true` to enable. No-op if `ANTHROPIC_API_KEY` is not set. |
-| `CLAUDE_REVIEW_THRESHOLD` | `0.6` | Regex confidence below which Claude is invoked. Lower (e.g. `0.4`) means Claude only runs on very poor matches; higher (e.g. `0.8`) means it runs more aggressively. |
+| `CLAUDE_REVIEW_THRESHOLD` | `0.8` | Regex confidence below which Claude is invoked. Lower (e.g. `0.6`) means Claude only runs on very poor matches; higher (e.g. `0.9`) means it runs more aggressively. |
 
 **How it works:** Claude Haiku is invoked after the regex template parser when `parsed_confidence < CLAUDE_REVIEW_THRESHOLD`. It receives the extracted text and, for scanned documents with sparse text, also receives images of the first few PDF pages (vision). It returns a JSON object of extracted fields; if its confidence is higher than the regex result, it replaces it. Cost is minimal — Haiku is only called on problem documents, and the system prompt is cached across calls.
 
@@ -905,6 +905,13 @@ python manage.py test-template newsupplier invoice.pdf --show-text
 ```
 
 Regex patterns use single backslashes in YAML (e.g. `\d+`, not `\\d+`).
+
+**`min_line_items`** — optional field in any template. If set, the parser requires at least that many line items to be extracted; the check is treated as one extra required slot in the confidence score. A document with no line items when `min_line_items: 1` is set will lose ~25% confidence (with 3 other required fields), pushing it below the 80% threshold and into the review queue.
+
+```yaml
+required_fields: [po_number, delivery_date, total_amount]
+min_line_items: 1   # at least 1 line item required for full confidence
+```
 
 #### Excel (.xlsx) templates
 
