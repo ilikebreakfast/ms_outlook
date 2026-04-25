@@ -1,6 +1,6 @@
 # ms_outlook — Email Attachment Extraction Pipeline
 
-Reads emails from your Outlook mailbox, downloads PDF and image attachments, extracts text (with OCR fallback for scanned documents), identifies the customer, and saves structured JSON output — all locally, no cloud services required.
+Reads emails from your Outlook mailbox, downloads PDF, image, Excel, and CSV attachments, extracts text (with OCR fallback for scanned documents), identifies the customer, and saves structured JSON output — all locally, no cloud services required.
 
 ---
 
@@ -22,13 +22,14 @@ Outlook mailbox
   └─────────────────────────────────────────────────────────────┘
         │
         ▼
-  Download PDFs / images / Excel files  →  saved to  attachments/
+  Download PDFs / images / Excel / CSV files  →  saved to  attachments/
         │
         ▼
   File-level security checks
     ├── File size limit
     ├── Magic byte validation (real file type check, including .xlsx ZIP header)
-    ├── PDF structure scan (embedded JS, auto-actions — skipped for Excel)
+    │   └── CSV: validated as valid UTF-8 text (no magic bytes for plain text)
+    ├── PDF structure scan (embedded JS, auto-actions — skipped for Excel/CSV)
     └── ClamAV antivirus scan (if enabled)
         │
         ▼
@@ -36,7 +37,8 @@ Outlook mailbox
     ├── Native PDF (pdfplumber, with full-OCR fallback if pdfplumber fails)
     ├── Scanned PDF or image (PyMuPDF → Tesseract OCR)
     ├── Excel .xlsx (openpyxl → tab-separated flat text)
-    └── Excel .xls  (xlrd  → tab-separated flat text)    →  saved to  raw_text/
+    ├── Excel .xls  (xlrd  → tab-separated flat text)
+    └── CSV .csv    (read as-is)                         →  saved to  raw_text/
         │
         ▼
   Prompt injection scrubbing (sanitise text before parsing)
@@ -279,6 +281,9 @@ python --version
 ### openpyxl and xlrd (Excel support)
 Required for `.xlsx` and legacy `.xls` attachments respectively. Both are installed automatically via `requirements.txt` (`pip install -r requirements.txt`). No binary install needed.
 
+### CSV support
+`.csv` attachments are read as plain UTF-8 text — no extra dependencies required.
+
 ### Tesseract OCR
 Required for scanned PDFs and image files.
 
@@ -445,8 +450,8 @@ The pipeline processes emails from the internet, which means it will encounter p
 | Threat | Defence |
 |---|---|
 | Phishing from unknown senders | Sender allowlist checked **before any download** — unknown senders are skipped entirely, no files written to disk. If `address_book.json` is missing or corrupt, **all senders are denied** (fail-closed). |
-| Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file. `.xlsx` files are validated against the ZIP magic bytes (`PK\x03\x04`) that OOXML requires. |
-| Malicious PDF with embedded JavaScript | PDF structure scan — rejects PDFs containing `/JS`, `/JavaScript`, `/Launch`, `/XFA`. `/AA` and `/OpenAction` are only blocked when an execution payload is also present (standalone triggers in legitimate POS receipts are allowed through as warnings). Excel files skip the PDF scan entirely. |
+| Fake file extensions (`.pdf` that's actually `.exe`) | Magic byte check — reads the actual first bytes of the file. `.xlsx` files are validated against the ZIP magic bytes (`PK\x03\x04`) that OOXML requires. `.csv` files are validated as valid UTF-8 text (plain text has no magic bytes). |
+| Malicious PDF with embedded JavaScript | PDF structure scan — rejects PDFs containing `/JS`, `/JavaScript`, `/Launch`, `/XFA`. `/AA` and `/OpenAction` are only blocked when an execution payload is also present (standalone triggers in legitimate POS receipts are allowed through as warnings). Excel and CSV files skip the PDF scan entirely. |
 | Zip-bomb / memory exhaustion | File size limit (default 20 MB) |
 | Malware in attachments | ClamAV antivirus scan (when enabled) |
 | Path traversal in filenames (`../../evil.py`) | Filename sanitisation — strips directory components |

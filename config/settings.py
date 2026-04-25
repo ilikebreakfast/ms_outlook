@@ -25,7 +25,7 @@ FALLBACK_TOKEN_PATH = Path(_fallback_raw) if _fallback_raw else None
 # --- Mailbox ---
 TARGET_FOLDER = os.getenv("TARGET_FOLDER") or None
 
-ATTACHMENT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".xlsx", ".xls"}
+ATTACHMENT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".xlsx", ".xls", ".csv"}
 
 # --- Storage ---
 ATTACHMENTS_DIR = ROOT / "attachments"

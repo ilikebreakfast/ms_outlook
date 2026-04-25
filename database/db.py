@@ -108,6 +108,15 @@ def init() -> None:
     """Create tables if they don't exist. Safe to call on every startup."""
     with _connect() as conn:
         conn.executescript(_SCHEMA)
+        # Migrations for columns added after initial schema deployment
+        for col, definition in [
+            ("status", "TEXT"),
+            ("template_name", "TEXT"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE processed_documents ADD COLUMN {col} {definition}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
     log.debug(f"Database ready: {DB_PATH}")
 
 
@@ -159,34 +168,46 @@ def record(
         processed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     with _connect() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO processed_documents
-                (message_id, attachment_filename, sender_email, customer_name,
-                 invoice_number, confidence, needs_review, status,
-                 json_path, attachment_path, received_at, processed_at,
-                 error, template_name)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(message_id, attachment_filename) DO UPDATE SET
-                customer_name        = excluded.customer_name,
-                invoice_number       = excluded.invoice_number,
-                confidence           = excluded.confidence,
-                needs_review         = excluded.needs_review,
-                status               = excluded.status,
-                json_path            = excluded.json_path,
-                attachment_path      = excluded.attachment_path,
-                processed_at         = excluded.processed_at,
-                error                = excluded.error,
-                template_name        = excluded.template_name
-            """,
-            (
-                message_id, attachment_filename, sender_email, customer_name,
-                invoice_number, confidence, int(needs_review), status,
-                json_path, attachment_path, received_at, processed_at,
-                error, template_name,
-            ),
-        )
-        doc_id = cursor.lastrowid
+        existing = conn.execute(
+            "SELECT id FROM processed_documents WHERE message_id = ? AND attachment_filename = ?",
+            (message_id, attachment_filename),
+        ).fetchone()
+
+        if existing:
+            conn.execute(
+                """
+                UPDATE processed_documents SET
+                    customer_name   = ?, invoice_number = ?, confidence    = ?,
+                    needs_review    = ?, status         = ?, json_path     = ?,
+                    attachment_path = ?, processed_at   = ?, error         = ?,
+                    template_name   = ?
+                WHERE id = ?
+                """,
+                (
+                    customer_name, invoice_number, confidence, int(needs_review),
+                    status, json_path, attachment_path, processed_at, error,
+                    template_name, existing["id"],
+                ),
+            )
+            doc_id = existing["id"]
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO processed_documents
+                    (message_id, attachment_filename, sender_email, customer_name,
+                     invoice_number, confidence, needs_review, status,
+                     json_path, attachment_path, received_at, processed_at,
+                     error, template_name)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    message_id, attachment_filename, sender_email, customer_name,
+                    invoice_number, confidence, int(needs_review), status,
+                    json_path, attachment_path, received_at, processed_at,
+                    error, template_name,
+                ),
+            )
+            doc_id = cursor.lastrowid
 
         # If this document needs review, add it to the review queue
         # (only if not already queued to avoid duplicates on re-runs)

@@ -38,7 +38,7 @@ MAGIC_BYTES: dict[str, list[bytes]] = {
     ".bmp":  [b"BM"],
     ".xlsx": [b"PK\x03\x04"],  # OOXML = ZIP container
     ".xls":  [b"\xD0\xCF\x11\xE0"],  # OLE2 Compound Document (BIFF)
-
+    ".csv":  [],  # plain text — no magic bytes; validated by UTF-8 decode instead
 }
 
 # PDF keywords that can execute code or exfiltrate data — always block.
@@ -109,9 +109,17 @@ def check_file_size(path: Path) -> Optional[str]:
 
 def check_magic_bytes(path: Path) -> Optional[str]:
     ext = path.suffix.lower()
-    expected = MAGIC_BYTES.get(ext)
-    if not expected:
+    if ext not in MAGIC_BYTES:
         return f"Unsupported extension: {ext}"
+
+    expected = MAGIC_BYTES[ext]
+    if not expected:
+        # Plain-text format (e.g. CSV) — no magic bytes; verify it decodes as UTF-8
+        try:
+            path.read_bytes()[:4096].decode("utf-8")
+        except UnicodeDecodeError:
+            return f"File with extension {ext} is not valid UTF-8 text"
+        return None
 
     header = path.read_bytes()[:8]
     if not any(header.startswith(magic) for magic in expected):

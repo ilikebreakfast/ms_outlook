@@ -29,6 +29,7 @@ pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp"}
 PDF_EXTENSION = ".pdf"
 EXCEL_EXTENSIONS = {".xlsx", ".xls"}
+CSV_EXTENSIONS = {".csv"}
 MIN_CHARS_PER_PAGE = 50  # below this = likely scanned
 
 
@@ -140,6 +141,9 @@ def extract_text(attachment_path: Path) -> Tuple[str, bool]:
     elif ext in EXCEL_EXTENSIONS:
         text = extract_excel_text(attachment_path)
         is_native = True  # no OCR involved
+    elif ext in CSV_EXTENSIONS:
+        text = attachment_path.read_text(encoding="utf-8", errors="replace")
+        is_native = True
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
