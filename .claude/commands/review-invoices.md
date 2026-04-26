@@ -3,141 +3,389 @@
 Review parsed invoice documents that fell below a confidence threshold.
 Uses your Claude Code subscription — no separate API key required.
 
-**Usage:**
+## Usage
+
+```bash
+/review-invoices
+/review-invoices 0.8
+/review-invoices 0.5 --fix
 ```
-/review-invoices              # review all flagged (needs_review=true + extracted_only)
-/review-invoices 0.8          # review all documents below 0.8 confidence
-/review-invoices 0.5 --fix    # review below 0.5 and auto-write improvements to JSON
-```
+
+---
+
+## Purpose
+
+This command performs a deterministic second-pass review of invoice extraction results.
+
+It is designed to:
+- recover missing fields
+- correct obvious extraction mistakes
+- validate line items mathematically
+- improve confidence scoring
+- identify template weaknesses
+
+This command must behave conservatively:
+- prefer null over guessing
+- validate before updating
+- never overwrite trusted values
+- use invoice structure rather than assumptions
 
 ---
 
 ## Your role
 
-You are a document field extraction specialist. Your job is to:
-1. Find parsed invoice/PO documents that were flagged for review
-2. Read their extracted text and identify what the regex templates missed
-3. Re-extract the missing or incorrect fields using your own understanding
-4. Report what you found and optionally update the JSON outputs
+You are a structured invoice extraction reviewer.
 
-You are working with documents already processed by the pipeline. The raw text is already extracted — you do not need to re-run the pipeline.
+Your task is to:
+1. Load low-confidence parsed invoices
+2. Read the associated raw extracted text
+3. Re-check missing or suspicious fields
+4. Validate extracted values
+5. Optionally write safe corrections back to JSON
+6. Suggest template improvements when patterns repeat
 
 ---
 
-## Process — follow exactly
+## Deterministic review rules
 
-### Step 1 — Parse the argument
+Always follow these rules.
 
-- If an argument was given and it looks like a float (e.g. `0.8`), use it as the confidence threshold.
-- If `--fix` is present, you will write improvements back to disk at the end.
-- Otherwise default threshold = read `LOW_CONFIDENCE_THRESHOLD` from `config/settings.py` (typically 0.6).
+### Rule 1 — Never guess
 
-### Step 2 — Find documents to review
+If a value is not clearly supported by the document:
+- leave it null
+- mark it as unclear
 
-Scan `parsed/` recursively for all `.json` files.
-For each file, load it and collect if ANY of:
-- `needs_review` is `true`
-- `confidence` < threshold
-- `status` == `"extracted_only"` or `"low_confidence"`
+### Rule 2 — Prefer structure over proximity
 
-Report the count immediately: "Found N documents to review."
+Use:
+- labels
+- column alignment
+- invoice layout
+- arithmetic consistency
 
-If none found, say so and stop.
+Do not rely only on nearest text.
 
-### Step 3 — For each document, load context
+### Rule 3 — Never overwrite trusted values
 
-For each candidate document (work through them one at a time):
+Only update:
+- null fields
+- empty strings
+- clearly invalid values
 
-1. **Load the JSON** from `parsed/`
-2. **Find the raw text**: look in `raw_text/` for a folder matching the same date/domain/hash slug as the attachment path, then the `.txt` file with the same stem as the attachment filename.
-   - `attachment_path` in the JSON gives you the full path — derive the raw text path:
-     `raw_text/<folder>/<stem>.txt`
-3. **Load the template** (if `template_name` is set in the JSON):
-   - Read `config/templates/<template_name>.yaml` to know which fields are expected
-4. **Load the address book entry** for this customer:
-   - Read `config/address_book.json`, find the contact matching `customer_name`
+Existing valid values must remain unchanged.
 
-### Step 4 — Re-extract missing fields
+### Rule 4 — Validate before accepting
 
-With the raw text in hand, do your own extraction for every field that is `null` or missing.
+For amounts and line items:
+- confirm values using arithmetic
+- reject values that do not reconcile
 
-Think carefully about:
-- OCR artefacts: split words, extra spaces inside numbers, merged columns
-- Field labels that differ from what the template regex expects
-- Fields present in the document but under different labels (e.g. "Net Amount" vs "Subtotal")
-- Line items that were missed entirely
+---
 
-For `extracted_only` documents (no template): extract every structured field you can find
-(invoice number, date, amounts, ABN, supplier, line items, etc.)
+## Step 1 — Parse arguments
 
-### Step 5 — Present findings
+If a numeric argument exists:
+- use it as the confidence threshold
 
-For each document, show a compact table:
+If `--fix` exists:
+- write safe improvements back to disk
+
+Otherwise, read `LOW_CONFIDENCE_THRESHOLD` from `config/settings.py`.
+
+Default: `0.6`
+
+---
+
+## Step 2 — Find review candidates
+
+Scan `parsed/**/*.json`. Select files where **any** apply:
+- `needs_review == true`
+- `confidence < threshold`
+- `status == "extracted_only"`
+- `status == "low_confidence"`
+
+Immediately report:
 
 ```
-📄 <filename> | <customer_name> | confidence: <old> → <new>
-   ✅ invoice_number: "INV-20260424" (was null)
-   ✅ total_amount: "1250.00" (was null)
-   ⚠️  delivery_date: could not find in text
-   📋 line_items: found 3 (was 0)
+Found N documents to review.
 ```
 
-After processing ALL documents, show a summary:
+If none are found, stop.
+
+---
+
+## Step 3 — Load document context
+
+For each candidate, load:
+1. parsed JSON
+2. raw text file
+3. template YAML if available
+4. address book match if available
+
+Derive raw text path by replacing `attachments/.../file.pdf` with `raw_text/.../file.txt` — same folder and filename stem.
+
+Also record:
+- original filename
+- attachment filename
+- template name
+- customer name
+
+The filename may later be used as a fallback source for delivery date.
+
+---
+
+## Step 4 — Identify fields needing review
+
+Review only fields that are:
+- null
+- missing
+- empty
+- internally inconsistent
+
+Suspicious values include:
+- quantity equals row number
+- subtotal greater than total
+- line totals do not reconcile
+- invalid dates
+- duplicate invoice fragments
+
+Mark only these fields for re-evaluation.
+
+---
+
+## Step 5 — Deterministic field extraction
+
+Extract using explicit rules.
+
+### Invoice number
+
+Look near labels: `Invoice No`, `Invoice #`, `Invoice Number`, `Tax Invoice`
+
+Reject values that:
+- look like page numbers
+- match customer PO unless clearly labelled
+
+### Invoice date
+
+Look near: `Invoice Date`, `Date`, `Tax Date`
+
+Accept:
+- `DD/MM/YYYY`
+- `DD-MM-YYYY`
+- `YYYY-MM-DD`
+- `DD MMM YYYY`
+
+Reject impossible dates.
+
+### Delivery date
+
+Look near: `Delivery Date`, `Delivered`, `Delivery`, `Despatch Date`, `Shipment Date`
+
+Accept the same date formats as invoice date.
+
+**Fallback rule:** If no delivery date exists in the document text, and the attachment filename contains a valid date, use that date as the delivery date.
+
+Examples:
+- `delivery_2026-04-25.pdf`
+- `INV_25-04-2026.xlsx`
+- `20260425_supplier_invoice.pdf`
+
+Only use filename date if:
+- delivery date is missing
+- the filename contains exactly one clear valid date
+- the extracted date is plausible
+
+Do not override an existing delivery date from the document.
+
+### Supplier
+
+Prefer (in order):
+1. template supplier
+2. address book match
+3. ABN-linked business name
+4. document header
+
+### ABN
+
+Accept 11-digit Australian ABN. Normalize by removing spaces.
+
+Example: `12 345 678 901` → `12345678901`
+
+### Totals
+
+Extract: `subtotal`, `GST`, `total`
+
+Validate: `subtotal + GST ≈ total` (tolerance: `±0.02`)
+
+If values do not reconcile, mark as suspicious.
+
+---
+
+## Step 6 — Deterministic line item extraction
+
+Each line item should contain:
+- `description`
+- `quantity`
+- `uom`
+- `unit_price`
+- `line_total`
+
+Expected structure: `description | qty | uom | unit_price | line_total`
+
+### Quantity rules
+
+Quantity should:
+- be numeric
+- usually near UOM
+- usually before unit price
+- support decimals (e.g. `1`, `2`, `12`, `1.5`)
+
+Never use: row number, item code, page number, sheet position.
+
+If a numeric column increments sequentially (`1`, `2`, `3`, `4`), treat it as a **line number only** — never quantity.
+
+### UOM rules
+
+Common UOM values: `EA`, `EACH`, `BOX`, `BX`, `CTN`, `PK`, `PACK`, `KG`, `G`, `L`, `ML`, `ROLL`, `BAG`, `CASE`
+
+UOM usually:
+- follows quantity
+- precedes unit price
+- appears as a short uppercase token
+
+If unclear, leave null. Never invent a UOM.
+
+### OCR merged values
+
+Split merged values such as:
+- `24EA` → `quantity=24`, `uom=EA`
+- `2BOX` → `quantity=2`, `uom=BOX`
+- `1.5KG` → `quantity=1.5`, `uom=KG`
+
+### Arithmetic validation
+
+Validate each row: `quantity × unit_price ≈ line_total` (tolerance: `±0.02`)
+
+If invalid, re-check the quantity candidate. Prefer the value that makes the row mathematically correct.
+
+**Example:**
+
+| Field | Wrong | Correct |
+|-------|-------|---------|
+| qty | `1` | `2` |
+| unit_price | `24.50` | `24.50` |
+| line_total | `49.00` | `49.00` |
+
+Because `2 × 24.50 = 49.00`.
+
+---
+
+## Step 7 — Confidence recalculation
+
+**Increase** confidence when:
+- arithmetic validates
+- required fields found
+- line items reconcile
+- filename fallback successfully fills missing delivery date
+
+**Reduce** confidence when:
+- values ambiguous
+- totals mismatch
+- quantity uncertain
+- OCR corruption severe
+
+Confidence range: `0.00` to `1.00`
+
+---
+
+## Step 8 — Output review summary
+
+For each document show:
+
 ```
-Reviewed: N | Improved: M | Still unclear: K
+📄 invoice123.json | ABC Pty Ltd | confidence 0.42 → 0.83
+✅ invoice_number: INV-10455
+✅ delivery_date: 2026-04-25 (from filename)
+✅ total_amount: 425.80
+✅ line_items: corrected quantity on 2 rows
+⚠ UOM missing on 1 row
 ```
 
-### Step 6 — If `--fix` was passed, write improvements
+After all documents show:
 
-For each document where you found improvements:
-1. Load the existing JSON
-2. Merge your findings in — **only fill null fields, do not overwrite existing non-null values**
-3. Recalculate `_confidence` if you have the template's `required_fields`
+```
+Reviewed: N
+Improved: M
+Unclear: K
+```
+
+---
+
+## Step 9 — If `--fix` supplied
+
+Only for improved documents:
+1. Load JSON
+2. Fill null fields only
+3. Correct clearly invalid line items
 4. Set `_claude_reviewed: true`
-5. Update `needs_review` to `false` if new confidence >= threshold
-6. Write the updated JSON back to disk (same path)
-7. Log: "Updated: <path>"
+5. Update `needs_review`
+6. Write back to same file
+7. Log: `Updated: path/to/file.json`
 
-### Step 7 — Template improvement suggestions
+---
 
-After reviewing, identify any **systematic** patterns where the regex template consistently fails.
-Group by template name and suggest specific regex pattern additions:
+## Step 10 — Template improvement suggestions
+
+Group repeated failures by template.
+
+**Example:**
 
 ```
-💡 Template suggestion for 'evergy':
-   Field 'delivery_date' — found in text as "Delivery: DD/MM/YYYY"
-   Add pattern: 'Delivery:\s+(\d{1,2}/\d{2}/\d{4})'
+💡 Template suggestion for supplier_x
+
+Field: quantity
+Issue: first numeric column captured as quantity
+Suggestion: ignore leading sequence column
+
+Field: delivery_date
+Issue: date often only present in filename
+Suggestion: fallback to filename date when field missing
+
+Field: uom
+Issue: merged OCR values like 24EA
+Suggestion: ([0-9.]+)(EA|BOX|KG|PK)
 ```
 
-If there are 3+ documents from the same sender all missing the same field, strongly recommend
-running `/generate-template <sender>` to regenerate the template with the new examples.
+If the same issue appears in 3 or more files, recommend:
+
+```bash
+/generate-template <supplier>
+```
 
 ---
 
 ## What NOT to do
 
-- Do not modify `config/templates/*.yaml` — suggest changes, let the user run `/generate-template`
-- Do not re-download or re-process emails — work only with files already on disk
-- Do not remove fields that already have values — only fill nulls and add missing line items
-- Do not hallucinate field values — if you genuinely cannot find a field in the raw text, leave it null
+Never:
+- overwrite valid fields
+- modify templates directly
+- fabricate values
+- invent UOM
+- inflate confidence without evidence
+
+When uncertain, leave null.
 
 ---
 
-## File paths reference
+## File paths
 
 ```
-parsed/                          ← JSON outputs from the pipeline
-  YYYY-MM-DD_domain_hash/
-    filename.json
-
-raw_text/                        ← extracted text (one .txt per attachment)
-  YYYY-MM-DD_domain_hash/
-    filename.txt
-
-config/templates/                ← YAML regex templates
-config/address_book.json         ← known senders
-config/settings.py               ← LOW_CONFIDENCE_THRESHOLD value
+parsed/
+raw_text/
+config/templates/
+config/address_book.json
+config/settings.py
 ```
 
-The `attachment_path` field inside each JSON file is the full path to the original file.
-Derive the raw text path by replacing `attachments/` with `raw_text/` and changing the extension to `.txt`.
+Use `attachment_path` to derive `raw_text` path.

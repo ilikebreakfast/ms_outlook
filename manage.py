@@ -146,12 +146,18 @@ def cmd_test_template(args) -> int:
         line_items = _extract_line_items(text, line_patterns) if line_patterns else []
     print(f"\n  {'line_items':<26} {'OK' if line_items else '--':<6} {len(line_items)} item(s) found")
 
+    min_li = tmpl.get("min_line_items", 0)
     extracted_required = sum(1 for f in required_fields if results.get(f))
-    confidence = extracted_required / len(required_fields) if required_fields else 0.0
+    total_slots = len(required_fields)
+    if min_li:
+        total_slots += 1
+        if len(line_items) >= min_li:
+            extracted_required += 1
+    confidence = extracted_required / total_slots if total_slots else 0.0
 
     print()
     print("─" * 70)
-    print(f"Required fields matched: {extracted_required}/{len(required_fields)}")
+    print(f"Required fields matched: {extracted_required}/{total_slots}")
     print(f"Parse confidence:        {confidence:.0%}")
 
     if confidence < LOW_CONFIDENCE_THRESHOLD:
