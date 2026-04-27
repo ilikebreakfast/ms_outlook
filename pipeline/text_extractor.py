@@ -147,6 +147,9 @@ def extract_text(attachment_path: Path) -> Tuple[str, bool]:
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
+    # Prepend filename so regex patterns can match dates/info embedded in the filename
+    text = f"[FILENAME: {attachment_path.name}]\n\n{text}"
+
     # Save raw text for audit
     out_dir = RAW_TEXT_DIR / attachment_path.parent.name
     out_dir.mkdir(parents=True, exist_ok=True)

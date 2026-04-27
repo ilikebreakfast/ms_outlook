@@ -104,6 +104,8 @@ Scan `parsed/**/*.json`. Select files where **any** apply:
 - `confidence < threshold`
 - `status == "extracted_only"`
 - `status == "low_confidence"`
+- any line item has `qty`, `unit_price`, and `total` all present but `qty × unit_price` differs from `total` by more than `0.02` (arithmetic failure — catches wrong column captures even on high-confidence docs)
+- `delivery_date` is null and the attachment filename contains a parseable date (filename fallback available)
 
 Immediately report:
 

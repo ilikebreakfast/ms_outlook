@@ -31,8 +31,8 @@ def _extract_field(text: str, patterns: list[str]) -> Optional[str]:
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
         if match:
-            # Return first capture group if present, else full match
-            return (match.group(1) if match.lastindex else match.group(0)).strip()
+            # Join all capture groups (supports multi-group date patterns); fall back to full match
+            return (" ".join(g for g in match.groups() if g) if match.lastindex else match.group(0)).strip()
     return None
 
 
