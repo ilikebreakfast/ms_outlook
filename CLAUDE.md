@@ -25,6 +25,34 @@ The pipeline interactively prompts for the number of days to look back (default:
 # Test a YAML template against a PDF or image
 python manage.py test-template evergy invoice.pdf
 python manage.py test-template bonitahua scan.png --show-text
+
+# Extract text from a PDF without running the full pipeline
+python manage.py parse-pdf invoice.pdf --show-text
+
+# Run a template against an already-extracted text file
+python manage.py parse-text topcut raw_text/2026-04-24_.../invoice.txt
+
+# Sender management
+python manage.py list-senders --days 30
+python manage.py add-sender billing@acme.com.au --name "ACME Corp" --template acme
+
+# Review queue
+python manage.py review-queue
+python manage.py resolve-review 3 [--dismiss]
+
+# Template drift analysis
+python manage.py analyze-template topcut --last 10
+
+# Database
+python manage.py sync-db            # backfill parsed_invoices from parsed/**/*.json
+python manage.py sync-contacts      # sync address_book.json → contacts table
+
+# Cleanup
+python manage.py dedup-attachments --dry-run   # preview duplicate attachment folders
+python manage.py dedup-attachments             # remove duplicates, keep earliest copy
+
+# Health check
+python manage.py health
 ```
 
 `--show-text` prints the first 3000 chars of extracted text, which is useful when writing new regex patterns.
@@ -55,14 +83,15 @@ A sender in the address book without a linked template still gets their email do
 ```
 Email Fetch (email_reader.py)
   → Sender Allowlist Check (security.py) — reads address_book.json, skip unknown senders WITHOUT downloading
-  → Attachment Download (attachment_downloader.py)
+  → Attachment Download (attachment_downloader.py) — skips within-run duplicates if DEDUP_REPLY_ATTACHMENTS=true
   → Security Validation (security.py) — magic bytes, PDF structure scan, ClamAV
   → Text Extraction (text_extractor.py) — pdfplumber native → PyMuPDF+Tesseract fallback
   → Prompt Injection Scrub (security.py)
   → Customer Classification (customer_classifier.py) — 4-tier matching against address book contacts
-  → [If template linked] Field Parsing (template_parser.py) — regex against YAML template
+  → [If template linked] Field Parsing (template_parser.py) — regex against YAML template; ABNs auto-normalized to 11 digits
+  → [Optional] Claude AI Reviewer (claude_reviewer.py) — fallback when regex confidence < threshold
   → JSON Output + Pydantic Validation (json_output.py) — status: "parsed" | "extracted_only" | "low_confidence"
-  → SQLite Record (database/db.py) — ⚠️ THIS MODULE IS MISSING (see below)
+  → SQLite Record (database/db.py) — deduplicates by (message_id, filename) and content hash
   → Email Move (email_mover.py)
 ```
 
@@ -101,6 +130,7 @@ Templates live in `config/templates/<name>.yaml`. Regex patterns use **single ba
 ```yaml
 customer_name: Evergy
 required_fields: [invoice_number, abn, order_date]
+min_line_items: 1   # optional: counts as one extra required slot for confidence scoring
 fields:
   invoice_number:
     - 'INV(\d+)'
@@ -109,17 +139,32 @@ fields:
     - 'ABN\s+(\d{2}\s?\d{3}\s?\d{3}\s?\d{3})'
   amount_due:
     - '\$([\d,]+\.\d{2})'
-line_items_pattern: ''
+line_items_patterns:   # list of patterns; results merged and deduplicated
+  - '^(?P<qty>\d+)\s+(?P<uom>\w+)\s+(?P<product_code>\d+)\s+(?P<description>.+)$'
 ```
 
+- Use `line_items_patterns` (list) for multiple line item formats; legacy `line_items_pattern` (single string) still works
+- Any field with `abn` in the name is automatically normalized to 11 digits (spaces/punctuation stripped)
 - The 4-tier classification order: exact email → domain → ABN extraction → keyword scoring
-- Confidence is the ratio of successfully matched `required_fields` to total; documents below `LOW_CONFIDENCE_THRESHOLD = 0.6` (in `config/settings.py`) are flagged for manual review
+- Confidence is the ratio of successfully matched `required_fields` to total (plus `min_line_items` slot if set); documents below `LOW_CONFIDENCE_THRESHOLD` (in `config/settings.py`) are flagged for manual review
+- Templates are gitignored (`config/templates/*.yaml`) — only `example_*.yaml` files are committed
 
 When an email arrives from an unknown sender, `pipeline/template_suggester.py` auto-generates a draft YAML template in `config/suggested_templates/`. The generated file includes a `_address_book_entry` block showing exactly what to paste into `address_book.json`.
 
-## Known Issue: Missing Database Module
+## Database
 
-`main.py` imports `from database import db` but `database/db.py` does not exist. The import is guarded with a try/except that falls back to a no-op stub, so the pipeline runs without crashing. The SQLite layer still needs to be implemented — it should deduplicate runs by message ID + filename and record pipeline metadata (customer, confidence, timestamp, etc.).
+`database/db.py` is the SQLite persistence layer. Six tables:
+
+| Table | Purpose |
+|---|---|
+| `processed_documents` | One row per attachment per run; dedup key `(message_id, filename)` + `content_hash` |
+| `review_queue` | Entries added when `needs_review=True`; cleared via `manage.py review-queue` |
+| `template_stats` | Per-run confidence scores per template; used by `manage.py analyze-template` |
+| `parsed_invoices` | All extracted JSON fields; columns added automatically when new fields appear |
+| `invoice_lines` | One row per line item; invoice-level fields repeated on each row |
+| `contacts` | Synced from `address_book.json` on every run and via `manage.py sync-contacts` |
+
+The schema is auto-migrated on startup — new columns are added via `ALTER TABLE ADD COLUMN` without manual migration scripts.
 
 ## Security Model
 
@@ -136,8 +181,8 @@ The Docker environment (`python:3.11-slim` + Tesseract + ClamAV) provides additi
 ## Output Structure
 
 Directories created at runtime (all gitignored):
-- `attachments/` — raw downloaded files
-- `raw_text/` — extracted text per attachment
-- `parsed/` — validated JSON output per document (includes `status` field)
+- `attachments/` — raw downloaded files, one subfolder per message (`YYYY-MM-DD_<domain>_<hash>/`)
+- `raw_text/` — extracted text per attachment (same folder structure as `attachments/`)
+- `parsed/` — validated JSON output per document (same folder structure; includes `status` field)
 - `logs/` — rotating log files
-- `database/` — SQLite DB (not yet implemented)
+- `database/pipeline.db` — SQLite database
