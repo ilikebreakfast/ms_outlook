@@ -27,6 +27,12 @@ def _load_template(template_name: str) -> Optional[dict]:
         return None
 
 
+def _normalize_abn(value: str) -> str:
+    """Strip spaces/punctuation from an ABN and return 11-digit string, or original if invalid."""
+    digits = re.sub(r'\D', '', value)
+    return digits if len(digits) == 11 else value
+
+
 def _extract_field(text: str, patterns: list[str]) -> Optional[str]:
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -154,7 +160,10 @@ def parse_xlsx(path: Path, template_name: str) -> dict:
 
     # 1. Cell-label lookup for fields_xlsx
     for field_name, label in fields_xlsx.items():
-        result[field_name] = _find_cell_value(ws, label)
+        value = _find_cell_value(ws, label)
+        if value and "abn" in field_name.lower():
+            value = _normalize_abn(value)
+        result[field_name] = value
 
     # 2. Flat-text regex for any remaining fields not already found
     if fields_regex:
@@ -162,9 +171,12 @@ def parse_xlsx(path: Path, template_name: str) -> dict:
         flat_text = extract_excel_text(path)
         for field_name, patterns in fields_regex.items():
             if field_name not in result or result[field_name] is None:
-                result[field_name] = _extract_field(
+                value = _extract_field(
                     flat_text, patterns if isinstance(patterns, list) else [patterns]
                 )
+                if value and "abn" in field_name.lower():
+                    value = _normalize_abn(value)
+                result[field_name] = value
 
     # 3. Line items from line_items_xlsx config
     xlsx_li_config = tmpl.get("line_items_xlsx")
@@ -206,7 +218,10 @@ def parse(text: str, template_name: str) -> dict:
 
     result = {}
     for field_name, patterns in fields.items():
-        result[field_name] = _extract_field(text, patterns if isinstance(patterns, list) else [patterns])
+        value = _extract_field(text, patterns if isinstance(patterns, list) else [patterns])
+        if value and "abn" in field_name.lower():
+            value = _normalize_abn(value)
+        result[field_name] = value
 
     # Support both line_items_patterns (list) and legacy line_items_pattern (string)
     line_patterns = tmpl.get("line_items_patterns") or tmpl.get("line_items_pattern", "")
