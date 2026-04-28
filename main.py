@@ -39,6 +39,7 @@ from pipeline import metrics as pipeline_metrics
 from config.settings import (
     MOVE_AFTER_PROCESSING, TEMPLATES_DIR, ADDRESS_BOOK_PATH,
     DEFAULT_SCHEDULE_MINUTES, CLAUDE_REVIEW_ENABLED, CLAUDE_REVIEW_THRESHOLD,
+    DEDUP_REPLY_ATTACHMENTS,
 )
 
 from database import db
@@ -374,12 +375,9 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
         db.sync_contacts(contacts)
     except Exception as _e:
         log.debug(f"contacts sync skipped: {_e}")
-    try:
-        known_hashes = db.get_known_hashes()
-        log.debug(f"Loaded {len(known_hashes)} known content hash(es) for dedup.")
-    except Exception as _e:
-        log.debug(f"Could not load known hashes: {_e}")
-        known_hashes = set()
+    # In-run dedup: track hashes seen this run to skip reply-chain duplicates.
+    # Starts empty each run so historical runs are always preserved.
+    known_hashes: set[str] = set() if DEDUP_REPLY_ATTACHMENTS else None
     client = GraphClient(interactive=interactive)
 
     total = 0

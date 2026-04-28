@@ -99,3 +99,11 @@ CLAUDE_REVIEW_THRESHOLD = float(os.getenv("CLAUDE_REVIEW_THRESHOLD", str(LOW_CON
 # --- Scheduling (used when --schedule flag is passed to main.py) ---
 # Default poll interval in minutes when running in scheduled/daemon mode.
 DEFAULT_SCHEDULE_MINUTES = int(os.getenv("DEFAULT_SCHEDULE_MINUTES", "60"))
+
+# --- Deduplication ---
+# When True, identical attachments encountered in different messages within the
+# SAME pipeline run (e.g. an invoice re-attached across a reply chain) are
+# downloaded and parsed only once. Cross-run duplicates are always allowed so
+# that historical runs are preserved for comparison.
+# Set DEDUP_REPLY_ATTACHMENTS=false in .env to disable (useful during testing).
+DEDUP_REPLY_ATTACHMENTS = os.getenv("DEDUP_REPLY_ATTACHMENTS", "true").lower() == "true"
