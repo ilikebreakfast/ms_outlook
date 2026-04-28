@@ -1,7 +1,7 @@
 """
 SQLite persistence layer for the ms_outlook pipeline.
 
-Three tables:
+Four tables:
   processed_documents — one row per attachment per run; primary dedup key is
                         (message_id, attachment_filename). All pipeline metadata
                         is stored here for audit and reporting.
@@ -9,6 +9,9 @@ Three tables:
                         Operators clear items via `manage.py review-queue`.
   template_stats      — one row per template per run; used to detect confidence
                         drift over time via `manage.py analyze-template`.
+  parsed_invoices     — one row per parsed JSON; stores all extracted fields.
+                        Columns are added automatically when new fields are seen.
+                        line_items is stored as JSON text.
 
 Usage (same interface as the original stub so main.py needs no changes):
     from database import db
@@ -16,6 +19,7 @@ Usage (same interface as the original stub so main.py needs no changes):
         ...
     db.record(message_id=..., attachment_filename=..., ...)
 """
+import json
 import logging
 import sqlite3
 from contextlib import contextmanager
@@ -78,6 +82,52 @@ CREATE INDEX IF NOT EXISTS idx_rq_status     ON review_queue(status);
 CREATE INDEX IF NOT EXISTS idx_ts_template   ON template_stats(template_name);
 """
 
+_PARSED_INVOICES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS parsed_invoices (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_file          TEXT    NOT NULL UNIQUE,
+    synced_at            TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pi_source ON parsed_invoices(source_file);
+"""
+
+_INVOICE_LINES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS invoice_lines (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_file          TEXT    NOT NULL,
+    line_num             INTEGER NOT NULL,
+    -- invoice-level fields (repeated per line)
+    message_id           TEXT,
+    sender_email         TEXT,
+    customer_name        TEXT,
+    company_name         TEXT,
+    company_abn          TEXT,
+    po_number            TEXT,
+    invoice_number       TEXT,
+    order_date           TEXT,
+    delivery_date        TEXT,
+    invoice_subtotal     TEXT,
+    invoice_tax_amount   TEXT,
+    invoice_total        TEXT,
+    confidence           REAL,
+    status               TEXT,
+    received_at          TEXT,
+    processed_at         TEXT,
+    -- line item fields
+    product_code         TEXT,
+    description          TEXT,
+    qty                  TEXT,
+    uom                  TEXT,
+    unit_price           TEXT,
+    line_subtotal        TEXT,
+    line_total           TEXT,
+    UNIQUE(source_file, line_num)
+);
+CREATE INDEX IF NOT EXISTS idx_il_source   ON invoice_lines(source_file);
+CREATE INDEX IF NOT EXISTS idx_il_product  ON invoice_lines(product_code);
+CREATE INDEX IF NOT EXISTS idx_il_company  ON invoice_lines(company_name);
+"""
+
 
 # ---------------------------------------------------------------------------
 # Connection helper
@@ -108,6 +158,8 @@ def init() -> None:
     """Create tables if they don't exist. Safe to call on every startup."""
     with _connect() as conn:
         conn.executescript(_SCHEMA)
+        conn.executescript(_PARSED_INVOICES_SCHEMA)
+        conn.executescript(_INVOICE_LINES_SCHEMA)
         # Migrations for columns added after initial schema deployment
         for col, definition in [
             ("status", "TEXT"),
@@ -251,6 +303,153 @@ def record_template_stat(
                 required_fields_total,
             ),
         )
+
+
+# ---------------------------------------------------------------------------
+# parsed_invoices — dynamic-column extracted-field store
+# ---------------------------------------------------------------------------
+
+# Fields that are always present as base columns (never added via ALTER TABLE)
+_PI_BASE_COLS = {"id", "source_file", "synced_at"}
+
+# Fields to skip storing (internal review metadata, not invoice data)
+_PI_SKIP_COLS = {"_claude_reviewed", "_reviewed_at", "_review_notes"}
+
+
+def _ensure_parsed_invoice_columns(conn: sqlite3.Connection, keys: list[str]) -> None:
+    """Add any missing columns to parsed_invoices for the given field names."""
+    existing = {
+        row[1] for row in conn.execute("PRAGMA table_info(parsed_invoices)").fetchall()
+    }
+    for key in keys:
+        if key not in existing and key not in _PI_BASE_COLS:
+            try:
+                conn.execute(f"ALTER TABLE parsed_invoices ADD COLUMN [{key}] TEXT")
+            except sqlite3.OperationalError:
+                pass  # race or already exists
+
+
+def record_parsed_invoice(data: dict) -> None:
+    """
+    Upsert one parsed invoice JSON dict into parsed_invoices.
+    - source_file is the dedup key (UNIQUE).
+    - Any key in data becomes a column; new keys trigger ALTER TABLE ADD COLUMN.
+    - list/dict values (e.g. line_items) are serialized as JSON text.
+    - Skips internal review metadata keys.
+    """
+    source_file = data.get("source_file", "")
+    if not source_file:
+        return
+
+    synced_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    # Flatten: serialize complex values, skip internal keys
+    flat: dict[str, object] = {}
+    for k, v in data.items():
+        if k in _PI_SKIP_COLS or k in _PI_BASE_COLS:
+            continue
+        if isinstance(v, (list, dict)):
+            flat[k] = json.dumps(v, ensure_ascii=False)
+        else:
+            flat[k] = v
+
+    with _connect() as conn:
+        _ensure_parsed_invoice_columns(conn, list(flat.keys()))
+
+        cols = ["source_file", "synced_at"] + list(flat.keys())
+        vals = [source_file, synced_at] + list(flat.values())
+        placeholders = ", ".join("?" * len(cols))
+        col_expr = ", ".join(f"[{c}]" for c in cols)
+        update_expr = ", ".join(
+            f"[{c}] = excluded.[{c}]" for c in cols if c not in ("source_file",)
+        )
+        conn.execute(
+            f"""
+            INSERT INTO parsed_invoices ({col_expr}) VALUES ({placeholders})
+            ON CONFLICT([source_file]) DO UPDATE SET {update_expr}
+            """,
+            vals,
+        )
+
+    record_invoice_lines(data)
+
+
+# ---------------------------------------------------------------------------
+# invoice_lines — one row per line item, invoice fields repeated
+# ---------------------------------------------------------------------------
+
+def record_invoice_lines(data: dict) -> None:
+    """
+    Upsert line items from a parsed invoice JSON dict into invoice_lines.
+    Each line item becomes one row. Invoice-level fields are repeated on every row.
+    Dedup key is (source_file, line_num).
+    """
+    source_file = data.get("source_file", "")
+    line_items = data.get("line_items") or []
+    if not source_file or not line_items:
+        return
+
+    invoice_fields = {
+        "message_id":         data.get("message_id"),
+        "sender_email":       data.get("sender_email"),
+        "customer_name":      data.get("customer_name"),
+        "company_name":       data.get("company_name"),
+        "company_abn":        data.get("company_abn"),
+        "po_number":          data.get("po_number"),
+        "invoice_number":     data.get("invoice_number"),
+        "order_date":         data.get("order_date"),
+        "delivery_date":      data.get("delivery_date"),
+        "invoice_subtotal":   data.get("subtotal"),
+        "invoice_tax_amount": data.get("tax_amount"),
+        "invoice_total":      data.get("total_amount"),
+        "confidence":         data.get("confidence"),
+        "status":             data.get("status"),
+        "received_at":        data.get("received_at"),
+        "processed_at":       data.get("processed_at"),
+    }
+
+    with _connect() as conn:
+        for i, item in enumerate(line_items, start=1):
+            conn.execute(
+                """
+                INSERT INTO invoice_lines (
+                    source_file, line_num,
+                    message_id, sender_email, customer_name, company_name, company_abn,
+                    po_number, invoice_number, order_date, delivery_date,
+                    invoice_subtotal, invoice_tax_amount, invoice_total,
+                    confidence, status, received_at, processed_at,
+                    product_code, description, qty, uom, unit_price, line_subtotal, line_total
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(source_file, line_num) DO UPDATE SET
+                    message_id=excluded.message_id, sender_email=excluded.sender_email,
+                    customer_name=excluded.customer_name, company_name=excluded.company_name,
+                    company_abn=excluded.company_abn, po_number=excluded.po_number,
+                    invoice_number=excluded.invoice_number, order_date=excluded.order_date,
+                    delivery_date=excluded.delivery_date,
+                    invoice_subtotal=excluded.invoice_subtotal,
+                    invoice_tax_amount=excluded.invoice_tax_amount,
+                    invoice_total=excluded.invoice_total,
+                    confidence=excluded.confidence, status=excluded.status,
+                    received_at=excluded.received_at, processed_at=excluded.processed_at,
+                    product_code=excluded.product_code, description=excluded.description,
+                    qty=excluded.qty, uom=excluded.uom, unit_price=excluded.unit_price,
+                    line_subtotal=excluded.line_subtotal, line_total=excluded.line_total
+                """,
+                (
+                    source_file, i,
+                    invoice_fields["message_id"], invoice_fields["sender_email"],
+                    invoice_fields["customer_name"], invoice_fields["company_name"],
+                    invoice_fields["company_abn"], invoice_fields["po_number"],
+                    invoice_fields["invoice_number"], invoice_fields["order_date"],
+                    invoice_fields["delivery_date"], invoice_fields["invoice_subtotal"],
+                    invoice_fields["invoice_tax_amount"], invoice_fields["invoice_total"],
+                    invoice_fields["confidence"], invoice_fields["status"],
+                    invoice_fields["received_at"], invoice_fields["processed_at"],
+                    item.get("product_code"), item.get("description"),
+                    item.get("qty"), item.get("uom"), item.get("unit_price"),
+                    item.get("subtotal"), item.get("total"),
+                ),
+            )
 
 
 # ---------------------------------------------------------------------------

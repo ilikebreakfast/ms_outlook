@@ -792,6 +792,43 @@ def cmd_health(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# sync-db
+# ---------------------------------------------------------------------------
+
+def cmd_sync_db(args) -> int:
+    """Backfill parsed_invoices table from all parsed/**/*.json files."""
+    import json as _json
+    from pathlib import Path
+    from database import db as _db
+
+    parsed_dir = Path("parsed")
+    if not parsed_dir.exists():
+        print("No parsed/ directory found.")
+        return 1
+
+    json_files = sorted(parsed_dir.rglob("*.json"))
+    if not json_files:
+        print("No JSON files found in parsed/.")
+        return 0
+
+    ok = 0
+    errors = 0
+    for path in json_files:
+        try:
+            data = _json.loads(path.read_text(encoding="utf-8"))
+            if "source_file" not in data:
+                data["source_file"] = str(path)
+            _db.record_parsed_invoice(data)
+            ok += 1
+        except Exception as e:
+            print(f"  [!!] {path.name}: {e}")
+            errors += 1
+
+    print(f"Synced {ok} invoice(s) to parsed_invoices table." + (f" {errors} error(s)." if errors else ""))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CLI wiring
 # ---------------------------------------------------------------------------
 
@@ -857,6 +894,9 @@ def main() -> None:
     p.add_argument("txt_file", help="Path to .txt file (e.g. raw_text/abc123/invoice.txt)")
     p.add_argument("--show-text", action="store_true", help="Print the text before parsing")
 
+    # sync-db
+    sub.add_parser("sync-db", help="Backfill parsed_invoices table from all parsed/**/*.json files")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -871,6 +911,7 @@ def main() -> None:
         "health":           cmd_health,
         "parse-pdf":        cmd_parse_pdf,
         "parse-text":       cmd_parse_text,
+        "sync-db":          cmd_sync_db,
     }
 
     fn = dispatch.get(args.command)

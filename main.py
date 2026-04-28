@@ -297,6 +297,11 @@ def process_attachment(
             processed_at=doc.processed_at,
             template_name=template_name,
         )
+        try:
+            import json as _json
+            db.record_parsed_invoice(_json.loads(json_path.read_text(encoding="utf-8")))
+        except Exception as _e:
+            log.debug(f"parsed_invoices sync skipped for {filename}: {_e}")
 
         if doc.status == "extracted_only":
             log.info(

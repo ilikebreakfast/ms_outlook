@@ -707,6 +707,15 @@ python manage.py resolve-review 3 --dismiss    # mark as dismissed instead
 python manage.py resolve-review 3 --by "Alice"
 ```
 
+### Database sync
+
+```bash
+# Backfill parsed_invoices and invoice_lines from all existing parsed/**/*.json files
+python manage.py sync-db
+```
+
+New pipeline runs populate both tables automatically. Use `sync-db` after manually editing JSON files or running `/review-invoices --fix`.
+
 ### Health check
 
 ```bash
@@ -983,6 +992,18 @@ sqlite3 database/pipeline.db "SELECT attachment_filename, error FROM processed_d
 
 # All recent runs
 sqlite3 database/pipeline.db "SELECT * FROM processed_documents ORDER BY processed_at DESC LIMIT 20;"
+
+# All extracted invoice fields (one row per document)
+sqlite3 database/pipeline.db "SELECT company_name, po_number, delivery_date, total_amount, confidence FROM parsed_invoices;"
+
+# All line items (one row per product, invoice fields repeated)
+sqlite3 database/pipeline.db "SELECT company_name, po_number, delivery_date, product_code, description, qty, uom, unit_price, line_total FROM invoice_lines;"
+```
+
+`parsed_invoices` and `invoice_lines` are populated automatically on each pipeline run. To backfill from existing JSON files:
+
+```bash
+python manage.py sync-db
 ```
 
 ```bash
@@ -1048,7 +1069,7 @@ ms_outlook/
 │   ├── claude_reviewer.py         ← optional Claude Haiku fallback (requires ANTHROPIC_API_KEY)
 │   └── metrics.py                 ← run metrics (metrics.json + run/alert/per-doc webhooks)
 ├── database/
-│   └── db.py                      ← SQLite: processed_documents, review_queue, template_stats
+│   └── db.py                      ← SQLite: processed_documents, review_queue, template_stats, parsed_invoices, invoice_lines
 ├── utils/
 │   └── logger.py
 ├── attachments/                   ← original files (gitignored)
