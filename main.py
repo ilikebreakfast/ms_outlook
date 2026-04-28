@@ -157,7 +157,7 @@ def _contacts_to_allowlists(contacts: list[dict]) -> tuple[set[str], set[str]]:
 
 def process_attachment(
     client, message, attachment_path, allowed_domains, allowed_emails,
-    contacts, dry_run: bool = False,
+    contacts, dry_run: bool = False, known_hashes: set = None,
 ) -> bool:
     """Returns True if processing succeeded (used to decide whether to move the email)."""
     msg_id = message["id"]
@@ -170,7 +170,7 @@ def process_attachment(
         return True
 
     content_hash = hashlib.sha256(attachment_path.read_bytes()).hexdigest()
-    if db.already_processed_by_hash(content_hash):
+    if known_hashes is not None and content_hash in known_hashes:
         log.info(f"Duplicate attachment (same content, reply chain?), skipping: {filename}")
         return True
 
@@ -374,6 +374,12 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
         db.sync_contacts(contacts)
     except Exception as _e:
         log.debug(f"contacts sync skipped: {_e}")
+    try:
+        known_hashes = db.get_known_hashes()
+        log.debug(f"Loaded {len(known_hashes)} known content hash(es) for dedup.")
+    except Exception as _e:
+        log.debug(f"Could not load known hashes: {_e}")
+        known_hashes = set()
     client = GraphClient(interactive=interactive)
 
     total = 0
@@ -403,6 +409,7 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
                 message["id"],
                 sender=sender,
                 received=message.get("receivedDateTime", ""),
+                known_hashes=known_hashes,
             )
 
         if not paths and not dry_run:
@@ -413,13 +420,17 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
         for path in paths:
             success = process_attachment(
                 client, message, path, allowed_domains, allowed_emails,
-                contacts, dry_run=dry_run,
+                contacts, dry_run=dry_run, known_hashes=known_hashes,
             )
             if not success:
                 all_succeeded = False
                 errors += 1
             else:
                 total += 1
+                # Track hash in-run so later messages in same run also dedup
+                if not dry_run:
+                    h = hashlib.sha256(path.read_bytes()).hexdigest()
+                    known_hashes.add(h)
 
         if MOVE_AFTER_PROCESSING and all_succeeded and not dry_run:
             if move_to_processed(client, message["id"]):

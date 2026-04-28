@@ -7,7 +7,7 @@ import logging
 import base64
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Set
 
 from auth.graph_client import GraphClient
 from config.settings import ATTACHMENTS_DIR, ATTACHMENT_EXTENSIONS
@@ -34,12 +34,19 @@ def _attachment_folder(message_id: str, sender: str, received: str) -> Path:
 
 
 def download_attachments(
-    client: GraphClient, message_id: str, sender: str = "", received: str = ""
+    client: GraphClient,
+    message_id: str,
+    sender: str = "",
+    received: str = "",
+    known_hashes: Set[str] = None,
 ) -> List[Path]:
     """
     Downloads all PDF/image attachments for a message.
     Returns list of local file paths.
-    Read-only - does not alter the email.
+
+    known_hashes: set of SHA-256 hex digests already in the DB. Attachments
+    whose content matches a known hash are skipped without writing to disk —
+    this avoids re-downloading identical files from email reply chains.
     """
     data = client.get(f"/me/messages/{message_id}/attachments")
     attachments = data.get("value", [])
@@ -58,9 +65,17 @@ def download_attachments(
             log.warning(f"No contentBytes for {name!r}, skipping.")
             continue
 
+        raw = base64.b64decode(content_bytes)
+
+        if known_hashes is not None:
+            content_hash = hashlib.sha256(raw).hexdigest()
+            if content_hash in known_hashes:
+                log.info(f"Skipping duplicate attachment (reply chain): {name!r}")
+                continue
+
         folder = _attachment_folder(message_id, sender, received)
         dest = folder / name
-        dest.write_bytes(base64.b64decode(content_bytes))
+        dest.write_bytes(raw)
         log.info(f"Saved attachment: {dest}")
         saved.append(dest)
 

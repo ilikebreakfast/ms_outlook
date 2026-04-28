@@ -13,6 +13,7 @@ Commands:
   python manage.py resolve-review <queue_id> [--dismiss]
   python manage.py analyze-template <name> [--last N]
   python manage.py health
+  python manage.py dedup-attachments [--dry-run]
   python manage.py sync-contacts
   python manage.py sync-db
 
@@ -794,6 +795,113 @@ def cmd_health(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# dedup-attachments
+# ---------------------------------------------------------------------------
+
+def cmd_dedup_attachments(args) -> int:
+    """
+    Find duplicate attachments across message folders (by SHA-256 content hash).
+    Keeps the earliest folder per group; removes the rest, including their
+    parsed/ JSON files and DB records.
+    Pass --dry-run to preview without deleting anything.
+    """
+    import hashlib as _hashlib
+    import shutil
+    from config.settings import ATTACHMENTS_DIR, PARSED_DIR
+    try:
+        from database import db as _db
+        from config.settings import ATTACHMENT_EXTENSIONS
+    except Exception as e:
+        print(f"Error loading modules: {e}")
+        return 1
+
+    dry_run = args.dry_run
+
+    if not ATTACHMENTS_DIR.exists():
+        print("No attachments/ directory found.")
+        return 1
+
+    # Scan all attachment files, group by content hash
+    hash_to_files: dict[str, list] = {}
+    for att_file in sorted(ATTACHMENTS_DIR.rglob("*")):
+        if not att_file.is_file():
+            continue
+        if att_file.suffix.lower() not in ATTACHMENT_EXTENSIONS:
+            continue
+        try:
+            h = _hashlib.sha256(att_file.read_bytes()).hexdigest()
+        except Exception:
+            continue
+        hash_to_files.setdefault(h, []).append(att_file)
+
+    duplicates = {h: files for h, files in hash_to_files.items() if len(files) > 1}
+    if not duplicates:
+        print("No duplicate attachments found.")
+        return 0
+
+    total_removed_files = 0
+    total_removed_folders = 0
+
+    for h, files in duplicates.items():
+        # Sort by folder name (date-prefixed) — keep the earliest
+        files_sorted = sorted(files, key=lambda f: f.parent.name)
+        keep = files_sorted[0]
+        remove = files_sorted[1:]
+
+        print(f"\n[HASH {h[:12]}...] {keep.name}")
+        print(f"  KEEP:   {keep.parent.name}/{keep.name}")
+
+        for dup in remove:
+            folder = dup.parent
+            # Find corresponding parsed/ folder (same folder stem)
+            parsed_folder = PARSED_DIR / folder.name if PARSED_DIR.exists() else None
+
+            print(f"  REMOVE: {folder.name}/{dup.name}")
+
+            if not dry_run:
+                # Delete attachment file
+                try:
+                    dup.unlink()
+                    total_removed_files += 1
+                except Exception as e:
+                    print(f"    [!!] Could not delete {dup}: {e}")
+
+                # Delete parsed JSON for this file
+                if parsed_folder and parsed_folder.exists():
+                    json_file = parsed_folder / (dup.stem + ".json")
+                    if json_file.exists():
+                        json_file.unlink()
+                        print(f"    Deleted parsed: {json_file.name}")
+
+                # If attachment folder is now empty, remove it
+                remaining = list(folder.iterdir()) if folder.exists() else []
+                if not remaining:
+                    shutil.rmtree(folder, ignore_errors=True)
+                    total_removed_folders += 1
+                    print(f"    Deleted empty folder: {folder.name}")
+
+                # If parsed folder is now empty, remove it
+                if parsed_folder and parsed_folder.exists():
+                    remaining_parsed = list(parsed_folder.iterdir())
+                    if not remaining_parsed:
+                        shutil.rmtree(parsed_folder, ignore_errors=True)
+                        print(f"    Deleted empty parsed folder: {parsed_folder.name}")
+            else:
+                print(f"    [DRY RUN] Would delete: {folder.name}/{dup.name}")
+                if parsed_folder:
+                    json_file = parsed_folder / (dup.stem + ".json")
+                    if json_file.exists():
+                        print(f"    [DRY RUN] Would delete parsed: {json_file.name}")
+
+    if dry_run:
+        print(f"\n[DRY RUN] {sum(len(v) - 1 for v in duplicates.values())} duplicate file(s) across {len(duplicates)} group(s). Run without --dry-run to delete.")
+    else:
+        print(f"\nRemoved {total_removed_files} duplicate file(s), {total_removed_folders} empty folder(s).")
+        print("Run 'python manage.py sync-db' to refresh the parsed_invoices table.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # sync-contacts
 # ---------------------------------------------------------------------------
 
@@ -925,6 +1033,10 @@ def main() -> None:
     p.add_argument("txt_file", help="Path to .txt file (e.g. raw_text/abc123/invoice.txt)")
     p.add_argument("--show-text", action="store_true", help="Print the text before parsing")
 
+    # dedup-attachments
+    p = sub.add_parser("dedup-attachments", help="Remove duplicate attachment/parsed files from reply chains")
+    p.add_argument("--dry-run", action="store_true", help="Preview without deleting anything")
+
     # sync-contacts
     sub.add_parser("sync-contacts", help="Sync address_book.json contacts into the SQLite contacts table")
 
@@ -945,6 +1057,7 @@ def main() -> None:
         "health":           cmd_health,
         "parse-pdf":        cmd_parse_pdf,
         "parse-text":       cmd_parse_text,
+        "dedup-attachments": cmd_dedup_attachments,
         "sync-contacts":    cmd_sync_contacts,
         "sync-db":          cmd_sync_db,
     }

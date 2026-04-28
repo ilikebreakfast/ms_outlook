@@ -211,6 +211,15 @@ def already_processed(message_id: str, attachment_filename: str) -> bool:
     return row is not None
 
 
+def get_known_hashes() -> set:
+    """Return all successfully processed content hashes (for download-time dedup)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT content_hash FROM processed_documents WHERE content_hash IS NOT NULL AND error IS NULL"
+        ).fetchall()
+    return {r[0] for r in rows}
+
+
 def already_processed_by_hash(content_hash: str) -> bool:
     """
     Returns True if an attachment with this content hash was already successfully
