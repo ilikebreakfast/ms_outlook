@@ -15,6 +15,7 @@ If address_book.json is missing the pipeline will DENY ALL senders and
 log an error (use --allow-all-senders to override for testing only).
 """
 import argparse
+import hashlib
 import json
 import logging
 import sys
@@ -168,6 +169,11 @@ def process_attachment(
         log.info(f"Already processed, skipping: {filename}")
         return True
 
+    content_hash = hashlib.sha256(attachment_path.read_bytes()).hexdigest()
+    if db.already_processed_by_hash(content_hash):
+        log.info(f"Duplicate attachment (same content, reply chain?), skipping: {filename}")
+        return True
+
     ok, issues = validate_attachment(attachment_path, sender, allowed_domains, allowed_emails)
     for issue in issues:
         log.warning(f"SECURITY [{filename}]: {issue}")
@@ -296,6 +302,7 @@ def process_attachment(
             attachment_path=str(attachment_path),
             processed_at=doc.processed_at,
             template_name=template_name,
+            content_hash=content_hash,
         )
         try:
             import json as _json
@@ -363,6 +370,10 @@ def run_once(days: int, dry_run: bool, allow_all: bool, interactive: bool = True
 
     contacts = _load_contacts(allow_all=allow_all)
     allowed_domains, allowed_emails = _contacts_to_allowlists(contacts)
+    try:
+        db.sync_contacts(contacts)
+    except Exception as _e:
+        log.debug(f"contacts sync skipped: {_e}")
     client = GraphClient(interactive=interactive)
 
     total = 0

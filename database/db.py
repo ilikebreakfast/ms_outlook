@@ -1,7 +1,7 @@
 """
 SQLite persistence layer for the ms_outlook pipeline.
 
-Four tables:
+Six tables:
   processed_documents — one row per attachment per run; primary dedup key is
                         (message_id, attachment_filename). All pipeline metadata
                         is stored here for audit and reporting.
@@ -12,6 +12,8 @@ Four tables:
   parsed_invoices     — one row per parsed JSON; stores all extracted fields.
                         Columns are added automatically when new fields are seen.
                         line_items is stored as JSON text.
+  invoice_lines       — one row per line item; invoice-level fields repeated.
+  contacts            — one row per address book contact; synced from address_book.json.
 
 Usage (same interface as the original stub so main.py needs no changes):
     from database import db
@@ -53,6 +55,7 @@ CREATE TABLE IF NOT EXISTS processed_documents (
     processed_at         TEXT    NOT NULL,
     error                TEXT,
     template_name        TEXT,
+    content_hash         TEXT,
     UNIQUE(message_id, attachment_filename)
 );
 
@@ -89,6 +92,20 @@ CREATE TABLE IF NOT EXISTS parsed_invoices (
     synced_at            TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pi_source ON parsed_invoices(source_file);
+"""
+
+_CONTACTS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS contacts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL UNIQUE,
+    domains         TEXT,   -- JSON array
+    emails          TEXT,   -- JSON array
+    abns            TEXT,   -- JSON array
+    keywords        TEXT,   -- JSON array
+    template        TEXT,
+    last_synced_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ct_name ON contacts(name);
 """
 
 _INVOICE_LINES_SCHEMA = """
@@ -160,15 +177,16 @@ def init() -> None:
         conn.executescript(_SCHEMA)
         conn.executescript(_PARSED_INVOICES_SCHEMA)
         conn.executescript(_INVOICE_LINES_SCHEMA)
-        # Migrations for columns added after initial schema deployment
+        conn.executescript(_CONTACTS_SCHEMA)
         for col, definition in [
             ("status", "TEXT"),
             ("template_name", "TEXT"),
+            ("content_hash", "TEXT"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE processed_documents ADD COLUMN {col} {definition}")
             except sqlite3.OperationalError:
-                pass  # column already exists
+                pass
     log.debug(f"Database ready: {DB_PATH}")
 
 
@@ -193,6 +211,24 @@ def already_processed(message_id: str, attachment_filename: str) -> bool:
     return row is not None
 
 
+def already_processed_by_hash(content_hash: str) -> bool:
+    """
+    Returns True if an attachment with this content hash was already successfully
+    processed — used to deduplicate attachments that appear in multiple messages
+    of an email reply chain.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id FROM processed_documents
+            WHERE content_hash = ? AND error IS NULL
+            LIMIT 1
+            """,
+            (content_hash,),
+        ).fetchone()
+    return row is not None
+
+
 def record(
     *,
     message_id: str,
@@ -209,6 +245,7 @@ def record(
     attachment_path: Optional[str] = None,
     error: Optional[str] = None,
     template_name: Optional[str] = None,
+    content_hash: Optional[str] = None,
 ) -> int:
     """
     Insert or replace a processed-document record.
@@ -232,13 +269,13 @@ def record(
                     customer_name   = ?, invoice_number = ?, confidence    = ?,
                     needs_review    = ?, status         = ?, json_path     = ?,
                     attachment_path = ?, processed_at   = ?, error         = ?,
-                    template_name   = ?
+                    template_name   = ?, content_hash   = ?
                 WHERE id = ?
                 """,
                 (
                     customer_name, invoice_number, confidence, int(needs_review),
                     status, json_path, attachment_path, processed_at, error,
-                    template_name, existing["id"],
+                    template_name, content_hash, existing["id"],
                 ),
             )
             doc_id = existing["id"]
@@ -249,14 +286,14 @@ def record(
                     (message_id, attachment_filename, sender_email, customer_name,
                      invoice_number, confidence, needs_review, status,
                      json_path, attachment_path, received_at, processed_at,
-                     error, template_name)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     error, template_name, content_hash)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     message_id, attachment_filename, sender_email, customer_name,
                     invoice_number, confidence, int(needs_review), status,
                     json_path, attachment_path, received_at, processed_at,
-                    error, template_name,
+                    error, template_name, content_hash,
                 ),
             )
             doc_id = cursor.lastrowid
@@ -450,6 +487,46 @@ def record_invoice_lines(data: dict) -> None:
                     item.get("subtotal"), item.get("total"),
                 ),
             )
+
+
+# ---------------------------------------------------------------------------
+# contacts — synced from address_book.json
+# ---------------------------------------------------------------------------
+
+def sync_contacts(contacts: list[dict]) -> int:
+    """
+    Upsert contacts from address_book.json into the contacts table.
+    Returns number of contacts upserted.
+    Skips entries with a _comment key (example placeholders).
+    """
+    synced_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    count = 0
+    with _connect() as conn:
+        for c in contacts:
+            name = c.get("name", "").strip()
+            if not name or name.startswith("_") or "_comment" in c:
+                continue
+            conn.execute(
+                """
+                INSERT INTO contacts (name, domains, emails, abns, keywords, template, last_synced_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    domains=excluded.domains, emails=excluded.emails,
+                    abns=excluded.abns, keywords=excluded.keywords,
+                    template=excluded.template, last_synced_at=excluded.last_synced_at
+                """,
+                (
+                    name,
+                    json.dumps(c.get("domains") or [], ensure_ascii=False),
+                    json.dumps(c.get("emails") or [], ensure_ascii=False),
+                    json.dumps(c.get("abns") or [], ensure_ascii=False),
+                    json.dumps(c.get("keywords") or [], ensure_ascii=False),
+                    c.get("template"),
+                    synced_at,
+                ),
+            )
+            count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------

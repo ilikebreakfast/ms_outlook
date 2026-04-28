@@ -13,6 +13,8 @@ Commands:
   python manage.py resolve-review <queue_id> [--dismiss]
   python manage.py analyze-template <name> [--last N]
   python manage.py health
+  python manage.py sync-contacts
+  python manage.py sync-db
 
 Examples:
   # Full test: extract from PDF then parse with template
@@ -792,6 +794,35 @@ def cmd_health(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# sync-contacts
+# ---------------------------------------------------------------------------
+
+def cmd_sync_contacts(args) -> int:
+    """Sync contacts from address_book.json into the SQLite contacts table."""
+    try:
+        from config.settings import ADDRESS_BOOK_PATH
+        from database import db as _db
+    except Exception as e:
+        print(f"Error loading modules: {e}")
+        return 1
+
+    if not ADDRESS_BOOK_PATH.exists():
+        print(f"Error: {ADDRESS_BOOK_PATH} not found.")
+        return 1
+
+    try:
+        data = json.loads(ADDRESS_BOOK_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Error reading address_book.json: {e}")
+        return 1
+
+    contacts = data.get("contacts", [])
+    count = _db.sync_contacts(contacts)
+    print(f"Synced {count} contact(s) to contacts table.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # sync-db
 # ---------------------------------------------------------------------------
 
@@ -894,6 +925,9 @@ def main() -> None:
     p.add_argument("txt_file", help="Path to .txt file (e.g. raw_text/abc123/invoice.txt)")
     p.add_argument("--show-text", action="store_true", help="Print the text before parsing")
 
+    # sync-contacts
+    sub.add_parser("sync-contacts", help="Sync address_book.json contacts into the SQLite contacts table")
+
     # sync-db
     sub.add_parser("sync-db", help="Backfill parsed_invoices table from all parsed/**/*.json files")
 
@@ -911,6 +945,7 @@ def main() -> None:
         "health":           cmd_health,
         "parse-pdf":        cmd_parse_pdf,
         "parse-text":       cmd_parse_text,
+        "sync-contacts":    cmd_sync_contacts,
         "sync-db":          cmd_sync_db,
     }
 
