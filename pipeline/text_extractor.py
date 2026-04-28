@@ -52,6 +52,55 @@ def _pdf_full_ocr(path: Path) -> str:
     return "\n\n".join(pages_text)
 
 
+def _extract_page_text(page) -> str:
+    """
+    Extract text from a single pdfplumber page with table-aware cell handling.
+
+    When a page contains tables, renders each table as tab-separated rows so
+    that cells whose text wraps across multiple PDF lines (e.g. a UOM like
+    "CTN (36 x\\n140g)") are collapsed to a single value rather than split
+    across lines straddling adjacent rows. Non-table text (headers, totals) is
+    extracted normally via extract_text() on the region outside the table bbox.
+    """
+    try:
+        tables = page.find_tables()
+    except Exception:
+        tables = []
+
+    if not tables:
+        return page.extract_text() or ""
+
+    # Non-table regions: crop away each table bbox and extract surrounding text
+    non_table_page = page
+    for tbl in tables:
+        try:
+            non_table_page = non_table_page.outside_bbox(tbl.bbox)
+        except Exception:
+            pass
+    try:
+        surrounding = non_table_page.extract_text() or ""
+    except Exception:
+        surrounding = ""
+
+    # Table regions: render as tab-separated rows, collapsing wrapped cell text
+    table_lines: list[str] = []
+    for tbl in tables:
+        try:
+            rows = tbl.extract()
+        except Exception:
+            continue
+        for row in (rows or []):
+            if not row:
+                continue
+            cells = [(c or "").replace("\n", " ").strip() for c in row]
+            line = "\t".join(cells).rstrip()
+            if any(cells):
+                table_lines.append(line)
+
+    parts = [p for p in (surrounding, "\n".join(table_lines)) if p.strip()]
+    return "\n".join(parts)
+
+
 def _extract_pdf_native(path: Path) -> Tuple[str, bool]:
     """Returns (text, is_native). is_native=False means OCR fallback used."""
     try:
@@ -60,7 +109,7 @@ def _extract_pdf_native(path: Path) -> Tuple[str, bool]:
 
         with pdfplumber.open(path) as pdf:
             for page in pdf.pages:
-                text = page.extract_text() or ""
+                text = _extract_page_text(page)
                 if len(text.strip()) >= MIN_CHARS_PER_PAGE:
                     pages_text.append(text)
                 else:
