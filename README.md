@@ -50,18 +50,25 @@ Outlook mailbox
     ├── 3. ABN found in document
     └── 4. Keyword matching
         │
-        ├─ Match found, template linked ──▶  Parse fields using YAML template
-        │                                   → customer_name, abn, address, invoice_number, dates, line_items
-        │                                   → [optional] Claude AI reviewer supplements regex
+        ├─ Match found, template linked ──▶  [optional] Document AI pre-fill
+        │                                   → Azure Document Intelligence extracts standard fields
+        │                                     (invoice number, dates, totals, line items) with no
+        │                                     template required — fills gaps before regex runs
+        │                                   → Parse remaining fields using YAML template regex
+        │                                   → [optional] Claude AI reviewer supplements only the
+        │                                     fields still missing after regex + Document AI
         │                                     when confidence < CLAUDE_REVIEW_THRESHOLD
         │
-        ├─ Match found, no template yet ──▶  Save raw text only  (status: extracted_only)
-        │                                   → [optional] Claude AI reviewer attempts field extraction
+        ├─ Match found, no template yet ──▶  [optional] Document AI extracts standard fields directly
+        │                                   → if Document AI disabled: Claude AI reviewer attempts
+        │                                     field extraction (extracted_only otherwise)
         │                                   → email still moved to Processed
-        │                                   → add a YAML template later to enable parsing
+        │                                   → add a YAML template later to parse custom fields
         │
         └─ No match ──────────────────────▶  Auto-generate suggested YAML template
                                             → config/suggested_templates/<sender>.yaml
+                                            → patterns anchored to actual label text from the PDF
+                                            → _context_lines_from_document shows matching lines
                                             → includes _address_book_entry snippet to copy
                                             Add to address_book.json + copy template to activate
         │
@@ -423,9 +430,38 @@ All settings go in `.env` (gitignored, never committed).
 
 `LOW_CONFIDENCE_THRESHOLD` (default `0.8`) is in `config/settings.py` — documents below this score are flagged `needs_review: true`.
 
+### Document AI — pre-built invoice extraction (optional)
+
+An optional pre-template extraction layer that uses Azure Document Intelligence's prebuilt Invoice model to extract standard fields from every attachment before regex template parsing runs.
+
+**What it extracts without any custom template:** invoice number, invoice date, due date, subtotal, tax amount, invoice total, amount due, purchase order number, vendor name, vendor address, vendor tax ID (ABN), customer name, billing/shipping address, and line items.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `DOCUMENT_AI_ENABLED` | `false` | Set to `true` to activate |
+| `DOCUMENT_AI_PROVIDER` | `azure` | Provider to use. Currently only `azure` is supported. |
+| `DOCUMENT_AI_KEY` | *(blank)* | API key from your Azure Document Intelligence resource |
+| `DOCUMENT_AI_ENDPOINT` | *(blank)* | Endpoint URL e.g. `https://<resource>.cognitiveservices.azure.com/` |
+
+**Setup:**
+1. `pip install azure-ai-documentintelligence`
+2. Create an Azure Document Intelligence resource in the [Azure portal](https://portal.azure.com) (search "Document Intelligence")
+3. Copy the key and endpoint into `.env`
+4. Set `DOCUMENT_AI_ENABLED=true`
+
+**Free tier:** 500 pages/month. Pay-as-you-go: ~$1.50 USD per 1,000 pages.
+
+**How it integrates:**
+- **Templated senders:** Document AI pre-populates standard fields. Your YAML template regex then fills supplier-specific custom fields (product codes, custom PO formats, etc.). Claude reviewer is only called if required fields are *still* missing after both layers.
+- **No-template senders:** Document AI results are used directly, replacing the Claude reviewer for standard invoice formats. More accurate than regex-based field extraction for new senders you haven't templated yet.
+
+**Required package is optional** — if `azure-ai-documentintelligence` is not installed and `DOCUMENT_AI_ENABLED=false` (the default), nothing changes. The import is guarded and produces a helpful `pip install` message if the package is missing but the feature is enabled.
+
+---
+
 ### Claude AI reviewer (optional)
 
-An optional second-pass reviewer that uses Claude Haiku to supplement regex extraction when confidence is low, or to extract fields from documents with no template. Requires an Anthropic API key — completely separate from your Claude Code subscription.
+An optional second-pass reviewer that uses Claude Haiku to fill in fields still missing after regex template parsing (and Document AI, if enabled). Requires an Anthropic API key — completely separate from your Claude Code subscription.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -433,7 +469,7 @@ An optional second-pass reviewer that uses Claude Haiku to supplement regex extr
 | `CLAUDE_REVIEW_ENABLED` | `false` | Set to `true` to enable. No-op if `ANTHROPIC_API_KEY` is not set. |
 | `CLAUDE_REVIEW_THRESHOLD` | `0.8` | Regex confidence below which Claude is invoked. Lower (e.g. `0.6`) means Claude only runs on very poor matches; higher (e.g. `0.9`) means it runs more aggressively. |
 
-**How it works:** Claude Haiku is invoked after the regex template parser when `parsed_confidence < CLAUDE_REVIEW_THRESHOLD`. It receives the extracted text and, for scanned documents with sparse text, also receives images of the first few PDF pages (vision). It returns a JSON object of extracted fields; if its confidence is higher than the regex result, it replaces it. Cost is minimal — Haiku is only called on problem documents, and the system prompt is cached across calls.
+**How it works:** Claude Haiku is invoked after the regex template parser when `parsed_confidence < CLAUDE_REVIEW_THRESHOLD`. It operates in **gap-filling mode** — it only asks Claude for the specific required fields that regex could not find, rather than re-extracting everything. The API call is skipped entirely if all required fields were already filled by regex or Document AI. For scanned documents with sparse OCR text, the first few PDF pages are also passed as images (vision input). Token cost is kept low: the system prompt is cached across calls, document text is capped at 2,000 characters, and only missing fields are requested.
 
 **If the key is not set or `CLAUDE_REVIEW_ENABLED=false`:** the pipeline runs exactly as before — no error, no delay, just no Claude fallback.
 
@@ -786,19 +822,31 @@ _address_book_entry:          # <-- copy this into config/address_book.json
     - '12345678901'
   keywords: [newcompany, order, supply, ...]
   template: supplier_at_newcompany_com_au
-_field_examples_found_in_document:   # actual values from the PDF
-  invoice_number_example: INV00123
-  order_date_example: 15 Apr 2026
+_field_examples_found_in_document:   # actual values sniffed from the PDF
+  invoice_number_example: INV-2026-00123
+  order_date_example: 15/04/2026
   amounts_found: ['1,250.00', '85.00']
+_context_lines_from_document:        # raw document lines the patterns were derived from
+  po_number: 'Invoice No: INV-2026-00123'
+  order_date: 'Invoice Date: 15/04/2026'
+  total_amount: 'Total Amount: 1,320.00'
 customer_name: New Company
-required_fields: [invoice_number, order_date]
+required_fields: [po_number, delivery_date]
 fields:
-  invoice_number:
-    - '(?:Invoice|INV|PO)[\s#:.]*(\w{3,20})'
+  po_number:
+    - 'Invoice\ No[\s:.\-#]*(INV-[A-Z0-9\-]+)'   # anchored to THIS supplier's label
+    - '(?:PO\s*Number|Order\s*(?:Number|No\.?|#))[:\s#]*([A-Z0-9][A-Z0-9\-]{2,24})'  # generic fallback
+  order_date:
+    - 'Invoice\ Date[\s:.\-#]*(\d{1,2}/\d{1,2}/\d{2,4})'   # anchored
+    - '(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On)?[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})'
   ...
 ```
 
-The `_field_examples_found_in_document` section shows **actual values pulled from the PDF** so you can see what the regex needs to match. Because templates now use YAML, regex patterns need only **single backslashes** — no more `\\d`, just `\d`.
+Patterns are now **context-anchored** — the first pattern for each field is derived from the actual label text found in the document (e.g. `Invoice\ No[\s:.]*(...)` rather than the generic `(?:invoice|inv|order|po)...(...)` that would fail if the supplier uses a different heading). A generic fallback is always appended as a safety net.
+
+The `_context_lines_from_document` block shows the **exact document line** each pattern was derived from, so you can verify correctness at a glance without running `test-template`.
+
+Because templates use YAML, regex patterns need only **single backslashes** — `\d`, not `\\d`.
 
 **To activate a suggested template:**
 
@@ -1065,8 +1113,9 @@ ms_outlook/
 │   ├── template_parser.py         ← parse() for PDF/image regex; parse_xlsx() for Excel (fields_xlsx + line_items_xlsx)
 │   ├── json_output.py             ← validate + save JSON (LineItem: product_code, uom, subtotal)
 │   ├── email_mover.py             ← move email after processing
-│   ├── template_suggester.py      ← auto-generate drafts with table format detection
-│   ├── claude_reviewer.py         ← optional Claude Haiku fallback (requires ANTHROPIC_API_KEY)
+│   ├── template_suggester.py      ← auto-generate drafts; context-anchored patterns + _context_lines block
+│   ├── document_ai_extractor.py   ← optional Azure Document Intelligence pre-fill (DOCUMENT_AI_ENABLED)
+│   ├── claude_reviewer.py         ← optional Claude Haiku gap-fill fallback (CLAUDE_REVIEW_ENABLED)
 │   └── metrics.py                 ← run metrics (metrics.json + run/alert/per-doc webhooks)
 ├── database/
 │   └── db.py                      ← SQLite: processed_documents, review_queue, template_stats, parsed_invoices, invoice_lines
