@@ -13,6 +13,12 @@ The user then:
   - Copies the file to config/templates/ to activate field parsing
 
 Existing suggestions are updated (not overwritten) to preserve manual edits.
+
+Key improvement: patterns are generated as *context-anchored* expressions derived
+from the actual label text found in the document (e.g. "Invoice No[:\\s]+(\\S+)")
+rather than generic keyword alternations.  The `_context_lines_from_document`
+block in every suggestion shows the raw document line each pattern was derived
+from, so you can verify correctness at a glance without running test-template.
 """
 import logging
 import re
@@ -58,7 +64,11 @@ _DELIVERY_RE = re.compile(
     re.IGNORECASE,
 )
 _INVOICE_RE = re.compile(
-    r"(?:invoice|inv|order|po|ref|reference)\s*(?:number|no\.?|#)?[:\s#]*([A-Z0-9][A-Z0-9\-]{2,24})",
+    # \b on both sides of the keyword prevents backtracking into a prefix match:
+    # without the trailing \b the engine tries "inv" inside "Invoice" after
+    # "invoice" (the full word) fails to complete the pattern, capturing "oice".
+    # [^\S\n]* (not \s*) prevents crossing line boundaries.
+    r"\b(?:invoice|reference|order|inv|po|ref)\b[^\S\n]*(?:number|no\.?|#)?[: \t#]*([A-Z0-9][A-Z0-9\-]{2,24})",
     re.IGNORECASE,
 )
 _AMOUNT_RE = re.compile(r"(?:\$|AUD)\s*([\d,]+\.\d{2})")
@@ -80,6 +90,101 @@ _TABLE_HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 _PIPE_ROW_RE = re.compile(r"^[^|]+\|[^|]+\|", re.MULTILINE)
+
+# Date value-pattern selectors (used by _anchored_field)
+_DATE_SLASH_RE  = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4}")
+_DATE_DOT_RE    = re.compile(r"\d{1,2}\.\d{1,2}\.\d{4}")
+_DATE_HYPHEN_RE = re.compile(r"\d{1,2}-[A-Z]{3}-\d{2}", re.IGNORECASE)
+
+
+def _context_anchor(text: str, value: str, value_pattern: str) -> Optional[str]:
+    """
+    Locate *value* in *text*, extract the label that precedes it on the same
+    line, and return a regex anchored to that label:
+        Label[\\s:.-#]*(value_pattern)
+
+    Returns None when the label is absent, too short, or too long to be useful,
+    or when *value* looks like a generic keyword (no digits, all alphabetic).
+    """
+    if not value:
+        return None
+    # Skip purely-alphabetic values — they are likely keywords, not real field
+    # values, and produce misleading anchors.
+    if value.isalpha():
+        return None
+    try:
+        m = re.search(re.escape(value), text, re.IGNORECASE)
+    except re.error:
+        return None
+    if not m:
+        return None
+    line_start = text.rfind("\n", 0, m.start()) + 1
+    pre = text[max(line_start, m.start() - 70) : m.start()]
+    # Strip trailing separators; keep meaningful label text
+    label = re.sub(r"[\s:.\-#/\d]+$", "", pre).strip()
+    if len(label) < 3 or len(label) > 55:
+        return None
+    return rf"{re.escape(label)}[\s:.\-#]*({value_pattern})"
+
+
+def _anchored_field(
+    text: str,
+    value: Optional[str],
+    value_pattern: str,
+    *fallbacks: str,
+) -> list[str]:
+    """Return patterns list: context anchor first (if derivable), then fallbacks."""
+    patterns: list[str] = []
+    if value:
+        anchor = _context_anchor(text, value, value_pattern)
+        if anchor:
+            patterns.append(anchor)
+    patterns.extend(fallbacks)
+    return patterns
+
+
+def _date_value_pattern(example: str) -> str:
+    """Choose a tight date regex based on the format found in the example value."""
+    if _DATE_SLASH_RE.search(example):
+        return r"\d{1,2}/\d{1,2}/\d{2,4}"
+    if _DATE_DOT_RE.search(example):
+        return r"\d{1,2}\.\d{1,2}\.\d{4}"
+    if _DATE_HYPHEN_RE.search(example):
+        return r"\d{1,2}-[A-Za-z]{3}-\d{2}"
+    return r"\d{1,2}[\s/\-.]\w{2,9}[\s/\-.]\d{2,4}"
+
+
+def _extract_context_lines(text: str, sniffed: dict) -> dict:
+    """
+    For each sniffed field value, extract the raw document line it was found on.
+    Included in the YAML as _context_lines_from_document so the user can verify
+    that generated patterns target the right text.
+    """
+    value_keys = {
+        "invoice_number_example": "po_number",
+        "order_date_example":     "order_date",
+        "delivery_date_example":  "delivery_date",
+        "abn_example":            "company_abn",
+        "subtotal_example":       "subtotal",
+        "total_example":          "total_amount",
+    }
+    lines: dict = {}
+    for sniff_key, field_name in value_keys.items():
+        value = sniffed.get(sniff_key)
+        if not value:
+            continue
+        try:
+            m = re.search(re.escape(str(value)), text, re.IGNORECASE)
+        except re.error:
+            continue
+        if not m:
+            continue
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        line_end   = text.find("\n", m.end())
+        if line_end == -1:
+            line_end = min(m.end() + 80, len(text))
+        lines[field_name] = text[line_start:line_end].strip()[:120]
+    return lines
 
 
 def _extract_keywords(text: str, top_n: int = 8) -> list[str]:
@@ -171,48 +276,68 @@ def _build_template(sender_email: str, display_name: str, text: str) -> dict:
 
     _, line_item_patterns = _sniff_line_item_format(text)
 
+    # --- Build context-anchored field patterns ---
+    inv_val    = sniffed.get("invoice_number_example")
+    odate_val  = sniffed.get("order_date_example")
+    ddate_val  = sniffed.get("delivery_date_example")
+    sub_val    = sniffed.get("subtotal_example")
+    total_val  = sniffed.get("total_example")
+
+    fields: dict = {
+        "customer_name": [re.escape(customer_name) if customer_name else "FILL_IN_CUSTOMER_NAME"],
+        "company_abn":   [r"ABN[\s:\-]+([\d\s]{11,14})"],
+        "address":       [r"(\d+\s+\w+.*?(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4})"],
+        "po_number": _anchored_field(
+            text, inv_val, r"[A-Z0-9][A-Z0-9\-]{2,24}",
+            r"(?:PO\s*Number|Order\s*(?:Number|No\.?|#)|REF)[:\s#]*([A-Z0-9][A-Z0-9\-]{2,24})",
+            r"Order\s*:\s*([A-Z]\d+)",
+        ),
+        "order_date": _anchored_field(
+            text, odate_val,
+            _date_value_pattern(odate_val) if odate_val else r"\d{1,2}[\s/\-.]\w{2,9}[\s/\-.]\d{2,4}",
+            r"(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On|date)?[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})",
+            r"(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On|date)?[:\s]+(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
+        ),
+        "delivery_date": _anchored_field(
+            text, ddate_val,
+            _date_value_pattern(ddate_val) if ddate_val else r"\d{1,2}[\s/\-.]\w{2,9}[\s/\-.]\d{2,4}",
+            r"(?:Delivery\s+Date|Date\s+of\s+Delivery|Deliver\s+By)[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})",
+            r"(?:Delivery\s+Date|Date\s+of\s+Delivery|Deliver\s+By)[:\s]+(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
+        ),
+        "company_name": [
+            r"Company\s+Name[:\s]+(.+?)(?:,\s*ABN|\n|$)",
+            r"Customer[:\s]+(.+?)(?:\n|,)",
+            r"Ship\s+To[:\s]+(.+?)(?:\n|,)",
+        ],
+        "subtotal": _anchored_field(
+            text, sub_val, r"[\d,]+\.\d{2}",
+            r"(?:Sub[\-\s]?Total|Amount\s*\(net\))[:\s]+([\d,]+\.\d{2})",
+        ),
+        "tax_amount": [
+            r"(?:^Tax|Total\s+GST|GST\s+Amount)[:\s]+([\d,]+\.\d{2})",
+        ],
+        "total_amount": _anchored_field(
+            text, total_val, r"[\d,]+\.\d{2}",
+            r"(?:Total\s+Amount|Amount\s*\(gross\)|Grand\s+Total|Total\s+Incl)[^\n]{0,30}?([\d,]+\.\d{2})",
+        ),
+    }
+
+    context_lines = _extract_context_lines(text, sniffed)
+
     template: dict = {
         "_status": "SUGGESTED — review patterns, then copy to config/templates/ to activate",
         "_generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "_address_book_entry": address_book_entry,
         "customer_name": customer_name,
         "required_fields": ["po_number", "delivery_date"],
-        "fields": {
-            "customer_name": [re.escape(customer_name) if customer_name else "FILL_IN_CUSTOMER_NAME"],
-            "company_abn": [r"ABN[\s:\-]+([\d\s]{11,14})"],
-            "address": [r"(\d+\s+\w+.*?(?:NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\s+\d{4})"],
-            "po_number": [
-                r"(?:PO\s*Number|Order\s*(?:Number|No\.?|#)|REF)[:\s#]*([A-Z0-9][A-Z0-9\-]{2,24})",
-                r"Order\s*:\s*([A-Z]\d+)",
-            ],
-            "order_date": [
-                r"(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On|date)?[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})",
-                r"(?:Order|Invoice|Bill|Issue|Created)\s*(?:Date|On|date)?[:\s]+(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
-            ],
-            "delivery_date": [
-                r"(?:Delivery\s+Date|Date\s+of\s+Delivery|Deliver\s+By)[:\s]+(\d{1,2}[./\-]\w{2,9}[./\-]\d{2,4})",
-                r"(?:Delivery\s+Date|Date\s+of\s+Delivery|Deliver\s+By)[:\s]+(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4})",
-            ],
-            "company_name": [
-                r"Company\s+Name[:\s]+(.+?)(?:,\s*ABN|\n|$)",
-                r"Customer[:\s]+(.+?)(?:\n|,)",
-                r"Ship\s+To[:\s]+(.+?)(?:\n|,)",
-            ],
-            "subtotal": [
-                r"(?:Sub[\-\s]?Total|Amount\s*\(net\))[:\s]+([\d,]+\.\d{2})",
-            ],
-            "tax_amount": [
-                r"(?:^Tax|Total\s+GST|GST\s+Amount)[:\s]+([\d,]+\.\d{2})",
-            ],
-            "total_amount": [
-                r"(?:Total\s+Amount|Amount\s*\(gross\)|Grand\s+Total|Total\s+Incl)[^\n]{0,30}?([\d,]+\.\d{2})",
-            ],
-        },
+        "fields": fields,
         "line_items_patterns": line_item_patterns,
     }
 
     if sniffed:
         template["_field_examples_found_in_document"] = sniffed
+    if context_lines:
+        template["_context_lines_from_document"] = context_lines
 
     return template
 

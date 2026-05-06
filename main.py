@@ -35,11 +35,12 @@ from pipeline.email_mover import move_to_processed
 from pipeline.security import validate_attachment, scrub_prompt_injection, is_allowed_sender
 from pipeline.template_suggester import suggest as suggest_template
 from pipeline.claude_reviewer import review as claude_review
+from pipeline.document_ai_extractor import extract_document_fields
 from pipeline import metrics as pipeline_metrics
 from config.settings import (
     MOVE_AFTER_PROCESSING, TEMPLATES_DIR, ADDRESS_BOOK_PATH,
     DEFAULT_SCHEDULE_MINUTES, CLAUDE_REVIEW_ENABLED, CLAUDE_REVIEW_THRESHOLD,
-    DEDUP_REPLY_ATTACHMENTS,
+    DEDUP_REPLY_ATTACHMENTS, DOCUMENT_AI_ENABLED,
 )
 
 from database import db
@@ -205,6 +206,12 @@ def process_attachment(
             if template_path.exists():
                 can_parse = True
 
+        # Document AI: pre-populate standard fields before regex template parsing.
+        # Runs for both template and no-template paths; regex matches take priority.
+        doc_ai_fields: dict = {}
+        if DOCUMENT_AI_ENABLED:
+            doc_ai_fields = extract_document_fields(attachment_path)
+
         if can_parse:
             log.info(f"Parsing with template: {template_name!r}")
             if attachment_path.suffix.lower() in (".xlsx", ".xls"):
@@ -212,7 +219,15 @@ def process_attachment(
             else:
                 parsed = parse(text, template_name)
 
-            # Claude review fallback: supplement regex when confidence is low
+            # Merge document AI fields into gaps left by regex (regex takes priority)
+            if doc_ai_fields:
+                for k, v in doc_ai_fields.items():
+                    if k not in ("line_items",) and (k not in parsed or not parsed[k]):
+                        parsed[k] = v
+                if "line_items" not in parsed or not parsed["line_items"]:
+                    parsed["line_items"] = doc_ai_fields.get("line_items", [])
+
+            # Claude review fallback: supplement regex when confidence is still low
             if (
                 CLAUDE_REVIEW_ENABLED
                 and parsed.get("_confidence", 0.0) < CLAUDE_REVIEW_THRESHOLD
@@ -247,8 +262,18 @@ def process_attachment(
         else:
             log.info(f"No template for {customer_name!r} — saving extracted text only.")
 
-            # Claude review for extracted_only: attempt field extraction without a template
-            if CLAUDE_REVIEW_ENABLED:
+            # For no-template senders, document AI results can populate fields directly.
+            # Claude reviewer is only invoked if document AI is disabled or returned nothing.
+            if doc_ai_fields:
+                log.info(
+                    f"Using document AI fields for no-template sender {customer_name!r} "
+                    f"({len(doc_ai_fields)} fields)"
+                )
+                doc = build_output(
+                    doc_ai_fields, customer_name, class_confidence, message, attachment_path
+                )
+                claude_result = None
+            elif CLAUDE_REVIEW_ENABLED:
                 log.info(f"Invoking Claude reviewer for no-template sender: {filename}")
                 claude_result = claude_review(
                     text=text,
@@ -260,15 +285,16 @@ def process_attachment(
             else:
                 claude_result = None
 
-            if claude_result:
-                doc = build_output(
-                    claude_result, customer_name, class_confidence, message, attachment_path
-                )
-            else:
-                doc = build_output(
-                    {}, customer_name, class_confidence, message, attachment_path,
-                    status="extracted_only",
-                )
+            if not doc_ai_fields:
+                if claude_result:
+                    doc = build_output(
+                        claude_result, customer_name, class_confidence, message, attachment_path
+                    )
+                else:
+                    doc = build_output(
+                        {}, customer_name, class_confidence, message, attachment_path,
+                        status="extracted_only",
+                    )
 
             display_name = message.get("from", {}).get("emailAddress", {}).get("name", "")
             suggestion_path = suggest_template(sender, display_name, text)

@@ -107,3 +107,23 @@ DEFAULT_SCHEDULE_MINUTES = int(os.getenv("DEFAULT_SCHEDULE_MINUTES", "60"))
 # that historical runs are preserved for comparison.
 # Set DEDUP_REPLY_ATTACHMENTS=false in .env to disable (useful during testing).
 DEDUP_REPLY_ATTACHMENTS = os.getenv("DEDUP_REPLY_ATTACHMENTS", "true").lower() == "true"
+
+# --- Document AI (pre-built invoice field extraction) ---
+# When enabled, runs Azure Document Intelligence's prebuilt-invoice model on each
+# attachment BEFORE regex template parsing.  Standard fields (invoice number,
+# dates, totals, vendor name/address, line items) are pre-populated without any
+# custom template, reducing the number of fields your YAML templates need to
+# cover.  For senders with no template (extracted_only), document AI results are
+# used directly, avoiding a Claude reviewer call.
+#
+# Provider: "azure" (Azure Document Intelligence — only supported provider)
+# Requires:
+#   pip install azure-ai-documentintelligence
+#   DOCUMENT_AI_KEY=<key from Azure portal>
+#   DOCUMENT_AI_ENDPOINT=https://<resource>.cognitiveservices.azure.com/
+#
+# Free tier: 500 pages/month.  Pay-as-you-go: ~$1.50 USD per 1 000 pages.
+DOCUMENT_AI_ENABLED  = os.getenv("DOCUMENT_AI_ENABLED",  "false").lower() == "true"
+DOCUMENT_AI_PROVIDER = os.getenv("DOCUMENT_AI_PROVIDER", "azure")
+DOCUMENT_AI_KEY      = os.getenv("DOCUMENT_AI_KEY",      "")
+DOCUMENT_AI_ENDPOINT = os.getenv("DOCUMENT_AI_ENDPOINT", "")

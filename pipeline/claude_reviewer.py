@@ -5,12 +5,16 @@ Invoked when regex template parsing confidence is below threshold,
 or when no template exists for a known sender (extracted_only status).
 
 Strategy:
-  1. Always pass extracted text to Claude (cheap, text tokens only).
-  2. If text extraction was via OCR (is_native=False) and text is sparse
+  1. Identify only the *missing* required fields and ask Claude to fill those
+     gaps rather than re-extracting everything.  Skips the API call entirely
+     when all required fields are already present.
+  2. Send at most _MAX_TEXT_CHARS of document text (reduced from 4 000 to
+     2 000 for typical invoices that fit well within that window).
+  3. If text extraction was via OCR (is_native=False) and text is sparse
      (<500 chars) and the file is a PDF, additionally render up to 3 pages
      as base64 PNG images for vision input.
-  3. Use claude-haiku for cost efficiency — only invoked as a fallback.
-  4. System prompt is cached to amortise the cost across repeated calls.
+  4. Use claude-haiku for cost efficiency — only invoked as a fallback.
+  5. System prompt is cached to amortise the cost across repeated calls.
 """
 import base64
 import json
@@ -27,7 +31,7 @@ log = logging.getLogger(__name__)
 _MODEL = "claude-haiku-4-5-20251001"
 _VISION_TEXT_THRESHOLD = 500   # chars — below this, add page images if available
 _MAX_PDF_PAGES_FOR_VISION = 3
-_MAX_TEXT_CHARS = 4000          # truncate long extractions to control token cost
+_MAX_TEXT_CHARS = 2000          # most invoices fit within 2 000 chars; reduces token cost
 
 _SYSTEM_PROMPT = (
     "You are a precise invoice data extractor. "
@@ -81,12 +85,17 @@ def _load_template_fields(template_name: str) -> list[str]:
 
 def _build_user_content(
     text: str,
-    template_fields: list[str],
+    missing_fields: list[str],
     existing_fields: dict,
     attachment_path: Path,
     is_native: bool,
 ) -> list[dict]:
-    """Assemble the user message content blocks."""
+    """
+    Assemble the user message content blocks.
+
+    Only asks Claude for *missing_fields* — fields already extracted by regex
+    are shown as context but not re-requested, keeping the prompt tight.
+    """
     content: list[dict] = []
 
     # Vision: add page images when OCR text is too sparse to be reliable
@@ -104,25 +113,31 @@ def _build_user_content(
                 f"for sparse OCR text ({len(text.strip())} chars)."
             )
 
-    # Build extraction prompt
-    fields_hint = ""
-    if template_fields:
-        fields_hint = f"\nExtract these specific fields: {', '.join(template_fields)}."
-
+    # Show what regex already found so Claude can cross-check without re-extracting
     already_found = {
         k: v
         for k, v in (existing_fields or {}).items()
         if v and not k.startswith("_") and k != "line_items"
     }
+
+    # Target prompt: only ask for fields that are genuinely missing
+    if missing_fields:
+        target = f"Extract ONLY these missing fields: {', '.join(missing_fields)}."
+    else:
+        # No specific missing fields known (no-template path) — extract common ones
+        target = (
+            "Extract fields present in the document: "
+            "invoice_number, order_date, abn, amount_due, total_amount, subtotal, "
+            "tax_amount, supplier_name, customer_name, po_number, delivery_date, address."
+        )
+
     existing_hint = ""
     if already_found:
-        existing_hint = f"\nAlready extracted by regex: {already_found}. Fill in the missing fields."
+        existing_hint = f"\nAlready extracted by regex (do not repeat): {already_found}."
 
     prompt = (
-        f"Extract invoice/document fields and return ONLY a JSON object.{fields_hint}{existing_hint}\n\n"
-        "Common fields to look for (include only those present): "
-        "invoice_number, order_date, abn, amount_due, total_amount, subtotal, "
-        "tax_amount, supplier_name, customer_name, po_number, delivery_date, address.\n\n"
+        f"{target}{existing_hint}\n\n"
+        f"Return ONLY a valid JSON object.\n\n"
         f"Document text:\n{text[:_MAX_TEXT_CHARS]}"
     )
     content.append({"type": "text", "text": prompt})
@@ -171,9 +186,20 @@ def review(
         log.warning("Claude reviewer: ANTHROPIC_API_KEY is not set — skipping.")
         return None
 
-    template_fields = _load_template_fields(template_name) if template_name else []
+    # Determine which required fields are still missing after regex parsing
+    required = _load_required_fields(template_name) if template_name else []
+    missing_fields = [f for f in required if not (existing_fields or {}).get(f)]
+
+    # Skip the API call if all required fields are already filled
+    if required and not missing_fields:
+        log.debug(
+            f"Claude reviewer: all {len(required)} required fields already extracted "
+            f"for {attachment_path.name} — skipping API call."
+        )
+        return None
+
     user_content = _build_user_content(
-        text, template_fields, existing_fields or {}, attachment_path, is_native
+        text, missing_fields, existing_fields or {}, attachment_path, is_native
     )
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
