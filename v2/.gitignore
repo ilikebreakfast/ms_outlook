@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Credentials and secrets
+.env
+config/token_cache.bin
+*.key
+*.pem
+*.pfx
+*.p12
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
