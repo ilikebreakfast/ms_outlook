@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,27 +8,39 @@
     <!-- Sleek Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+
     <style>
         :root {
             /* Sleek Glassmorphism Color Palette */
-            --bg-dark: #070505;           /* Obsidian deep black */
+            --bg-dark: #070505;
+            /* Obsidian deep black */
             --bg-gradient: linear-gradient(135deg, #070505 0%, #160d0d 100%);
-            --panel-bg: rgba(26, 15, 15, 0.65); /* Translucent cast iron maroon backing */
-            --panel-border: rgba(255, 255, 255, 0.08); /* Frosted silver border */
-            
+            --panel-bg: rgba(26, 15, 15, 0.65);
+            /* Translucent cast iron maroon backing */
+            --panel-border: rgba(255, 255, 255, 0.08);
+            /* Frosted silver border */
+
             /* Neon Accent Outlines */
-            --primary-pink: #ff7da0;      /* Juicy neon pork pink */
-            --neon-green: #10b981;        /* Crisp garnish emerald green */
-            --neon-cyan: #06b6d4;         /* Electric cyan */
-            --neon-orange: #f59e0b;       /* Golden caramel yellow */
-            --accent-red: #f43f5e;        /* Ribeye rose red */
-            
+            --primary-pink: #ff7da0;
+            /* Juicy neon pork pink */
+            --neon-green: #10b981;
+            /* Crisp garnish emerald green */
+            --neon-cyan: #06b6d4;
+            /* Electric cyan */
+            --neon-orange: #f59e0b;
+            /* Golden caramel yellow */
+            --accent-red: #f43f5e;
+            /* Ribeye rose red */
+
             /* Text Elements */
-            --text-main: #fbf6f0;         /* Garlic white */
-            --text-muted: #a88a8a;        /* Smoked meat ash */
-            
+            --text-main: #fbf6f0;
+            /* Garlic white */
+            --text-muted: #a88a8a;
+            /* Smoked meat ash */
+
             /* Typography */
             --font-main: 'Outfit', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
@@ -63,7 +76,7 @@
             z-index: -1;
             pointer-events: none;
         }
-        
+
         body::before {
             content: "";
             position: fixed;
@@ -103,7 +116,7 @@
             text-transform: uppercase;
             letter-spacing: 1.5px;
             z-index: 2;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         /* Navigation Header */
@@ -119,7 +132,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .logo-group {
@@ -144,10 +157,10 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            background: rgba(255,255,255,0.03);
+            background: rgba(255, 255, 255, 0.03);
             padding: 6px 14px;
             border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .status-dot {
@@ -160,8 +173,17 @@
         }
 
         @keyframes blink {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.9); }
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.9);
+            }
         }
 
         /* Stats Grid */
@@ -312,9 +334,9 @@
             font-family: var(--font-mono);
             font-size: 11px;
             color: var(--text-muted);
-            background: rgba(0,0,0,0.3);
+            background: rgba(0, 0, 0, 0.3);
             padding: 4px 8px;
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 4px;
             width: fit-content;
         }
@@ -381,6 +403,11 @@
             margin-top: 8px;
         }
 
+        .form-row-group>div {
+            min-width: 0;
+            /* fixes flex wrapping squeeze */
+        }
+
         .form-field {
             display: flex;
             flex-direction: column;
@@ -401,7 +428,8 @@
             letter-spacing: 0.5px;
         }
 
-        input, select {
+        input,
+        select {
             background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 6px;
@@ -413,10 +441,11 @@
             transition: all 0.2s ease;
         }
 
-        input:focus, select:focus {
+        input:focus,
+        select:focus {
             border-color: var(--primary-pink);
             box-shadow: 0 0 10px rgba(255, 125, 160, 0.2);
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
         }
 
         /* Field configuration block card */
@@ -432,13 +461,32 @@
             border-color: rgba(255, 255, 255, 0.12);
             background: rgba(255, 255, 255, 0.02);
         }
-        
+
         /* Coordinate hover glowing pulse */
-        .field-block.pulse-glow-pink { border-color: var(--primary-pink) !important; box-shadow: 0 0 15px rgba(255, 125, 160, 0.25); }
-        .field-block.pulse-glow-green { border-color: var(--neon-green) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.25); }
-        .field-block.pulse-glow-cyan { border-color: var(--neon-cyan) !important; box-shadow: 0 0 15px rgba(6, 182, 212, 0.25); }
-        .field-block.pulse-glow-orange { border-color: var(--neon-orange) !important; box-shadow: 0 0 15px rgba(245, 158, 11, 0.25); }
-        .field-block.pulse-glow-red { border-color: var(--accent-red) !important; box-shadow: 0 0 15px rgba(244, 63, 94, 0.25); }
+        .field-block.pulse-glow-pink {
+            border-color: var(--primary-pink) !important;
+            box-shadow: 0 0 15px rgba(255, 125, 160, 0.25);
+        }
+
+        .field-block.pulse-glow-green {
+            border-color: var(--neon-green) !important;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+        }
+
+        .field-block.pulse-glow-cyan {
+            border-color: var(--neon-cyan) !important;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+        }
+
+        .field-block.pulse-glow-orange {
+            border-color: var(--neon-orange) !important;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
+        }
+
+        .field-block.pulse-glow-red {
+            border-color: var(--accent-red) !important;
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.25);
+        }
 
         .field-title-badge {
             display: flex;
@@ -549,7 +597,7 @@
 
         .preview-card {
             background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 6px;
             padding: 10px 14px;
         }
@@ -585,20 +633,39 @@
 
         .placeholder-icon {
             font-size: 54px;
-            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
             animation: float 4s ease-in-out infinite;
         }
 
         @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-8px);
+            }
         }
 
         @keyframes pulse-border {
-            0% { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 0 4px rgba(16, 185, 129, 0.2); }
-            50% { border-color: var(--neon-green); box-shadow: 0 0 14px rgba(16, 185, 129, 0.45); }
-            100% { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 0 4px rgba(16, 185, 129, 0.2); }
+            0% {
+                border-color: rgba(16, 185, 129, 0.4);
+                box-shadow: 0 0 4px rgba(16, 185, 129, 0.2);
+            }
+
+            50% {
+                border-color: var(--neon-green);
+                box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+            }
+
+            100% {
+                border-color: rgba(16, 185, 129, 0.4);
+                box-shadow: 0 0 4px rgba(16, 185, 129, 0.2);
+            }
         }
+
         .pulse-btn-anim {
             animation: pulse-border 1.5s infinite !important;
         }
@@ -613,7 +680,7 @@
             border-radius: 8px;
             margin: 8px 16px;
         }
-        
+
         .view-btn {
             flex: 1;
             padding: 6px 12px;
@@ -629,12 +696,12 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .view-btn:hover {
             color: #fff;
             background: rgba(255, 255, 255, 0.03);
         }
-        
+
         .view-btn.active {
             color: #fff;
             background: rgba(255, 255, 255, 0.08) !important;
@@ -650,7 +717,7 @@
             background: rgba(10, 6, 6, 0.4);
             border-bottom-left-radius: 12px;
         }
-        
+
         .spreadsheet-table {
             width: 100%;
             border-collapse: collapse;
@@ -658,7 +725,7 @@
             font-size: 12px;
             color: var(--text-main);
         }
-        
+
         .spreadsheet-table th {
             background: rgba(45, 24, 24, 0.85);
             color: var(--primary-pink);
@@ -673,10 +740,10 @@
             top: 0;
             z-index: 10;
         }
-        
+
         .spreadsheet-table td {
             padding: 12px 14px;
-            border: 1px solid rgba(255,255,255,0.03);
+            border: 1px solid rgba(255, 255, 255, 0.03);
             cursor: pointer;
             transition: all 0.15s ease;
             white-space: nowrap;
@@ -684,23 +751,23 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
+
         .spreadsheet-table tr:nth-child(even) {
             background: rgba(255, 255, 255, 0.01);
         }
-        
+
         .spreadsheet-table td:hover {
             background: var(--primary-pink) !important;
             color: #070505 !important;
             font-weight: bold;
         }
-        
+
         .spreadsheet-table td.selected-cell {
             background: var(--neon-green) !important;
             color: #070505 !important;
             font-weight: bold;
         }
-        
+
         /* PDF.js visual custom page wrappers */
         .pdf-viewer-container {
             flex-grow: 1;
@@ -764,7 +831,7 @@
             overflow: hidden;
             pointer-events: auto;
         }
-        
+
         .pdf-draw-overlay.drawing-active {
             cursor: crosshair !important;
         }
@@ -802,8 +869,15 @@
         }
 
         @keyframes coordinate-pulse {
-            0% { box-shadow: 0 0 6px var(--box-color); border-width: 2px; }
-            100% { box-shadow: 0 0 20px var(--box-color); border-width: 3.5px; }
+            0% {
+                box-shadow: 0 0 6px var(--box-color);
+                border-width: 2px;
+            }
+
+            100% {
+                box-shadow: 0 0 20px var(--box-color);
+                border-width: 3.5px;
+            }
         }
 
         /* Coordinate rules info display bubble */
@@ -811,8 +885,8 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.06);
             border-radius: 4px;
             padding: 3px 8px;
             font-family: var(--font-mono);
@@ -838,7 +912,7 @@
             background: rgba(0, 0, 0, 0.2);
             padding: 8px 12px;
             border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.03);
+            border: 1px solid rgba(255, 255, 255, 0.03);
         }
 
         .mapping-column-label {
@@ -854,7 +928,7 @@
             gap: 12px;
             margin-left: 16px;
         }
-        
+
         .legend-item {
             display: flex;
             align-items: center;
@@ -863,7 +937,7 @@
             font-weight: 600;
             text-transform: uppercase;
         }
-        
+
         .legend-dot {
             width: 8px;
             height: 8px;
@@ -875,40 +949,58 @@
             width: 6px;
             height: 6px;
         }
+
         ::-webkit-scrollbar-track {
             background: rgba(0, 0, 0, 0.1);
         }
+
         ::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.08);
             border-radius: 3px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.18);
         }
     </style>
 </head>
+
 <body>
 
     <!-- Header Section -->
     <header>
         <div class="logo-group">
-            <svg viewBox="0 0 16 16" width="36" height="36" style="fill: var(--accent-red); filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.4));">
-                <path d="M4,1 h8 v2 h2 v2 h1 v6 h-1 v2 h-2 v1 h-2 v1 h-4 v-1 h-1 v-1 h-1 v-8 h2 Z" fill="rgba(127, 29, 29, 0.5)" />
-                <path d="M5,2 h6 v1 h2 v2 h1 v4 h-1 v2 h-1 v1 h-1 v1 h-2 v-1 h-1 v-1 h-1 v-6 h1 Z" fill="var(--accent-red)" />
+            <svg viewBox="0 0 16 16" width="36" height="36"
+                style="fill: var(--accent-red); filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.4));">
+                <path d="M4,1 h8 v2 h2 v2 h1 v6 h-1 v2 h-2 v1 h-2 v1 h-4 v-1 h-1 v-1 h-1 v-8 h2 Z"
+                    fill="rgba(127, 29, 29, 0.5)" />
+                <path d="M5,2 h6 v1 h2 v2 h1 v4 h-1 v2 h-1 v1 h-1 v1 h-2 v-1 h-1 v-1 h-1 v-6 h1 Z"
+                    fill="var(--accent-red)" />
                 <path d="M8,2 v10 M5,7 h6" stroke="#fff" stroke-width="1.2" stroke-linecap="square" />
             </svg>
             <div>
                 <h1>THE MEAT EXTRACTOR</h1>
-                <p style="font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">Glassmorphism Command Center v2</p>
+                <p
+                    style="font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">
+                    Glassmorphism Command Center v2</p>
             </div>
         </div>
-        
+
         <div class="visual-legend" id="header-legend" style="display: none;">
-            <div class="legend-item"><span class="legend-dot" style="background-color: var(--primary-pink); box-shadow: 0 0 6px var(--primary-pink);"></span>Inv Num</div>
-            <div class="legend-item"><span class="legend-dot" style="background-color: var(--neon-green); box-shadow: 0 0 6px var(--neon-green);"></span>Date</div>
-            <div class="legend-item"><span class="legend-dot" style="background-color: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan);"></span>ABN</div>
-            <div class="legend-item"><span class="legend-dot" style="background-color: var(--neon-orange); box-shadow: 0 0 6px var(--neon-orange);"></span>Total</div>
-            <div class="legend-item"><span class="legend-dot" style="background-color: var(--accent-red); box-shadow: 0 0 6px var(--accent-red);"></span>Table</div>
+            <div class="legend-item"><span class="legend-dot"
+                    style="background-color: var(--primary-pink); box-shadow: 0 0 6px var(--primary-pink);"></span>Inv
+                Num</div>
+            <div class="legend-item"><span class="legend-dot"
+                    style="background-color: var(--neon-green); box-shadow: 0 0 6px var(--neon-green);"></span>Date
+            </div>
+            <div class="legend-item"><span class="legend-dot"
+                    style="background-color: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan);"></span>ABN</div>
+            <div class="legend-item"><span class="legend-dot"
+                    style="background-color: var(--neon-orange); box-shadow: 0 0 6px var(--neon-orange);"></span>Total
+            </div>
+            <div class="legend-item"><span class="legend-dot"
+                    style="background-color: var(--accent-red); box-shadow: 0 0 6px var(--accent-red);"></span>Table
+            </div>
         </div>
 
         <div class="system-status">
@@ -947,12 +1039,13 @@
 
     <!-- Main Dashboard Body Grid -->
     <main class="main-container">
-        
+
         <!-- Left Sidebar: Pending reviews -->
         <aside class="glass-panel queue-sidebar">
             <div class="panel-header-tag">Ledger List</div>
             <div class="queue-list" id="queue-list-container">
-                <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 20px;">LOADING LEDGERS...</p>
+                <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 20px;">LOADING
+                    LEDGERS...</p>
             </div>
         </aside>
 
@@ -962,17 +1055,55 @@
             <div class="placeholder-workspace">
                 <div class="placeholder-icon">🥩</div>
                 <h3 style="font-size: 15px; font-weight: 600; color: #fff;">Select an invoice layout</h3>
-                <p style="font-size: 13px; max-width: 320px; color: var(--text-muted); line-height: 1.5;">Choose a layout template from the left ledger list to define visual parsing coordinate rules.</p>
+                <p style="font-size: 13px; max-width: 320px; color: var(--text-muted); line-height: 1.5;">Choose a
+                    layout template from the left ledger list to define visual parsing coordinate rules.</p>
             </div>
         </section>
 
     </main>
 
+    <!-- Dataset Historical Preview Section -->
+    <section class="glass-panel"
+        style="margin: 24px 40px 40px 40px; padding: 24px; padding-top: 36px; border-color: rgba(16, 185, 129, 0.15);">
+        <div class="panel-header-tag" style="background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));">
+            Parsed Dataset Log</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3
+                style="font-size: 14px; font-weight: 700; color: var(--neon-green); text-transform: uppercase; letter-spacing: 0.5px;">
+                Active Database Extraction Logs</h3>
+            <button class="pixel-btn-secondary" onclick="loadHistoryData()"
+                style="padding: 4px 10px; font-size: 9px; margin: 0; box-shadow: none; border-color: rgba(255,255,255,0.08);">
+                🔄 Refresh Log
+            </button>
+        </div>
+        <div style="overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+            <table class="spreadsheet-table" id="history-table">
+                <thead>
+                    <tr>
+                        <th style="font-size: 8px;">File Name</th>
+                        <th style="font-size: 8px;">Layout Hash</th>
+                        <th style="font-size: 8px;">Invoice Number</th>
+                        <th style="font-size: 8px; text-align: right;">Total Amount</th>
+                        <th style="font-size: 8px; text-align: center;">Status</th>
+                        <th style="font-size: 8px; text-align: right;">Processed At</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body">
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No
+                            historical data parsed yet.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <!-- Core Interactive SPA Javascript -->
     <script>
         let currentLayoutHash = null;
         let selectedLayoutData = null;
-        
+        let activeTab = 'headers'; // Tracks whether 'headers' or 'line-items' tab is open locally
+
         // Field color variables
         const FIELD_COLORS = {
             "invoice_number": { color: "#ff7da0", bg: "rgba(255, 125, 160, 0.08)", text: "pink" },
@@ -985,6 +1116,7 @@
         document.addEventListener("DOMContentLoaded", () => {
             loadMetrics();
             loadPendingList();
+            loadHistoryData();
         });
 
         // 1. Fetch system metrics
@@ -998,6 +1130,57 @@
                 document.getElementById("stat-active").innerText = data.active_rules;
             } catch (err) {
                 console.error("Failed to load metrics:", err);
+            }
+        }
+
+        // 1.1 Fetch history dataset logs
+        async function loadHistoryData() {
+            try {
+                const res = await fetch("/api/history");
+                const data = await res.json();
+                const tbody = document.getElementById("history-table-body");
+                if (!tbody) return;
+
+                if (data.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No historical data parsed yet.</td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = data.map(item => {
+                    const statusColor = item.status === 'success' ? 'var(--neon-green)' : (item.status === 'drifted' ? 'var(--neon-orange)' : 'var(--accent-red)');
+                    const invNo = item.parsed_data.invoice_number || item.parsed_data.invoice_no || "-";
+                    let totalAmt = "-";
+                    if (item.parsed_data.total_amount !== undefined && item.parsed_data.total_amount !== null) {
+                        try {
+                            const val = parseFloat(item.parsed_data.total_amount);
+                            totalAmt = isNaN(val) ? item.parsed_data.total_amount : `$${val.toFixed(2)}`;
+                        } catch (e) {
+                            totalAmt = item.parsed_data.total_amount;
+                        }
+                    }
+                    const dateStr = new Date(item.processed_at).toLocaleString();
+
+                    return `
+                        <tr>
+                            <td style="font-weight: 500; font-family: var(--font-main); color: #fff; text-align: left;">${escapeHtml(item.filename)}</td>
+                            <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-align: left;">${escapeHtml(item.layout_hash.substring(0, 12))}</td>
+                            <td style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; text-align: left;">${escapeHtml(invNo)}</td>
+                            <td style="font-family: var(--font-mono); text-align: right; font-weight: 700; color: var(--neon-green);">${escapeHtml(totalAmt)}</td>
+                            <td style="text-align: center;">
+                                <span style="font-size: 9px; padding: 2px 8px; border-radius: 4px; background: ${statusColor}15; border: 1px solid ${statusColor}33; color: ${statusColor}; text-transform: uppercase; font-weight: 600;">
+                                    ${item.status}
+                                </span>
+                            </td>
+                            <td style="font-family: var(--font-mono); text-align: right; font-size: 11px; color: var(--text-muted);">${escapeHtml(dateStr)}</td>
+                        </tr>
+                    `;
+                }).join("");
+            } catch (err) {
+                console.error("Failed to load historical dataset:", err);
             }
         }
 
@@ -1023,7 +1206,7 @@
                     const el = document.createElement("div");
                     el.className = `queue-item ${currentLayoutHash === item.layout_hash ? 'active' : ''}`;
                     el.onclick = () => selectLayout(item.layout_hash);
-                    
+
                     el.innerHTML = `
                         <div class="queue-supplier">${escapeHtml(item.supplier_name)}</div>
                         <div class="queue-meta">
@@ -1041,7 +1224,7 @@
         // 3. Select layout and load full details in split workspace
         async function selectLayout(layoutHash) {
             currentLayoutHash = layoutHash;
-            
+
             // Re-highlight sidebar queue items
             document.querySelectorAll(".queue-item").forEach(item => item.classList.remove("active"));
             loadPendingList(); // Reloader maintains selected styling
@@ -1057,11 +1240,9 @@
                 const res = await fetch(`/api/layout/${layoutHash}`);
                 const data = await res.json();
                 selectedLayoutData = data;
-                
-                const rules = data.extraction_rules;
-                const fields = rules.fields || {};
-                const lineItems = rules.line_items || { strategy: "tabular_columns", columns: {} };
+                selectedLayoutData.extracted_table_text = ""; // clear local crop preview
 
+                const rules = data.extraction_rules;
                 document.getElementById("header-legend").style.display = "flex";
 
                 container.innerHTML = `
@@ -1110,50 +1291,7 @@
                             </div>
                             
                             <div class="rules-form-container" id="ws-rules-form">
-                                
-                                <!-- Tab content headers -->
-                                <div id="tab-content-headers" class="tab-content">
-                                    ${renderFieldBlock("invoice_number", "Invoice Number", fields.invoice_number)}
-                                    ${renderFieldBlock("invoice_date", "Invoice Date", fields.invoice_date)}
-                                    ${renderFieldBlock("abn", "Supplier ABN", fields.abn)}
-                                    ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
-                                </div>
-                                
-                                <!-- Tab content line items -->
-                                <div id="tab-content-line-items" class="tab-content" style="display: none;">
-                                    <div class="field-block" data-field="line_items" style="display: flex; flex-direction: column; gap: 14px;">
-                                        <div class="field-title-badge">
-                                            <span class="badge" style="border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);">Order Line Items Table</span>
-                                            <button class="pixel-btn-secondary auto-extract-btn" onclick="activateAutoExtract('line_items', this)" style="padding: 4px 8px; font-size: 8px; margin: 0; box-shadow: none; border-color: rgba(255,255,255,0.08);">
-                                                🎯 Select Table Area
-                                            </button>
-                                        </div>
-                                        
-                                        <div style="display:flex; align-items:center; gap:8px;">
-                                            <input type="checkbox" id="line-items-enabled" ${rules.line_items ? 'checked' : ''} onchange="toggleLineItemsEnable(this)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--primary-pink);">
-                                            <label for="line-items-enabled" style="cursor: pointer; font-size: 9px; color: var(--primary-pink);">Enable Line Items Extraction</label>
-                                        </div>
-                                        
-                                        <div id="line-items-coordinate-info" class="coordinate-pill" style="${rules.line_items && rules.line_items.box ? '' : 'display:none;'}">
-                                            Page: <span id="line-items-page-val">${rules.line_items ? rules.line_items.page : 1}</span>, Box: <span id="line-items-box-val">${rules.line_items && rules.line_items.box ? JSON.stringify(rules.line_items.box.map(b => parseFloat(b.toFixed(3)))) : '[]'}</span>
-                                        </div>
-                                        
-                                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 8px;" id="line-items-mappings-grid">
-                                            <div style="font-size: 9px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px;">Column Mapping Matrix</div>
-                                            
-                                            ${renderColumnMappingSelect("product_code", "Product Code Column", lineItems.columns ? lineItems.columns.product_code : null)}
-                                            ${renderColumnMappingSelect("product_name", "Product Name Column", lineItems.columns ? (lineItems.columns.product_name || lineItems.columns.description) : null)}
-                                            ${renderColumnMappingSelect("uom", "Unit of Measure Column", lineItems.columns ? lineItems.columns.uom : null)}
-                                            ${renderColumnMappingSelect("quantity", "Quantity Column", lineItems.columns ? lineItems.columns.quantity : null)}
-                                            ${renderColumnMappingSelect("unit_price", "Unit Price Column", lineItems.columns ? (lineItems.columns.unit_price || lineItems.columns.price) : null)}
-                                            ${renderColumnMappingSelect("total", "Subtotal Column", lineItems.columns ? lineItems.columns.total : null)}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Dynamic Live trials output panel -->
-                                <div id="live-preview-panel"></div>
-
+                                <!-- Rendered dynamically by refreshFormUI() -->
                             </div>
                         </div>
 
@@ -1165,10 +1303,13 @@
                         <button class="pixel-btn-success" onclick="approveAndActivate()">Lock in the Cut</button>
                     </div>
                 `;
-                
+
                 // Initialize visual/text document viewer layout
                 await switchDocumentView('visual');
-                setupFieldCardHoverTriggers();
+
+                // Render Form Sidebar fields and triggers dynamically inside ws-rules-form
+                activeTab = 'headers';
+                refreshFormUI();
             } catch (err) {
                 console.error("Failed to load workspace layout details:", err);
                 container.innerHTML = `
@@ -1179,12 +1320,96 @@
             }
         }
 
+        // Centralized Local UI Refreshing: Re-renders the sidebar panels in-place
+        function refreshFormUI() {
+            if (!selectedLayoutData) return;
+
+            const rules = selectedLayoutData.extraction_rules;
+            const fields = rules.fields || {};
+            const lineItems = rules.line_items || { strategy: "tabular_columns", columns: {} };
+
+            const formContainer = document.getElementById("ws-rules-form");
+            if (!formContainer) return;
+
+            // Build Fields HTML
+            const fieldsHtml = `
+                <div id="tab-content-headers" class="tab-content" style="${activeTab === 'headers' ? '' : 'display: none;'}">
+                    <div style="padding: 12px; border: 1px solid rgba(6,182,212,0.15); background: rgba(6,182,212,0.04); border-radius: 8px; font-size: 11px; line-height: 1.4; color: var(--text-main); margin-bottom: 4px;">
+                        💡 <strong style="color: var(--neon-cyan);">Operator Pro-Tip:</strong> When using <strong>🎯 Draw Box</strong>, draw the bounding rectangle <strong>directly over the target value itself</strong> (e.g., the actual number or date text), NOT the keyword label. The visual crop sweep captures whatever text lies inside the drawn coordinates area.
+                    </div>
+                    ${renderFieldBlock("invoice_number", "Invoice Number", fields.invoice_number)}
+                    ${renderFieldBlock("invoice_date", "Invoice Date", fields.invoice_date)}
+                    ${renderFieldBlock("abn", "Supplier ABN", fields.abn)}
+                    ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
+                </div>
+            `;
+
+            // Build Line Items Raw Text Sweep Preview
+            let tableTextPreviewHtml = "";
+            if (rules.line_items && rules.line_items.strategy === "coordinate_table" && selectedLayoutData.extracted_table_text) {
+                tableTextPreviewHtml = `
+                    <div style="margin-top: 10px;">
+                        <label>Table Text Sweep Preview</label>
+                        <div id="table-raw-text-preview" style="font-family: var(--font-mono); font-size:10px; color: var(--text-muted); background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; max-height: 80px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.05); white-space: pre-wrap; line-height: 1.4;">${escapeHtml(selectedLayoutData.extracted_table_text)}</div>
+                    </div>
+                `;
+            }
+
+            const lineItemsHtml = `
+                <div id="tab-content-line-items" class="tab-content" style="${activeTab === 'line-items' ? '' : 'display: none;'}">
+                    <div class="field-block" data-field="line_items" style="display: flex; flex-direction: column; gap: 14px; border-left: 3px solid var(--accent-red);">
+                        <div class="field-title-badge">
+                            <span class="badge" style="border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1); color: var(--accent-red);">Order Line Items Table</span>
+                            <button class="pixel-btn-secondary auto-extract-btn" onclick="activateAutoExtract('line_items', this)" style="padding: 4px 8px; font-size: 8px; margin: 0; box-shadow: none; border-color: rgba(255,255,255,0.08);">
+                                🎯 Select Table Area
+                            </button>
+                        </div>
+                        
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="line-items-enabled" ${rules.line_items ? 'checked' : ''} onchange="toggleLineItemsEnable(this)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--primary-pink);">
+                            <label for="line-items-enabled" style="cursor: pointer; font-size: 9px; color: var(--primary-pink);">Enable Line Items Extraction</label>
+                        </div>
+                        
+                        <div id="line-items-coordinate-info" class="coordinate-pill" style="${rules.line_items && rules.line_items.box ? '' : 'display:none;'}">
+                            Page: <span id="line-items-page-val">${rules.line_items ? rules.line_items.page : 1}</span>, Box: <span id="line-items-box-val">${rules.line_items && rules.line_items.box ? JSON.stringify(rules.line_items.box.map(b => parseFloat(b.toFixed(3)))) : '[]'}</span>
+                            <button class="pixel-btn-secondary" onclick="clearFieldCoordinates('line_items')" style="padding: 2px 4px; font-size: 7px; margin-left: 8px; border-radius: 3px; border-color: rgba(255,255,255,0.06); text-transform:none;">Clear</button>
+                        </div>
+                        
+                        ${tableTextPreviewHtml}
+                        
+                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 8px; ${rules.line_items ? '' : 'opacity:0.5; pointer-events:none;'}" id="line-items-mappings-grid">
+                            <div style="font-size: 9px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px;">Column Mapping Matrix</div>
+                            
+                            ${renderColumnMappingSelect("product_code", "Product Code Column", lineItems.columns ? lineItems.columns.product_code : null)}
+                            ${renderColumnMappingSelect("product_name", "Product Name/Description Column", lineItems.columns ? (lineItems.columns.product_name || lineItems.columns.description) : null)}
+                            ${renderColumnMappingSelect("uom", "Unit of Measure Column", lineItems.columns ? lineItems.columns.uom : null)}
+                            ${renderColumnMappingSelect("quantity", "Quantity Column", lineItems.columns ? lineItems.columns.quantity : null)}
+                            ${renderColumnMappingSelect("unit_price", "Unit Price Column", lineItems.columns ? (lineItems.columns.unit_price || lineItems.columns.price) : null)}
+                            ${renderColumnMappingSelect("total", "Subtotal Column", lineItems.columns ? lineItems.columns.total : null)}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Re-render form container in-place
+            formContainer.innerHTML = `
+                ${fieldsHtml}
+                ${lineItemsHtml}
+                <div id="live-preview-panel"></div>
+            `;
+
+            // Re-assert active tab layouts
+            switchSidebarTab(activeTab);
+            setupFieldCardHoverTriggers();
+        }
+
         // Render HTML for an individual field configuration block
         function renderFieldBlock(fieldKey, labelName, fieldRule) {
             const rule = fieldRule || { anchor_keyword: "", search_direction: "relative_right", window_characters: 80, regex_pattern: "", use_filename: false };
-            const isDisabled = rule.use_filename || rule.strategy === "coordinate" ? "disabled" : "";
+            const isCoordinates = rule.strategy === "coordinate";
+            const isDisabled = rule.use_filename || isCoordinates ? "disabled" : "";
             const isDimmed = rule.use_filename ? "style='opacity: 0.7;'" : "";
-            
+
             let filenameToggleHtml = "";
             if (fieldKey === "invoice_number") {
                 const isChecked = rule.use_filename ? "checked" : "";
@@ -1197,10 +1422,10 @@
             }
 
             const borderStyle = FIELD_COLORS[fieldKey] ? `border-left: 3px solid ${FIELD_COLORS[fieldKey].color};` : "";
-            
+
             // Build visual coordinate preview indicator pill if coordinate rule exists
             let coordinatePillHtml = "";
-            if (rule.strategy === "coordinate" && rule.box) {
+            if (isCoordinates && rule.box) {
                 coordinatePillHtml = `
                     <div class="coordinate-pill">
                         Page ${rule.page || 1} Box: ${JSON.stringify(rule.box.map(b => parseFloat(b.toFixed(3))))}
@@ -1208,7 +1433,7 @@
                     </div>
                 `;
             }
-            
+
             return `
                 <div class="field-block" data-field="${fieldKey}" ${isDimmed} style="${borderStyle}">
                     <div class="field-title-badge">
@@ -1220,21 +1445,21 @@
                     ${filenameToggleHtml}
                     ${coordinatePillHtml}
                     
-                    <div class="proximity-settings" style="${rule.strategy === 'coordinate' ? 'display:none;' : ''}">
+                    <div class="proximity-settings" style="${isCoordinates ? 'display:none;' : ''}">
                         <div class="form-row-group">
                             <div class="form-field">
                                 <label>Anchor Keyword</label>
                                 <input type="text" class="field-anchor" value="${escapeHtml(rule.anchor_keyword)}" ${isDisabled}>
                             </div>
                             <div class="form-field small">
-                                <label>Search Direction</label>
+                                <label>Direction</label>
                                 <select class="field-direction" ${isDisabled}>
-                                    <option value="relative_right" ${rule.search_direction === 'relative_right' ? 'selected' : ''}>Same Line (Right)</option>
-                                    <option value="relative_below" ${rule.search_direction === 'relative_below' ? 'selected' : ''}>Below Anchor</option>
+                                    <option value="relative_right" ${rule.search_direction === 'relative_right' ? 'selected' : ''}>Right</option>
+                                    <option value="relative_below" ${rule.search_direction === 'relative_below' ? 'selected' : ''}>Below</option>
                                 </select>
                             </div>
                             <div class="form-field small">
-                                <label>Search Range (Chars)</label>
+                                <label>Range</label>
                                 <input type="number" class="field-window" value="${rule.window_characters}" ${isDisabled}>
                             </div>
                         </div>
@@ -1247,7 +1472,7 @@
             `;
         }
 
-        // Render Column index selection select element
+        // Render Column index selection select element (1-based displayed text, 0-based compiled values)
         function renderColumnMappingSelect(fieldKey, labelText, mappedVal) {
             let colIndex = -1;
             if (mappedVal !== undefined && mappedVal !== null) {
@@ -1257,7 +1482,7 @@
 
             let optionsHtml = `<option value="-1" ${colIndex === -1 ? 'selected' : ''}>Not Mapped</option>`;
             for (let i = 0; i <= 10; i++) {
-                optionsHtml += `<option value="${i}" ${colIndex === i ? 'selected' : ''}>Column ${i}</option>`;
+                optionsHtml += `<option value="${i}" ${colIndex === i ? 'selected' : ''}>Column ${i + 1}</option>`;
             }
 
             return `
@@ -1271,72 +1496,93 @@
         }
 
         function switchSidebarTab(tabName) {
+            activeTab = tabName;
+
             const btnHeaders = document.getElementById("tab-btn-headers");
             const btnLineItems = document.getElementById("tab-btn-line-items");
             const contentHeaders = document.getElementById("tab-content-headers");
             const contentLineItems = document.getElementById("tab-content-line-items");
-            
+
+            if (!btnHeaders || !btnLineItems) return;
+
             if (tabName === 'headers') {
                 btnHeaders.classList.add("active");
                 btnLineItems.classList.remove("active");
-                contentHeaders.style.display = "flex";
-                contentLineItems.style.display = "none";
+                if (contentHeaders) contentHeaders.style.display = "flex";
+                if (contentLineItems) contentLineItems.style.display = "none";
             } else {
                 btnHeaders.classList.remove("active");
                 btnLineItems.classList.add("active");
-                contentHeaders.style.display = "none";
-                contentLineItems.style.display = "flex";
+                if (contentHeaders) contentHeaders.style.display = "none";
+                if (contentLineItems) contentLineItems.style.display = "flex";
             }
         }
 
         function toggleLineItemsEnable(checkbox) {
             const mappingsGrid = document.getElementById("line-items-mappings-grid");
             const drawBtn = document.querySelector('[data-field="line_items"] .auto-extract-btn');
-            
+
             if (checkbox.checked) {
-                mappingsGrid.style.opacity = "1";
-                mappingsGrid.querySelectorAll("select").forEach(s => s.disabled = false);
+                if (mappingsGrid) {
+                    mappingsGrid.style.opacity = "1";
+                    mappingsGrid.style.pointerEvents = "auto";
+                    mappingsGrid.querySelectorAll("select").forEach(s => s.disabled = false);
+                }
                 if (drawBtn) drawBtn.style.display = "inline-block";
             } else {
-                mappingsGrid.style.opacity = "0.5";
-                mappingsGrid.querySelectorAll("select").forEach(s => s.disabled = true);
+                if (mappingsGrid) {
+                    mappingsGrid.style.opacity = "0.5";
+                    mappingsGrid.style.pointerEvents = "none";
+                    mappingsGrid.querySelectorAll("select").forEach(s => s.disabled = true);
+                }
                 if (drawBtn) drawBtn.style.display = "none";
             }
             testRules();
         }
 
+        // Locally clear coordinates without hitting remote API endpoints
         function clearFieldCoordinates(fieldKey) {
             if (!selectedLayoutData) return;
+
+            // Sync current configurations in input textboxes first
+            syncDOMToSchema();
+
             const rules = selectedLayoutData.extraction_rules;
-            if (rules.fields && rules.fields[fieldKey]) {
-                delete rules.fields[fieldKey].box;
-                delete rules.fields[fieldKey].page;
-                rules.fields[fieldKey].strategy = "proximity"; // fallback
+            if (fieldKey === 'line_items') {
+                if (rules.line_items) {
+                    rules.line_items.strategy = "tabular_columns";
+                    delete rules.line_items.box;
+                    delete rules.line_items.page;
+                }
+                selectedLayoutData.extracted_table_text = "";
+            } else {
+                if (rules.fields && rules.fields[fieldKey]) {
+                    delete rules.fields[fieldKey].box;
+                    delete rules.fields[fieldKey].page;
+                    rules.fields[fieldKey].strategy = "proximity"; // fallback
+                }
             }
-            
-            // Re-render layout details
-            selectLayout(currentLayoutHash);
+
+            // Re-render sidebar elements locally
+            refreshFormUI();
+
+            // Re-render PDF highlight overlays
+            renderCoordinateBoundingBoxes();
+
+            // Run trials previews
+            testRules();
         }
 
         function toggleFilenameOption(checkbox) {
-            const block = checkbox.closest(".field-block");
-            const proximitySettings = block.querySelector(".proximity-settings");
-            const autoCarveBtn = block.querySelector(".auto-extract-btn");
-            
-            if (checkbox.checked) {
-                if (proximitySettings) proximitySettings.style.display = "none";
-                if (autoCarveBtn) autoCarveBtn.style.display = "none";
-                block.style.opacity = "0.7";
-                
-                const regexInput = block.querySelector(".field-regex");
-                if (!regexInput.value.trim()) {
-                    regexInput.value = "([0-9]+)";
-                }
-            } else {
-                if (proximitySettings) proximitySettings.style.display = "block";
-                if (autoCarveBtn) autoCarveBtn.style.display = "inline-block";
-                block.style.opacity = "1.0";
+            syncDOMToSchema();
+
+            const fieldKey = "invoice_number";
+            const rules = selectedLayoutData.extraction_rules;
+            if (rules.fields && rules.fields[fieldKey]) {
+                rules.fields[fieldKey].use_filename = checkbox.checked;
             }
+
+            refreshFormUI();
             testRules();
         }
 
@@ -1354,6 +1600,8 @@
                 const result = await res.json();
                 const previewPanel = document.getElementById("live-preview-panel");
 
+                if (!previewPanel) return;
+
                 if (!result.success) {
                     previewPanel.innerHTML = `
                         <div class="preview-output-section" style="border-color: var(--accent-red); background: rgba(244,63,94,0.08);">
@@ -1365,7 +1613,7 @@
                 }
 
                 const ext = result.extracted;
-                
+
                 // Render order line items grid table if enabled and returned
                 let lineItemsTableHtml = "";
                 if (ext.line_items && ext.line_items.length > 0) {
@@ -1379,7 +1627,7 @@
                             <td style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--neon-green); text-align:right;">$${item.total !== null && item.total !== undefined ? parseFloat(item.total).toFixed(2) : "-"}</td>
                         </tr>
                     `).join("");
-                    
+
                     lineItemsTableHtml = `
                         <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px;">
                             <div class="preview-title" style="color:var(--primary-pink); display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
@@ -1407,6 +1655,76 @@
                     `;
                 }
 
+                // Build Flattened Dataset Row Preview
+                let flattenedRowsHtml = "";
+                const invNo = ext.invoice_number || "NULL";
+                const invDate = ext.invoice_date || "NULL";
+                const abn = ext.abn || "NULL";
+
+                let totalAmtVal = "NULL";
+                if (ext.total_amount !== undefined && ext.total_amount !== null) {
+                    const parsedTotal = parseFloat(ext.total_amount);
+                    totalAmtVal = isNaN(parsedTotal) ? ext.total_amount : `$${parsedTotal.toFixed(2)}`;
+                }
+
+                if (ext.line_items && ext.line_items.length > 0) {
+                    flattenedRowsHtml = ext.line_items.map((item, idx) => `
+                        <tr style="background: rgba(16, 185, 129, ${idx % 2 === 0 ? '0.02' : '0.05'});">
+                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 700; color: var(--neon-green); text-align: left;">${escapeHtml(invNo)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(invDate)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(abn)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 600; text-align: left;">${escapeHtml(item.product_code || item.code || "-")}</td>
+                            <td style="font-size:11px; text-align: left;">${escapeHtml(item.product_name || item.description || "-")}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align:right;">${item.quantity !== null && item.quantity !== undefined ? item.quantity : "-"}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align:right; color: var(--neon-cyan);">$${item.unit_price !== null && item.unit_price !== undefined ? parseFloat(item.unit_price).toFixed(2) : "-"}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align:right; color: var(--primary-pink); font-weight: 700;">$${item.total !== null && item.total !== undefined ? parseFloat(item.total).toFixed(2) : "-"}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align:right; color: var(--neon-orange); font-weight: 700;">${escapeHtml(totalAmtVal)}</td>
+                        </tr>
+                    `).join("");
+                } else {
+                    flattenedRowsHtml = `
+                        <tr style="background: rgba(6, 182, 212, 0.03);">
+                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 700; color: var(--neon-cyan); text-align: left;">${escapeHtml(invNo)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(invDate)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(abn)}</td>
+                            <td colspan="5" style="text-align: center; color: var(--text-muted); font-size:11px; font-style: italic;">No line items extracted (Header values only)</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align:right; color: var(--neon-orange); font-weight: 700;">${escapeHtml(totalAmtVal)}</td>
+                        </tr>
+                    `;
+                }
+
+                const datasetPreviewHtml = `
+                    <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
+                        <div class="preview-title" style="color: var(--neon-cyan); display: flex; align-items: center; gap: 8px;">
+                            <span>📊 Flattened Dataset Row Preview (Live Export Simulation)</span>
+                        </div>
+                        <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px; margin-top: 4px;">
+                            This simulates exactly how the current extraction selections are joined into database row records. 
+                            ${ext.line_items && ext.line_items.length > 0 ? 'Notice how the parent header fields duplicate per each line item row!' : 'Only a single row is created when no line items are mapped.'}
+                        </p>
+                        <div style="overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; background: rgba(0,0,0,0.2);">
+                            <table class="spreadsheet-table" style="margin: 0; border: none; width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th style="font-size: 8px; color: var(--neon-green); text-align: left;">Inv Num</th>
+                                        <th style="font-size: 8px; color: var(--text-muted); text-align: left;">Inv Date</th>
+                                        <th style="font-size: 8px; color: var(--text-muted); text-align: left;">Supplier ABN</th>
+                                        <th style="font-size: 8px; color: var(--text-main); text-align: left;">Item Code</th>
+                                        <th style="font-size: 8px; color: var(--text-main); text-align: left;">Description</th>
+                                        <th style="font-size: 8px; color: var(--text-main); text-align: right;">Qty</th>
+                                        <th style="font-size: 8px; color: var(--neon-cyan); text-align: right;">Unit Price</th>
+                                        <th style="font-size: 8px; color: var(--primary-pink); text-align: right;">Line Total</th>
+                                        <th style="font-size: 8px; color: var(--neon-orange); text-align: right;">Inv Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${flattenedRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
                 previewPanel.innerHTML = `
                     <div class="preview-output-section">
                         <div class="preview-title">Meat Extraction Result (Confidence: ${Math.round(result.confidence * 100)}%)</div>
@@ -1425,10 +1743,11 @@
                             </div>
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Total Amount</div>
-                                <div class="preview-card-val" style="color: var(--neon-orange)">$${ext.total_amount !== undefined ? parseFloat(ext.total_amount).toFixed(2) : "NULL"}</div>
+                                <div class="preview-card-val" style="color: var(--neon-orange)">${escapeHtml(totalAmtVal)}</div>
                             </div>
                         </div>
                         ${lineItemsTableHtml}
+                        ${datasetPreviewHtml}
                     </div>
                 `;
             } catch (err) {
@@ -1452,11 +1771,11 @@
                         rules: rules
                     })
                 });
-                
+
                 const result = await res.json();
                 if (result.success) {
                     alert(`Layout carving rules for '${supplierName}' locked & activated!`);
-                    
+
                     // Reset selected views
                     currentLayoutHash = null;
                     document.getElementById("header-legend").style.display = "none";
@@ -1470,6 +1789,7 @@
 
                     loadMetrics();
                     loadPendingList();
+                    loadHistoryData();
                 } else {
                     alert("Approval failed: " + result.detail);
                 }
@@ -1478,45 +1798,39 @@
             }
         }
 
-        // Gather raw input field elements into extraction_rules schema JSON payload
-        function compileFormRules() {
-            const compiled = {
-                required_fields: ["invoice_number", "total_amount"],
-                fields: {}
-            };
+        // Syncs active values currently typed in input elements back to the local rules schema memory object
+        function syncDOMToSchema() {
+            if (!selectedLayoutData) return;
+            const rules = selectedLayoutData.extraction_rules;
 
+            // 1. Sync header fields
             document.querySelectorAll("#tab-content-headers .field-block").forEach(block => {
                 const fieldKey = block.dataset.field;
                 const useFilenameCheckbox = block.querySelector(".field-use-filename");
                 const useFilename = useFilenameCheckbox ? useFilenameCheckbox.checked : false;
-                
-                // Carry over coordinate rules directly if visual coordinates have been drawn
-                if (selectedLayoutData && selectedLayoutData.extraction_rules.fields && 
-                    selectedLayoutData.extraction_rules.fields[fieldKey] && 
-                    selectedLayoutData.extraction_rules.fields[fieldKey].strategy === "coordinate") {
-                    
-                    const origRule = selectedLayoutData.extraction_rules.fields[fieldKey];
-                    compiled.fields[fieldKey] = {
-                        strategy: "coordinate",
-                        page: origRule.page,
-                        box: origRule.box,
-                        regex_pattern: block.querySelector(".field-regex").value
-                    };
-                } else {
-                    compiled.fields[fieldKey] = {
-                        strategy: "proximity",
-                        anchor_keyword: block.querySelector(".field-anchor").value,
-                        search_direction: block.querySelector(".field-direction").value,
-                        window_characters: parseInt(block.querySelector(".field-window").value) || 80,
-                        regex_pattern: block.querySelector(".field-regex").value,
-                        use_filename: useFilename
-                    };
+
+                if (!rules.fields) rules.fields = {};
+                if (!rules.fields[fieldKey]) {
+                    rules.fields[fieldKey] = { strategy: "proximity" };
                 }
+
+                const r = rules.fields[fieldKey];
+                if (r.strategy !== "coordinate") {
+                    r.strategy = "proximity";
+                    r.anchor_keyword = block.querySelector(".field-anchor").value;
+                    r.search_direction = block.querySelector(".field-direction").value;
+                    r.window_characters = parseInt(block.querySelector(".field-window").value) || 80;
+                }
+                r.regex_pattern = block.querySelector(".field-regex").value;
+                r.use_filename = useFilename;
             });
 
-            // Formulate Line Items Mapping payload if active
+            // 2. Sync Order Line items column selectors
             const lineItemsEnabled = document.getElementById("line-items-enabled");
             if (lineItemsEnabled && lineItemsEnabled.checked) {
+                if (!rules.line_items) {
+                    rules.line_items = { strategy: "tabular_columns", columns: {} };
+                }
                 const columns = {};
                 document.querySelectorAll("#line-items-mappings-grid .mapping-column-row").forEach(row => {
                     const colKey = row.dataset.fieldCol;
@@ -1526,24 +1840,19 @@
                         columns[colKey] = { col_index: val };
                     }
                 });
-
-                let tableBox = null;
-                let tablePage = 1;
-                if (selectedLayoutData && selectedLayoutData.extraction_rules.line_items && 
-                    selectedLayoutData.extraction_rules.line_items.strategy === "coordinate_table") {
-                    tableBox = selectedLayoutData.extraction_rules.line_items.box;
-                    tablePage = selectedLayoutData.extraction_rules.line_items.page || 1;
+                rules.line_items.columns = columns;
+                if (!rules.line_items.strategy) {
+                    rules.line_items.strategy = "tabular_columns";
                 }
-
-                compiled.line_items = {
-                    strategy: tableBox ? "coordinate_table" : "tabular_columns",
-                    page: tablePage,
-                    box: tableBox,
-                    columns: columns
-                };
+            } else {
+                delete rules.line_items;
             }
+        }
 
-            return compiled;
+        // Compiles current rules inputs
+        function compileFormRules() {
+            syncDOMToSchema(); // Update local memory schema from DOM elements first
+            return selectedLayoutData.extraction_rules;
         }
 
         // --- Segmented Document Viewer View Mode ---
@@ -1551,12 +1860,12 @@
 
         async function switchDocumentView(viewMode) {
             currentViewMode = viewMode;
-            
+
             const btnVisual = document.getElementById("btn-view-visual");
             const btnText = document.getElementById("btn-view-text");
-            
+
             if (!btnVisual || !btnText) return;
-            
+
             if (viewMode === 'visual') {
                 btnVisual.classList.add("active");
                 btnText.classList.remove("active");
@@ -1571,7 +1880,7 @@
         function renderPlainTextView() {
             const viewerContent = document.getElementById("document-viewer-content");
             if (!viewerContent || !selectedLayoutData) return;
-            
+
             viewerContent.innerHTML = `
                 <div class="text-viewer" id="ws-raw-text">${escapeHtml(selectedLayoutData.sample_text)}</div>
             `;
@@ -1581,16 +1890,16 @@
         async function renderVisualDocumentView() {
             const viewerContent = document.getElementById("document-viewer-content");
             if (!viewerContent || !selectedLayoutData) return;
-            
+
             const docType = selectedLayoutData.document_type.toLowerCase();
             const layoutHash = selectedLayoutData.layout_hash;
-            
+
             viewerContent.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted)">
                     <p style="font-size: 11px; font-weight:600; letter-spacing:0.5px;">UNWRAPPING DOC PIECE...</p>
                 </div>
             `;
-            
+
             if (docType === 'pdf') {
                 viewerContent.innerHTML = `
                     <div class="pdf-viewer-container" id="pdf-viewer-root">
@@ -1598,7 +1907,7 @@
                         <div id="ws-raw-text" style="display:none;">${escapeHtml(selectedLayoutData.sample_text)}</div>
                     </div>
                 `;
-                
+
                 // Load PDF.js library if not loaded
                 if (typeof pdfjsLib === 'undefined') {
                     await new Promise((resolve, reject) => {
@@ -1609,38 +1918,38 @@
                         document.head.appendChild(script);
                     });
                 }
-                
+
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-                
+
                 try {
                     const pdfUrl = `/api/document/file/${layoutHash}`;
                     const loadingTask = pdfjsLib.getDocument(pdfUrl);
                     const pdf = await loadingTask.promise;
-                    
+
                     const pagesContainer = document.getElementById("pdf-pages-container");
                     pagesContainer.innerHTML = "";
-                    
+
                     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                         const page = await pdf.getPage(pageNum);
-                        
+
                         const containerWidth = document.getElementById("pdf-viewer-root").clientWidth - 48;
                         const unscaledViewport = page.getViewport({ scale: 1.0 });
                         const scale = Math.max(1.0, containerWidth / unscaledViewport.width);
                         const viewport = page.getViewport({ scale: scale });
-                        
+
                         const pageWrapper = document.createElement("div");
                         pageWrapper.className = "pdf-page-wrapper";
                         pageWrapper.style.width = viewport.width + "px";
                         pageWrapper.style.height = viewport.height + "px";
                         pageWrapper.dataset.page = pageNum;
-                        
+
                         const canvas = document.createElement("canvas");
                         canvas.width = viewport.width;
                         canvas.height = viewport.height;
                         pageWrapper.appendChild(canvas);
-                        
+
                         const context = canvas.getContext("2d");
-                        
+
                         const textLayerDiv = document.createElement("div");
                         textLayerDiv.className = "textLayer";
                         textLayerDiv.style.width = viewport.width + "px";
@@ -1654,11 +1963,11 @@
                             drawOverlay.classList.add("drawing-active");
                         }
                         pageWrapper.appendChild(drawOverlay);
-                        
+
                         pagesContainer.appendChild(pageWrapper);
-                        
+
                         await page.render({ canvasContext: context, viewport: viewport }).promise;
-                        
+
                         const textContent = await page.getTextContent();
                         await pdfjsLib.renderTextLayer({
                             textContent: textContent,
@@ -1680,7 +1989,7 @@
                     const res = await fetch(`/api/document/grid/${layoutHash}`);
                     if (!res.ok) throw new Error("File grid endpoints failed or is seed dummy");
                     const grid = await res.json();
-                    
+
                     let html = `
                         <div class="spreadsheet-table-container">
                             <div style="font-size:11px; font-weight:600; color:var(--neon-green); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
@@ -1757,7 +2066,7 @@
             el.style.height = (h_pct * height) + "px";
             el.style.setProperty("--box-color", colorMeta.color);
             el.style.setProperty("--box-bg", colorMeta.bg);
-            
+
             // Set sync hover triggers
             el.onmouseenter = () => {
                 el.classList.add("pulse-highlight");
@@ -1767,7 +2076,7 @@
                     block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
             };
-            
+
             el.onmouseleave = () => {
                 el.classList.remove("pulse-highlight");
                 const block = document.querySelector(`.field-block[data-field="${fieldKey}"]`);
@@ -1815,122 +2124,105 @@
             overlays.forEach(overlay => {
                 overlay.addEventListener("mousedown", (e) => {
                     if (!activeTargetField) return; // Only draw when a field Draw Box button is clicked
-                    
+
                     isDrawing = true;
                     drawOverlayPageNum = parseInt(overlay.closest(".pdf-page-wrapper").dataset.page);
-                    
+
                     const rect = overlay.getBoundingClientRect();
                     startX = e.clientX - rect.left;
                     startY = e.clientY - rect.top;
-                    
+
                     // Create dashed highlight box
                     activeDrawBox = document.createElement("div");
                     activeDrawBox.className = "active-draw-box";
                     const colorMeta = FIELD_COLORS[activeTargetField];
                     activeDrawBox.style.setProperty("--box-color", colorMeta.color);
                     activeDrawBox.style.setProperty("--box-bg", colorMeta.bg);
-                    
+
                     activeDrawBox.style.left = startX + "px";
                     activeDrawBox.style.top = startY + "px";
                     activeDrawBox.style.width = "0px";
                     activeDrawBox.style.height = "0px";
-                    
+
                     overlay.appendChild(activeDrawBox);
                     e.preventDefault();
                 });
-                
+
                 overlay.addEventListener("mousemove", (e) => {
                     if (!isDrawing || !activeDrawBox) return;
-                    
+
                     const rect = overlay.getBoundingClientRect();
                     const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
                     const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-                    
+
                     const x = Math.min(startX, currentX);
                     const y = Math.min(startY, currentY);
                     const w = Math.abs(startX - currentX);
                     const h = Math.abs(startY - currentY);
-                    
+
                     activeDrawBox.style.left = x + "px";
                     activeDrawBox.style.top = y + "px";
                     activeDrawBox.style.width = w + "px";
                     activeDrawBox.style.height = h + "px";
                 });
-                
+
                 overlay.addEventListener("mouseup", (e) => {
                     if (!isDrawing || !activeDrawBox) return;
                     isDrawing = false;
-                    
+
                     const rect = overlay.getBoundingClientRect();
                     const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
                     const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-                    
+
                     const x = Math.min(startX, currentX);
                     const y = Math.min(startY, currentY);
                     const w = Math.abs(startX - currentX);
                     const h = Math.abs(startY - currentY);
-                    
+
                     // 1. Calculate percentage bounds
                     const x_pct = x / rect.width;
                     const y_pct = y / rect.height;
                     const w_pct = w / rect.width;
                     const h_pct = h / rect.height;
-                    
-                    // 2. Perform text intersection sweep
-                    const textContent = sweepIntersectingSpans(overlay.closest(".pdf-page-wrapper"), x, y, w, h);
-                    
+
+                    // 2. Perform text intersection sweep using screen client coordinate bounding rects matching
+                    const textContent = sweepIntersectingSpans(overlay.closest(".pdf-page-wrapper"), activeDrawBox);
+
                     // 3. Save coordinates into layouts rules schema
                     saveCoordinatesToSchema(activeTargetField, drawOverlayPageNum, [x_pct, y_pct, w_pct, h_pct], textContent);
-                    
+
                     // Cleanup drawing overlay box
                     activeDrawBox.remove();
                     activeDrawBox = null;
-                    
+
                     cancelAutoExtract();
                 });
             });
         }
 
-        // Sweep all text span layers intersecting the bounding box coordinates rectangle
-        function sweepIntersectingSpans(pageWrapper, x, y, w, h) {
+        // Sweep all text span layers intersecting the bounding box coordinates rectangle using viewport client rects
+        function sweepIntersectingSpans(pageWrapper, activeDrawBox) {
             const spans = pageWrapper.querySelectorAll(".textLayer span");
-            const canvas = pageWrapper.querySelector("canvas");
-            
-            const scaleX = canvas.clientWidth / canvas.width;
-            const scaleY = canvas.clientHeight / canvas.height;
-            
-            const boxLeft = x;
-            const boxRight = x + w;
-            const boxTop = y;
-            const boxBottom = y + h;
-            
+            const boxRect = activeDrawBox.getBoundingClientRect();
+
             let items = [];
-            
+
             spans.forEach(span => {
-                // PDF.js sets element positioning style values (left, top, transform scale, etc) directly
-                const left = parseFloat(span.style.left);
-                const top = parseFloat(span.style.top);
-                const spanWidth = span.getBoundingClientRect().width; // approximate
-                const spanHeight = span.getBoundingClientRect().height;
-                
-                const spanLeft = left;
-                const spanRight = left + spanWidth;
-                const spanTop = top;
-                const spanBottom = top + spanHeight;
-                
-                // Check rectangle intersection
-                const intersectX = Math.max(boxLeft, spanLeft) < Math.min(boxRight, spanRight);
-                const intersectY = Math.max(boxTop, spanTop) < Math.min(boxBottom, spanBottom);
-                
+                const spanRect = span.getBoundingClientRect();
+
+                // Perfect viewport coordinates intersection math, immune to device margins, zoom scale ratios, or transforms
+                const intersectX = Math.max(boxRect.left, spanRect.left) < Math.min(boxRect.right, spanRect.right);
+                const intersectY = Math.max(boxRect.top, spanRect.top) < Math.min(boxRect.bottom, spanRect.bottom);
+
                 if (intersectX && intersectY) {
                     items.push({
                         text: span.innerText,
-                        left: left,
-                        top: top
+                        left: spanRect.left,
+                        top: spanRect.top
                     });
                 }
             });
-            
+
             // Sort spans top-to-bottom, then left-to-right (standard logical reading flow order)
             items.sort((a, b) => {
                 if (Math.abs(a.top - b.top) < 6) { // same line threshold
@@ -1938,15 +2230,19 @@
                 }
                 return a.top - b.top;
             });
-            
+
             const resultText = items.map(i => i.text).join(" ").replace(/\s+/g, " ").trim();
             return resultText;
         }
 
         function saveCoordinatesToSchema(fieldKey, pageNum, boxPct, extractedValue) {
             if (!selectedLayoutData) return;
+
+            // Sync current input textbox states from DOM to memory first
+            syncDOMToSchema();
+
             const rules = selectedLayoutData.extraction_rules;
-            
+
             if (fieldKey === "line_items") {
                 rules.line_items = {
                     strategy: "coordinate_table",
@@ -1954,33 +2250,16 @@
                     box: boxPct,
                     columns: rules.line_items ? rules.line_items.columns : {}
                 };
-                
-                // Show coordinates display inside tabular line items card UI
-                const infoCard = document.getElementById("line-items-coordinate-info");
-                if (infoCard) {
-                    infoCard.style.display = "inline-flex";
-                    document.getElementById("line-items-page-val").innerText = pageNum;
-                    document.getElementById("line-items-box-val").innerText = JSON.stringify(boxPct.map(b => parseFloat(b.toFixed(3))));
-                }
-                
-                // Check checkmark if disabled
-                document.getElementById("line-items-enabled").checked = true;
-                toggleLineItemsEnable(document.getElementById("line-items-enabled"));
+                selectedLayoutData.extracted_table_text = extractedValue;
             } else {
                 if (!rules.fields) rules.fields = {};
-                rules.fields[fieldKey] = {
-                    strategy: "coordinate",
-                    page: pageNum,
-                    box: boxPct,
-                    regex_pattern: rules.fields[fieldKey] ? rules.fields[fieldKey].regex_pattern : "([\\s\\S]+)"
-                };
-                
-                // Populate the extracted text value straight into regular expression filter input
-                const block = document.querySelector(`.field-block[data-field="${fieldKey}"]`);
-                if (block && extractedValue) {
+
+                // Preserve current regular expression filter if exists, otherwise generate basic visual sweep regex filter
+                let regex = rules.fields[fieldKey] ? rules.fields[fieldKey].regex_pattern : "([\\s\\S]+)";
+
+                if (extractedValue) {
                     const cleanVal = extractedValue.replace(/[\s,]/g, "");
-                    let regex = "([A-Za-z0-9-]+)";
-                    
+                    regex = "([A-Za-z0-9-]+)";
                     if (/^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/.test(extractedValue) || /^\d{11}$/.test(cleanVal)) {
                         regex = "([\\d\\s]+)";
                     } else if (/^\$?[0-9,.]+\d{2}$/.test(extractedValue) || /^[0-9,.]+\d{2}$/.test(cleanVal)) {
@@ -1990,17 +2269,22 @@
                     } else if (/^\d+$/.test(cleanVal)) {
                         regex = "(\\d+)";
                     }
-                    
-                    block.querySelector(".field-regex").value = regex;
                 }
+
+                rules.fields[fieldKey] = {
+                    strategy: "coordinate",
+                    page: pageNum,
+                    box: boxPct,
+                    regex_pattern: regex
+                };
             }
-            
+
+            // Re-render sidebar elements locally
+            refreshFormUI();
+
             // Redraw highlighting overlays
             renderCoordinateBoundingBoxes();
-            
-            // Re-map hover triggers
-            setupFieldCardHoverTriggers();
-            
+
             // Trigger trials rules validation in preview panel
             testRules();
         }
@@ -2012,10 +2296,10 @@
                 setTimeout(() => cellElement.style.outline = "", 1000);
                 return;
             }
-            
+
             const cellValue = cellElement.dataset.value.trim();
             if (!cellValue) return;
-            
+
             const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
             if (block) {
                 let anchor = "";
@@ -2026,15 +2310,15 @@
                         anchor = headers[colIdx].innerText.trim();
                     }
                 }
-                
+
                 block.querySelector(".field-anchor").value = anchor || "Header";
                 block.querySelector(".field-direction").value = "relative_right";
                 block.querySelector(".field-window").value = 80;
-                
+
                 let regex = "([A-Za-z0-9-]+)";
                 const cleanVal = cellValue.replace(/[\s,]/g, "");
                 if (/^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/.test(cellValue) || /^\d{11}$/.test(cleanVal)) {
-                     regex = "([\\d\\s]+)";
+                    regex = "([\\d\\s]+)";
                 } else if (/^\$?[0-9,.]+\d{2}$/.test(cellValue) || /^[0-9,.]+\d{2}$/.test(cleanVal)) {
                     regex = "([0-9.,$]+)";
                 } else if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(cellValue) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(cellValue)) {
@@ -2042,32 +2326,32 @@
                 } else if (/^\d+$/.test(cleanVal)) {
                     regex = "(\\d+)";
                 }
-                
+
                 block.querySelector(".field-regex").value = regex;
-                
+
                 cellElement.classList.add("selected-cell");
                 setTimeout(() => cellElement.classList.remove("selected-cell"), 1500);
-                
+
                 const originalBorder = block.style.borderColor;
                 block.style.borderColor = "var(--neon-green)";
                 setTimeout(() => block.style.borderColor = originalBorder, 1500);
-                
+
                 testRules();
             }
-            
+
             cancelAutoExtract();
         }
 
         function processSelectionText(selectedText) {
             const textViewer = document.getElementById("ws-raw-text");
             if (!textViewer) return;
-            
+
             const fullText = textViewer.innerText;
             let startIndex = fullText.indexOf(selectedText);
-            
+
             const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
             if (!block) return;
-            
+
             if (startIndex === -1) {
                 block.querySelector(".field-anchor").value = "Invoice";
                 block.querySelector(".field-regex").value = `(${escapeRegExp(selectedText)})`;
@@ -2075,15 +2359,15 @@
                 cancelAutoExtract();
                 return;
             }
-            
+
             const precedingText = fullText.substring(0, startIndex);
             const lines = precedingText.split("\n");
             const currentLinePreceding = lines[lines.length - 1];
-            
+
             let anchor = "";
             let direction = "relative_right";
             let windowChars = 80;
-            
+
             const sameLineLabelMatch = currentLinePreceding.match(/([\w\s-]+):?\s*$/);
             if (sameLineLabelMatch && sameLineLabelMatch[1].trim().length > 2) {
                 anchor = sameLineLabelMatch[1].trim();
@@ -2096,7 +2380,7 @@
                     windowChars = 150;
                 }
             }
-            
+
             if (!anchor) {
                 const commonKeywords = ["invoice", "inv", "date", "abn", "total", "amount", "due", "gst", "subtotal", "tax"];
                 for (const kw of commonKeywords) {
@@ -2111,10 +2395,10 @@
                     }
                 }
             }
-            
+
             let regex = "([A-Za-z0-9-]+)";
             const cleanVal = selectedText.replace(/[\s,]/g, "");
-            
+
             if (/^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/.test(selectedText) || /^\d{11}$/.test(cleanVal)) {
                 regex = "([\\d\\s]+)";
             } else if (/^\$?[0-9,.]+\d{2}$/.test(selectedText) || /^[0-9,.]+\d{2}$/.test(cleanVal)) {
@@ -2124,16 +2408,16 @@
             } else if (/^\d+$/.test(cleanVal)) {
                 regex = "(\\d+)";
             }
-            
+
             block.querySelector(".field-anchor").value = anchor || "Invoice";
             block.querySelector(".field-direction").value = direction;
             block.querySelector(".field-window").value = windowChars;
             block.querySelector(".field-regex").value = regex;
-            
+
             const originalBorder = block.style.borderColor;
             block.style.borderColor = "var(--neon-green)";
             setTimeout(() => block.style.borderColor = originalBorder, 1500);
-            
+
             testRules();
             cancelAutoExtract();
         }
@@ -2152,23 +2436,23 @@
                 return;
             }
             cancelAutoExtract();
-            
+
             activeTargetField = fieldKey;
             activeTargetButton = buttonElement;
-            
+
             buttonElement.innerHTML = "🎯 Drag Bounding Box...";
             buttonElement.style.background = "linear-gradient(135deg, #059669, var(--neon-green))";
             buttonElement.style.color = "#fff";
             buttonElement.style.borderColor = "transparent";
             buttonElement.classList.add("pulse-btn-anim");
-            
+
             // Highlight text viewer if using plain text view
             const textViewer = document.getElementById("ws-raw-text");
             if (textViewer && textViewer.style.display !== "none") {
                 textViewer.style.outline = "2px dashed var(--neon-green)";
                 textViewer.style.background = "rgba(16, 185, 129, 0.05)";
             }
-            
+
             // Highlight interactive visual overlays specifically on the rendered pages
             document.querySelectorAll(".pdf-draw-overlay").forEach(o => o.classList.add("drawing-active"));
         }
@@ -2183,29 +2467,29 @@
             }
             activeTargetField = null;
             activeTargetButton = null;
-            
+
             const textViewer = document.getElementById("ws-raw-text");
             if (textViewer) {
                 textViewer.style.outline = "";
                 textViewer.style.background = "";
             }
-            
+
             document.querySelectorAll(".pdf-draw-overlay").forEach(o => o.classList.remove("drawing-active"));
         }
 
         document.addEventListener("mouseup", () => {
             if (!activeTargetField) return;
-            
+
             const selection = window.getSelection();
             const selectedText = selection.toString().trim();
             if (!selectedText) return;
-            
+
             const textViewer = document.getElementById("ws-raw-text");
             const pdfViewer = document.getElementById("pdf-viewer-root");
-            
+
             const isInsideText = textViewer && textViewer.contains(selection.anchorNode);
             const isInsidePdf = pdfViewer && pdfViewer.contains(selection.anchorNode);
-            
+
             if (isInsideText || isInsidePdf) {
                 processSelectionText(selectedText);
                 selection.removeAllRanges();
@@ -2216,28 +2500,28 @@
         function updateLiveHighlighting() {
             const textViewer = document.getElementById("ws-raw-text");
             if (!textViewer || !selectedLayoutData) return;
-            
+
             if (currentViewMode !== 'text') return;
-            
+
             const rawText = selectedLayoutData.sample_text;
             if (!rawText) return;
-            
+
             const activeBlock = document.querySelector(".field-block:focus-within") || document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
             if (!activeBlock) {
                 textViewer.innerHTML = escapeHtml(rawText);
                 return;
             }
-            
+
             const useFilenameCheckbox = activeBlock.querySelector(".field-use-filename");
             if (useFilenameCheckbox && useFilenameCheckbox.checked) {
                 textViewer.innerHTML = escapeHtml(rawText);
                 return;
             }
-            
+
             // Ignore highlighting proximity window if visual coordinates active
             const fieldKey = activeBlock.dataset.field;
-            if (selectedLayoutData.extraction_rules.fields && 
-                selectedLayoutData.extraction_rules.fields[fieldKey] && 
+            if (selectedLayoutData.extraction_rules.fields &&
+                selectedLayoutData.extraction_rules.fields[fieldKey] &&
                 selectedLayoutData.extraction_rules.fields[fieldKey].strategy === "coordinate") {
                 textViewer.innerHTML = escapeHtml(rawText);
                 return;
@@ -2245,28 +2529,28 @@
 
             const anchor = activeBlock.querySelector(".field-anchor").value;
             const windowChars = parseInt(activeBlock.querySelector(".field-window").value) || 80;
-            
+
             if (!anchor) {
                 textViewer.innerHTML = escapeHtml(rawText);
                 return;
             }
-            
+
             const idx = rawText.toLowerCase().indexOf(anchor.toLowerCase());
             if (idx === -1) {
                 textViewer.innerHTML = escapeHtml(rawText);
                 return;
             }
-            
+
             const preAnchor = rawText.substring(0, idx);
             const matchedAnchor = rawText.substring(idx, idx + anchor.length);
-            
+
             let windowStart = idx + anchor.length;
             let windowEnd = windowStart + windowChars;
             if (windowEnd > rawText.length) windowEnd = rawText.length;
-            
+
             const windowText = rawText.substring(windowStart, windowEnd);
             const postWindow = rawText.substring(windowEnd);
-            
+
             textViewer.innerHTML = `
                 ${escapeHtml(preAnchor)}<span class="highlight-anchor" style="background-color: var(--neon-orange); color: #000; font-weight: bold; padding: 0 2px; border-radius:3px;">${escapeHtml(matchedAnchor)}</span><span class="highlight-window" style="background-color: rgba(16, 185, 129, 0.2); color: #fff; border-bottom: 1.5px dashed var(--neon-green); padding: 0 2px;">${escapeHtml(windowText)}</span>${escapeHtml(postWindow)}
             `;
@@ -2279,14 +2563,14 @@
                 testRules();
             }
         });
-            
+
         document.addEventListener("change", (e) => {
-            if (e.target.matches(".field-direction, .field-use-filename")) {
+            if (e.target.matches(".field-direction, .field-use-filename, .mapping-column-select")) {
                 updateLiveHighlighting();
                 testRules();
             }
         });
-        
+
         document.addEventListener("focusin", (e) => {
             if (e.target.closest(".field-block")) {
                 updateLiveHighlighting();
@@ -2305,4 +2589,5 @@
         }
     </script>
 </body>
+
 </html>

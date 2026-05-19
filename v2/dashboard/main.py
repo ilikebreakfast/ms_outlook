@@ -75,6 +75,40 @@ async def get_metrics():
         conn.close()
 
 
+@app.get("/api/history")
+async def get_extraction_history():
+    """Retrieve all logged extraction records for historical preview."""
+    conn = db.get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, message_id, filename, layout_hash, parsed_data, status, processed_at
+            FROM extraction_history
+            ORDER BY processed_at DESC
+            LIMIT 50;
+        """).fetchall()
+        
+        history_list = []
+        for r in rows:
+            parsed = {}
+            if r["parsed_data"]:
+                try:
+                    parsed = json.loads(r["parsed_data"])
+                except Exception:
+                    pass
+            history_list.append({
+                "id": r["id"],
+                "message_id": r["message_id"],
+                "filename": r["filename"],
+                "layout_hash": r["layout_hash"],
+                "parsed_data": parsed,
+                "status": r["status"],
+                "processed_at": r["processed_at"]
+            })
+        return history_list
+    finally:
+        conn.close()
+
+
 @app.get("/api/pending")
 async def get_pending_templates():
     """List all templates awaiting operator visual review and approval."""
