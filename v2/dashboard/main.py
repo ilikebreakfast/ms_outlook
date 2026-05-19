@@ -170,19 +170,19 @@ async def get_layout(layout_hash: str):
         
         # If no history logs yet, provide clean placeholder text
         if hist_row:
-            sample_text = f"[SOURCE FILE: {hist_row['filename']}]\n\n"
+            sample_text = ""
             # Try getting cached raw file if we can read it, or default
             raw_cache = Path(__file__).parent.parent / "data" / "raw_text"
             # Scan matching text file
             for txt_file in raw_cache.glob("**/*.txt"):
                 if txt_file.name.lower().startswith(Path(hist_row['filename']).stem.lower()):
                     try:
-                        sample_text += txt_file.read_text(encoding="utf-8")
+                        sample_text = txt_file.read_text(encoding="utf-8")
                         break
                     except Exception:
                         pass
-            if len(sample_text) < 100:
-                sample_text += "TAX INVOICE\nAcme Energy\nABN: 11222333444\nInvoice No: INV-1002\nTotal Amount Paid: $550.00"
+            if not sample_text:
+                sample_text = "TAX INVOICE\nAcme Energy\nABN: 11222333444\nInvoice No: INV-1002\nTotal Amount Paid: $550.00"
         else:
             sample_text = "TAX INVOICE\nAcme Energy\nABN: 11222333444\nInvoice No: INV-1002\nTotal Amount Paid: $550.00"
     finally:
