@@ -1,0 +1,31 @@
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local databases and caches
+v2/data/
+v1/attachments/
+v1/raw_text/
+v1/parsed/
+v1/logs/
+v1/config/token_cache.bin
+v1/database/pipeline.db
+
+# Environments and Credentials
+.env
+.venv/
+env/
+venv/
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo

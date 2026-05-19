@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Pipeline v2 — Operator Dashboard</title>
+    <!-- Premium Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --panel-bg: rgba(17, 24, 39, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #6366f1; /* Glowing indigo */
+            --primary-hover: #4f46e5;
+            --accent-green: #10b981; /* Success green */
+            --accent-orange: #f59e0b; /* Pending amber */
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --font-display: 'Outfit', 'Inter', sans-serif;
+            --font-sans: 'Inter', sans-serif;
+            --glass-blur: blur(16px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 40%);
+        }
+
+        /* Glassmorphic Panel Layout */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        /* Container & Navigation */
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(11, 15, 25, 0.8);
+            backdrop-filter: var(--glass-blur);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--accent-green));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-family: var(--font-display);
+            font-size: 20px;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+        }
+
+        h1 {
+            font-family: var(--font-display);
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff, #a5b4fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Stats bar */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            padding: 24px 40px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(99, 102, 241, 0.25);
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-family: var(--font-display);
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-value.highlight-green {
+            color: var(--accent-green);
+        }
+
+        .stat-value.highlight-orange {
+            color: var(--accent-orange);
+            text-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+        }
+
+        /* Main Workspace Layout */
+        .main-container {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 24px;
+            padding: 0 40px 40px 40px;
+            height: calc(100vh - 200px);
+            min-height: 650px;
+        }
+
+        /* Queue List Column */
+        .queue-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            height: 100%;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .sidebar-title {
+            font-family: var(--font-display);
+            font-size: 16px;
+            font-weight: 600;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+
+        .queue-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .queue-item {
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .queue-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(99, 102, 241, 0.2);
+        }
+
+        .queue-item.active {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: var(--primary);
+            box-shadow: inset 0 0 10px rgba(99, 102, 241, 0.1);
+        }
+
+        .queue-supplier {
+            font-weight: 600;
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .queue-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Workspace Core Panel */
+        .workspace-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .workspace-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .workspace-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .fingerprint-tag {
+            font-family: monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            width: fit-content;
+        }
+
+        /* Split panes inside Workspace */
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .pane {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .pane-left {
+            border-right: 1px solid var(--border-color);
+        }
+
+        .pane-header {
+            padding: 12px 24px;
+            background: rgba(0, 0, 0, 0.2);
+            font-family: var(--font-display);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Raw text viewer pane */
+        .text-viewer {
+            padding: 24px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            background: rgba(0, 0, 0, 0.15);
+            flex-grow: 1;
+            color: #d1d5db;
+        }
+
+        /* Interactive rules config form pane */
+        .rules-form-container {
+            padding: 24px;
+            overflow-y: auto;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-row-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex-grow: 1;
+        }
+
+        .form-field.small {
+            flex-grow: 0;
+            width: 110px;
+        }
+
+        label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #fff;
+            font-family: var(--font-sans);
+            font-size: 13px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Field configuration block */
+        .field-block {
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.01);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .field-block:hover {
+            border-color: rgba(99, 102, 241, 0.15);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .field-title-badge {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .badge {
+            font-family: var(--font-display);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(99, 102, 241, 0.15);
+        }
+
+        /* Action Buttons footer */
+        .workspace-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 16px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-family: var(--font-display);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #4f46e5);
+            border: none;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-green), #047857);
+            border: none;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Trial execution preview overlays */
+        .preview-output-section {
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 16px;
+            margin-top: 10px;
+        }
+
+        .preview-title {
+            font-family: var(--font-display);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-green);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .preview-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+
+        .preview-card-lbl {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .preview-card-val {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            word-break: break-all;
+        }
+
+        /* Placeholder state workspace */
+        .placeholder-workspace {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+            gap: 16px;
+        }
+
+        .placeholder-icon {
+            font-size: 48px;
+            color: rgba(99, 102, 241, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { border-color: var(--accent-green); box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); }
+            50% { border-color: #059669; box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); }
+            100% { border-color: var(--accent-green); box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); }
+        }
+        .pulse-btn-anim {
+            animation: pulse-border 1.5s infinite !important;
+        }
+        #ws-raw-text {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Section -->
+    <header class="glass-panel">
+        <div class="logo-group">
+            <div class="logo-icon">IF</div>
+            <div>
+                <h1>Invoice Flow v2</h1>
+                <p style="font-size: 11px; color: var(--text-muted)">Deterministic Human-in-the-Loop Orchestrator</p>
+            </div>
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted)">
+            System Mode: <span style="color: var(--accent-green); font-weight: 600">Active</span>
+        </div>
+    </header>
+
+    <!-- Operational Metrics Stats Bar -->
+    <section class="stats-grid">
+        <div class="stat-card glass-panel">
+            <span class="stat-label">Total Invoices Processed</span>
+            <span class="stat-value" id="stat-total">0</span>
+        </div>
+        <div class="stat-card glass-panel">
+            <span class="stat-label">Extraction Success Rate</span>
+            <span class="stat-value highlight-green" id="stat-success">0.0%</span>
+        </div>
+        <div class="stat-card glass-panel">
+            <span class="stat-label">Pending Layout Reviews</span>
+            <span class="stat-value highlight-orange" id="stat-pending">0</span>
+        </div>
+        <div class="stat-card glass-panel">
+            <span class="stat-label">Active Rule Configurations</span>
+            <span class="stat-value" id="stat-active">0</span>
+        </div>
+    </section>
+
+    <!-- Main Dashboard Body Grid -->
+    <main class="main-container">
+        
+        <!-- Left Sidebar: Pending reviews -->
+        <aside class="glass-panel queue-sidebar">
+            <div class="sidebar-title">Pending Approvals</div>
+            <div class="queue-list" id="queue-list-container">
+                <!-- Injected dynamically -->
+                <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-top: 20px;">Loading queue...</p>
+            </div>
+        </aside>
+
+        <!-- Right Main: Workspace configuration layout -->
+        <section class="glass-panel workspace-panel" id="workspace-panel-container">
+            <div class="placeholder-workspace">
+                <div class="placeholder-icon">📄</div>
+                <h3 style="font-family: var(--font-display); font-size: 18px; color: #fff">Select a pending template</h3>
+                <p style="font-size: 13px; max-width: 320px">Choose a newly compiled template signature from the left panel to verify and lock its parsing rules.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Core Interactive SPA Javascript -->
+    <script>
+        let currentLayoutHash = null;
+        let selectedLayoutData = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            loadMetrics();
+            loadPendingList();
+        });
+
+        // 1. Fetch system metrics
+        async function loadMetrics() {
+            try {
+                const res = await fetch("/api/metrics");
+                const data = await res.json();
+                document.getElementById("stat-total").innerText = data.total_processed;
+                document.getElementById("stat-success").innerText = data.success_rate;
+                document.getElementById("stat-pending").innerText = data.pending_reviews;
+                document.getElementById("stat-active").innerText = data.active_rules;
+            } catch (err) {
+                console.error("Failed to load metrics:", err);
+            }
+        }
+
+        // 2. Fetch pending template approvals list
+        async function loadPendingList() {
+            try {
+                const res = await fetch("/api/pending");
+                const list = await res.json();
+                const container = document.getElementById("queue-list-container");
+                container.innerHTML = "";
+
+                if (list.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; margin-top: 40px; color: var(--text-muted)">
+                            <div style="font-size: 24px; margin-bottom: 10px;">🎉</div>
+                            <p style="font-size: 13px;">Queue completely empty!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                list.forEach(item => {
+                    const el = document.createElement("div");
+                    el.className = `queue-item ${currentLayoutHash === item.layout_hash ? 'active' : ''}`;
+                    el.onclick = () => selectLayout(item.layout_hash);
+                    
+                    el.innerHTML = `
+                        <div class="queue-supplier">${escapeHtml(item.supplier_name)}</div>
+                        <div class="queue-meta">
+                            <span>Format: ${escapeHtml(item.document_type.toUpperCase())}</span>
+                            <span>Fingerprint: ${item.layout_hash.substring(0, 8)}...</span>
+                        </div>
+                    `;
+                    container.appendChild(el);
+                });
+            } catch (err) {
+                console.error("Failed to load pending queue list:", err);
+            }
+        }
+
+        // 3. Select layout and load full details in split workspace
+        async function selectLayout(layoutHash) {
+            currentLayoutHash = layoutHash;
+            
+            // Re-highlight sidebar queue items
+            document.querySelectorAll(".queue-item").forEach(item => item.classList.remove("active"));
+            loadPendingList(); // Reloader maintains selected styling
+
+            const container = document.getElementById("workspace-panel-container");
+            container.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted)">
+                    <p style="font-size:14px">Loading workspace...</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`/api/layout/${layoutHash}`);
+                const data = await res.json();
+                selectedLayoutData = data;
+                
+                const rules = data.extraction_rules;
+                const fields = rules.fields || {};
+
+                container.innerHTML = `
+                    <div class="workspace-header">
+                        <div class="workspace-title-group">
+                            <input type="text" id="ws-supplier-name" value="${escapeHtml(data.supplier_name)}" style="font-family: var(--font-display); font-size:18px; font-weight:700; background:none; border:none; border-bottom:1px dashed var(--border-color); padding: 2px 0; border-radius:0; width: 320px;">
+                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                                <div class="fingerprint-tag">Fingerprint: ${data.layout_hash}</div>
+                                <select id="ws-doc-type" style="padding: 2px 6px; font-size:11px; border-radius:4px; background:rgba(255,255,255,0.05)">
+                                    <option value="pdf" ${data.document_type === 'pdf' ? 'selected' : ''}>PDF</option>
+                                    <option value="excel" ${data.document_type === 'excel' ? 'selected' : ''}>EXCEL</option>
+                                    <option value="csv" ${data.document_type === 'csv' ? 'selected' : ''}>CSV</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="font-size:12px; color:var(--text-muted)">
+                            Status: <span style="color:var(--accent-orange); font-weight:600">Pending Review</span>
+                        </div>
+                    </div>
+
+                    <!-- Split workspace grid -->
+                    <div class="workspace-grid">
+                        
+                        <!-- Left pane: Raw Text sample -->
+                        <div class="pane pane-left">
+                            <div class="pane-header">Source Document Text</div>
+                            <div class="text-viewer" id="ws-raw-text">${escapeHtml(data.sample_text)}</div>
+                        </div>
+
+                        <!-- Right pane: Interactive Proximity Rules Form -->
+                        <div class="pane">
+                            <div class="pane-header">Deterministic Rules Editor</div>
+                            <div class="rules-form-container" id="ws-rules-form">
+                                
+                                ${renderFieldBlock("invoice_number", "Invoice Number", fields.invoice_number)}
+                                ${renderFieldBlock("invoice_date", "Invoice Date", fields.invoice_date)}
+                                ${renderFieldBlock("abn", "Supplier ABN", fields.abn)}
+                                ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
+                                
+                                <!-- Dynamic Live trials output panel -->
+                                <div id="live-preview-panel"></div>
+
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Action controls -->
+                    <div class="workspace-footer">
+                        <button class="btn-secondary" onclick="testRules()">Test Extraction Rules</button>
+                        <button class="btn-success" onclick="approveAndActivate()">Approve & Activate Rule</button>
+                    </div>
+                `;
+            } catch (err) {
+                console.error("Failed to load workspace layout details:", err);
+                container.innerHTML = `
+                    <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--accent-orange)">
+                        <p style="font-size:14px">Failed to load workspace details: ${err}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Render HTML for an individual field configuration block
+        function renderFieldBlock(fieldKey, labelName, fieldRule) {
+            const rule = fieldRule || { anchor_keyword: "", search_direction: "relative_right", window_characters: 80, regex_pattern: "" };
+            return `
+                <div class="field-block" data-field="${fieldKey}">
+                    <div class="field-title-badge" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <span class="badge">${labelName}</span>
+                        <button class="btn-secondary auto-extract-btn" onclick="activateAutoExtract('${fieldKey}', this)" style="padding: 4px 10px; font-size: 11px; margin: 0; display: flex; align-items: center; gap: 4px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color); background: rgba(255,255,255,0.03); color: var(--text-muted); transition: all 0.2s ease;">
+                            🎯 Auto-Extract Selection
+                        </button>
+                    </div>
+                    <div class="form-row-group">
+                        <div class="form-field">
+                            <label>Anchor Keyword</label>
+                            <input type="text" class="field-anchor" value="${escapeHtml(rule.anchor_keyword)}">
+                        </div>
+                        <div class="form-field small">
+                            <label>Direction</label>
+                            <select class="field-direction">
+                                <option value="relative_right" ${rule.search_direction === 'relative_right' ? 'selected' : ''}>Right</option>
+                                <option value="relative_below" ${rule.search_direction === 'relative_below' ? 'selected' : ''}>Below</option>
+                            </select>
+                        </div>
+                        <div class="form-field small">
+                            <label>Window</label>
+                            <input type="number" class="field-window" value="${rule.window_characters}">
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label>Regex Local Window Pattern</label>
+                        <input type="text" class="field-regex" value="${escapeHtml(rule.regex_pattern)}" style="font-family: monospace;">
+                    </div>
+                </div>
+            `;
+        }
+
+        // 4. Test extraction rules in real-time
+        async function testRules() {
+            const rawText = document.getElementById("ws-raw-text").innerText;
+            const rules = compileFormRules();
+
+            try {
+                const res = await fetch("/api/test-extraction", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ raw_text: rawText, rules: rules })
+                });
+                const result = await res.json();
+                const previewPanel = document.getElementById("live-preview-panel");
+
+                if (!result.success) {
+                    previewPanel.innerHTML = `
+                        <div class="preview-output-section" style="border-color: red;">
+                            <div class="preview-title" style="color: red;">Compilation Error</div>
+                            <p style="font-size:12px; color: red;">${escapeHtml(result.error)}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const ext = result.extracted;
+                previewPanel.innerHTML = `
+                    <div class="preview-output-section">
+                        <div class="preview-title">Live Trial Extraction Preview (Confidence: ${result.confidence * 100}%)</div>
+                        <div class="preview-grid">
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Invoice Number</div>
+                                <div class="preview-card-val">${escapeHtml(ext.invoice_number || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Invoice Date</div>
+                                <div class="preview-card-val">${escapeHtml(ext.invoice_date || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Supplier ABN</div>
+                                <div class="preview-card-val">${escapeHtml(ext.abn || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Total Amount</div>
+                                <div class="preview-card-val" style="color: var(--accent-green)">$${ext.total_amount !== undefined ? ext.total_amount : "NULL"}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                console.error("Test extraction execution failed:", err);
+            }
+        }
+
+        // 5. Approve template layout rules and activate in DB
+        async function approveAndActivate() {
+            const supplierName = document.getElementById("ws-supplier-name").value;
+            const docType = document.getElementById("ws-doc-type").value;
+            const rules = compileFormRules();
+
+            try {
+                const res = await fetch(`/api/approve/${currentLayoutHash}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        supplier_name: supplierName,
+                        document_type: docType,
+                        rules: rules
+                    })
+                });
+                
+                const result = await res.json();
+                if (result.success) {
+                    alert(`Layout rules for '${supplierName}' successfully activated and locked!`);
+                    
+                    // Reset selected views
+                    currentLayoutHash = null;
+                    document.getElementById("workspace-panel-container").innerHTML = `
+                        <div class="placeholder-workspace">
+                            <div class="placeholder-icon">🎉</div>
+                            <h3 style="font-family: var(--font-display); font-size: 18px; color: #fff">Template Activated!</h3>
+                            <p style="font-size: 13px; max-width: 320px">Layout rules successfully saved. Subsequent invoices will be parsed 100% deterministically.</p>
+                        </div>
+                    `;
+
+                    loadMetrics();
+                    loadPendingList();
+                } else {
+                    alert("Approval failed: " + result.detail);
+                }
+            } catch (err) {
+                console.error("Failed to approve layout template:", err);
+            }
+        }
+
+        // Gather raw input field elements into extraction_rules schema JSON payload
+        function compileFormRules() {
+            const compiled = {
+                required_fields: ["invoice_number", "total_amount"],
+                fields: {}
+            };
+
+            document.querySelectorAll(".field-block").forEach(block => {
+                const fieldKey = block.dataset.field;
+                compiled.fields[fieldKey] = {
+                    anchor_keyword: block.querySelector(".field-anchor").value,
+                    search_direction: block.querySelector(".field-direction").value,
+                    window_characters: parseInt(block.querySelector(".field-window").value) || 80,
+                    regex_pattern: block.querySelector(".field-regex").value
+                };
+            });
+
+            // Carry over legacy line items definition if present
+            if (selectedLayoutData && selectedLayoutData.extraction_rules.line_items) {
+                compiled.line_items = selectedLayoutData.extraction_rules.line_items;
+            }
+
+            return compiled;
+        }
+
+        // --- Visual Text Selection Auto-Extraction Mapping ---
+        let activeTargetField = null;
+        let activeTargetButton = null;
+
+        function activateAutoExtract(fieldKey, buttonElement) {
+            if (activeTargetField === fieldKey) {
+                cancelAutoExtract();
+                return;
+            }
+            cancelAutoExtract();
+            
+            activeTargetField = fieldKey;
+            activeTargetButton = buttonElement;
+            
+            buttonElement.innerHTML = "🎯 Highlight Text in Left Pane...";
+            buttonElement.style.background = "rgba(16, 185, 129, 0.2)";
+            buttonElement.style.color = "var(--accent-green)";
+            buttonElement.style.borderColor = "var(--accent-green)";
+            buttonElement.classList.add("pulse-btn-anim");
+            
+            const textViewer = document.getElementById("ws-raw-text");
+            if (textViewer) {
+                textViewer.style.outline = "2px dashed var(--accent-green)";
+                textViewer.style.background = "rgba(16, 185, 129, 0.05)";
+                textViewer.style.borderRadius = "8px";
+            }
+        }
+
+        function cancelAutoExtract() {
+            if (activeTargetButton) {
+                activeTargetButton.innerHTML = "🎯 Auto-Extract Selection";
+                activeTargetButton.style.background = "";
+                activeTargetButton.style.color = "";
+                activeTargetButton.style.borderColor = "";
+                activeTargetButton.classList.remove("pulse-btn-anim");
+            }
+            activeTargetField = null;
+            activeTargetButton = null;
+            
+            const textViewer = document.getElementById("ws-raw-text");
+            if (textViewer) {
+                textViewer.style.outline = "";
+                textViewer.style.background = "";
+            }
+        }
+
+        document.addEventListener("mouseup", () => {
+            if (!activeTargetField) return;
+            
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+            
+            const textViewer = document.getElementById("ws-raw-text");
+            if (!textViewer || !textViewer.contains(selection.anchorNode)) {
+                cancelAutoExtract();
+                return;
+            }
+            
+            const fullText = textViewer.innerText;
+            let startIndex = -1;
+            try {
+                const range = selection.getRangeAt(0);
+                const preCaretRange = range.cloneRange();
+                preCaretRange.selectNodeContents(textViewer);
+                preCaretRange.setEnd(range.startContainer, range.startOffset);
+                startIndex = preCaretRange.toString().length;
+            } catch (e) {
+                startIndex = fullText.indexOf(selectedText);
+            }
+            
+            if (startIndex === -1) {
+                cancelAutoExtract();
+                return;
+            }
+            
+            const precedingText = fullText.substring(0, startIndex);
+            const lines = precedingText.split("\n");
+            const currentLinePreceding = lines[lines.length - 1];
+            
+            let anchor = "";
+            let direction = "relative_right";
+            let windowChars = 80;
+            
+            const sameLineLabelMatch = currentLinePreceding.match(/([\w\s-]+):?\s*$/);
+            if (sameLineLabelMatch && sameLineLabelMatch[1].trim().length > 2) {
+                anchor = sameLineLabelMatch[1].trim();
+                direction = "relative_right";
+            } else if (lines.length > 1) {
+                const prevLine = lines[lines.length - 2].trim();
+                if (prevLine.length > 2 && prevLine.length < 50) {
+                    anchor = prevLine;
+                    direction = "relative_below";
+                    windowChars = 150;
+                }
+            }
+            
+            if (!anchor) {
+                const commonKeywords = ["invoice", "inv", "date", "abn", "total", "amount", "due", "gst", "subtotal", "tax"];
+                for (const kw of commonKeywords) {
+                    const lastIdx = precedingText.toLowerCase().lastIndexOf(kw);
+                    if (lastIdx !== -1 && (startIndex - lastIdx) < 120) {
+                        const lineStart = precedingText.substring(0, lastIdx).lastIndexOf("\n");
+                        const lineEnd = precedingText.indexOf("\n", lastIdx);
+                        anchor = precedingText.substring(lineStart + 1, lineEnd !== -1 ? lineEnd : precedingText.length).replace(/[:]/g, "").trim();
+                        direction = precedingText.substring(lastIdx, startIndex).includes("\n") ? "relative_below" : "relative_right";
+                        windowChars = direction === "relative_below" ? 150 : 80;
+                        break;
+                    }
+                }
+            }
+            
+            let regex = "([A-Za-z0-9-]+)";
+            const cleanVal = selectedText.replace(/[\s,]/g, "");
+            
+            if (/^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/.test(selectedText) || /^\d{11}$/.test(cleanVal)) {
+                regex = "([\\d\\s]+)";
+            } else if (/^\$?[0-9,.]+\d{2}$/.test(selectedText) || /^[0-9,.]+\d{2}$/.test(cleanVal)) {
+                regex = "([0-9.,$]+)";
+            } else if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(selectedText) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(selectedText)) {
+                regex = "([0-9/-]+)";
+            } else if (/^\d+$/.test(cleanVal)) {
+                regex = "(\\d+)";
+            }
+            
+            const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
+            if (block) {
+                block.querySelector(".field-anchor").value = anchor || "Invoice";
+                block.querySelector(".field-direction").value = direction;
+                block.querySelector(".field-window").value = windowChars;
+                block.querySelector(".field-regex").value = regex;
+                
+                const originalBorder = block.style.borderColor;
+                const originalShadow = block.style.boxShadow;
+                block.style.borderColor = "var(--accent-green)";
+                block.style.boxShadow = "0 0 15px rgba(16, 185, 129, 0.4)";
+                setTimeout(() => {
+                    block.style.borderColor = originalBorder;
+                    block.style.boxShadow = originalShadow;
+                }, 1200);
+                
+                testRules();
+            }
+            
+            cancelAutoExtract();
+            selection.removeAllRanges();
+        });
+
+        // Standard escaping security utility
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return "";
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
