@@ -1588,7 +1588,7 @@
 
         // 4. Test extraction rules in real-time
         async function testRules() {
-            const rawText = document.getElementById("ws-raw-text").innerText;
+            const rawText = document.getElementById("ws-raw-text").textContent;
             const rules = compileFormRules();
 
             try {
@@ -2352,7 +2352,7 @@
             const textViewer = document.getElementById("ws-raw-text");
             if (!textViewer) return;
 
-            const fullText = textViewer.innerText;
+            const fullText = textViewer.textContent;
             let startIndex = fullText.indexOf(selectedText);
 
             const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
