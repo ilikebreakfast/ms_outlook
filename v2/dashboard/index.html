@@ -965,7 +965,10 @@
                 compiled.line_items = selectedLayoutData.extraction_rules.line_items;
             }
 
-            return compil        // --- Segmented Document Viewer Logic ---
+            return compiled;
+        }
+
+        // --- Segmented Document Viewer Logic ---
         let currentViewMode = 'visual';
 
         async function switchDocumentView(viewMode) {
