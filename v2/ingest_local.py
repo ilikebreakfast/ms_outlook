@@ -145,8 +145,44 @@ def ingest_local_file(file_path: str):
         return True
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python v2/ingest_local.py <path_to_invoice_file>")
-        sys.exit(1)
+    import sys
+    target = None
+    if len(sys.argv) >= 2:
+        target = sys.argv[1].strip().strip('"').strip("'")
+    
+    # If no target specified or target is empty, use the default v2 data/attachments directory
+    if not target or target == "":
+        target = str(Path(__file__).parent / "data" / "attachments")
+        print(f"No file specified. Scanning default directory: {target}")
+
+    path = Path(target)
+    if path.is_dir():
+        print(f"Scanning top-level directory for importable files: {path.resolve()}")
+        supported_exts = {".pdf", ".xlsx", ".xls", ".csv"}
+        importable_files = []
         
-    ingest_local_file(sys.argv[1])
+        # Ensure directory exists
+        path.mkdir(parents=True, exist_ok=True)
+        
+        for f in path.iterdir():
+            if f.is_file() and f.suffix.lower() in supported_exts:
+                importable_files.append(f)
+                
+        if not importable_files:
+            print(f"No importable documents (.pdf, .xlsx, .xls, .csv) found in: {path.resolve()}")
+            print("Please drop your test files directly into that folder and press Enter to scan again.")
+            sys.exit(0)
+            
+        print(f"Found {len(importable_files)} file(s) to ingest.")
+        success_count = 0
+        for f in importable_files:
+            print(f"\n--- Ingesting {f.name} ---")
+            if ingest_local_file(str(f)):
+                success_count += 1
+        print(f"\n[+] Batch ingestion completed: {success_count}/{len(importable_files)} successfully ingested.")
+    else:
+        if ingest_local_file(str(path)):
+            print("[+] Ingestion successful.")
+        else:
+            print("[x] Ingestion failed.")
+            sys.exit(1)

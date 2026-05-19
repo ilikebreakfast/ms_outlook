@@ -336,7 +336,7 @@ async def get_raw_document_file(layout_hash: str):
                 elif f.suffix.lower() in [".xlsx", ".xls"]:
                     media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 
-                return FileResponse(path=f, media_type=media_type, filename=f.name)
+                return FileResponse(path=f, media_type=media_type, content_disposition_type="inline")
                 
         # File is in history database but missing physically from data/attachments directory
         missing_file_html = f"""<!DOCTYPE html>

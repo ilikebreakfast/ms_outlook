@@ -1,26 +1,29 @@
-# Python caches
+# Python caches and compiler outputs (Global patterns)
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache/
+*.egg-info/
+dist/
+build/
 
-# Local databases and caches
-v2/data/
-v1/attachments/
-v1/raw_text/
-v1/parsed/
-v1/logs/
-v1/config/token_cache.bin
-v1/database/pipeline.db
+# Global database files
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
 
-# Environments and Credentials
+# Global environments, credentials, and token caches
 .env
+.env.*
+!.env.example
 .venv/
 env/
 venv/
+token_cache.bin
 
-# IDE files
+# IDE and System files
 .vscode/
 .idea/
 *.suo
@@ -29,3 +32,4 @@ venv/
 *.sln
 *.swp
 *.swo
+.DS_Store

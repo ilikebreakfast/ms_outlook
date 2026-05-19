@@ -12,16 +12,26 @@ venv/
 .venv/
 env/
 
-# Credentials and secrets
+# Credentials, secrets, and token caches
 .env
+.env.*
+!.env.example
 config/token_cache.bin
 *.key
 *.pem
 *.pfx
 *.p12
 
-# IDE
+# Application runtime data (Private customer info, attachments, logs, SQLite DBs)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# IDE and System files
 .idea/
 .vscode/
 *.swp
 *.swo
+.DS_Store
