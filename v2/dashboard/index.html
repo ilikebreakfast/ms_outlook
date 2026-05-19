@@ -2145,7 +2145,10 @@
                     activeDrawBox.style.height = "0px";
 
                     overlay.appendChild(activeDrawBox);
+                    
+                    window.getSelection().removeAllRanges();
                     e.preventDefault();
+                    e.stopPropagation();
                 });
 
                 overlay.addEventListener("mousemove", (e) => {
@@ -2195,7 +2198,10 @@
                     activeDrawBox.remove();
                     activeDrawBox = null;
 
+                    window.getSelection().removeAllRanges();
                     cancelAutoExtract();
+                    e.preventDefault();
+                    e.stopPropagation();
                 });
             });
         }
@@ -2479,6 +2485,7 @@
 
         document.addEventListener("mouseup", () => {
             if (!activeTargetField) return;
+            if (isDrawing) return; // Ignore drag selections when actively drawing visual coordinate boxes
 
             const selection = window.getSelection();
             const selectedText = selection.toString().trim();
