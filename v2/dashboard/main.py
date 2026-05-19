@@ -200,6 +200,97 @@ async def approve_layout(layout_hash: str, req: ApproveRequest):
 @app.get("/api/document/file/{layout_hash}")
 async def get_raw_document_file(layout_hash: str):
     """Retrieve the actual binary PDF, Excel, or CSV file for interactive embedding."""
+    
+    # 1. Fallback for our seeded demo layout (Acme Energy)
+    if layout_hash == "a1f998485a91d5":
+        mock_acme_html = """<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body { font-family: 'Segoe UI', -apple-system, sans-serif; background: #fff; color: #1e293b; padding: 40px; margin: 0; line-height: 1.5; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #6366f1; padding-bottom: 20px; }
+    .company { font-size: 24px; font-weight: bold; color: #1e1b4b; }
+    .details { font-size: 12px; color: #64748b; line-height: 1.5; }
+    .invoice-title { font-size: 28px; color: #6366f1; font-weight: 700; text-align: right; margin: 0; }
+    .info-table { width: 100%; margin-top: 40px; border-collapse: collapse; }
+    .info-table td { padding: 8px 0; font-size: 13px; }
+    .items-table { width: 100%; margin-top: 40px; border-collapse: collapse; }
+    .items-table th { background: #f8fafc; padding: 12px; font-size: 12px; font-weight: 600; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    .items-table td { padding: 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+    .totals { width: 300px; margin-left: auto; margin-top: 30px; }
+    .totals td { padding: 6px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <div class="company">Acme Energy Corporation</div>
+            <div class="details" style="margin-top: 6px;">
+                100 Powerhouse Road, Melbourne VIC 3000<br>
+                ABN: 11 222 333 444<br>
+                Email: billing@acmeenergy.com.au
+            </div>
+        </div>
+        <div>
+            <h1 class="invoice-title">TAX INVOICE</h1>
+            <div class="details" style="text-align: right; margin-top: 6px;">
+                <strong>Invoice Number:</strong> INV-8827931<br>
+                <strong>Date:</strong> 2026-05-19<br>
+                <strong>Due Date:</strong> 2026-06-02
+            </div>
+        </div>
+    </div>
+    
+    <div style="margin-top: 40px; font-size: 13px;">
+        <strong>Bill To:</strong><br>
+        Joel Wood<br>
+        123 Developer Lane, Sydney NSW 2000
+    </div>
+    
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th>Rate</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Commercial Electricity Usage - Peak Q2</td>
+                <td>1</td>
+                <td>$450.00</td>
+                <td>$450.00</td>
+            </tr>
+            <tr>
+                <td>Carbon Offset Green Surcharge</td>
+                <td>1</td>
+                <td>$45.00</td>
+                <td>$45.00</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <table class="totals">
+        <tr>
+            <td>Subtotal:</td>
+            <td style="text-align: right;">$495.00</td>
+        </tr>
+        <tr>
+            <td>GST (10% Included):</td>
+            <td style="text-align: right;">$45.00</td>
+        </tr>
+        <tr style="font-weight: bold; font-size: 16px; border-top: 2px solid #1e293b;">
+            <td style="padding-top: 10px;">Total Due:</td>
+            <td style="padding-top: 10px; text-align: right; color: #6366f1;">$495.00</td>
+        </tr>
+    </table>
+</body>
+</html>
+"""
+        return HTMLResponse(content=mock_acme_html, media_type="text/html")
+
     conn = db.get_db_connection()
     try:
         hist_row = conn.execute(
@@ -209,13 +300,28 @@ async def get_raw_document_file(layout_hash: str):
         
         filename = hist_row["filename"] if hist_row else None
         
-        # If no filename in history, check if layout_hash is our seeded demo template
-        if not filename and layout_hash == "a1f998485a91d5":
-            # For demo, if there is a real file or not, we can just return a placeholder or 404
-            raise HTTPException(status_code=404, detail="No source file exists for seeded dummy template.")
-            
         if not filename:
-            raise HTTPException(status_code=404, detail="No source document found for this layout signature.")
+            missing_html = """<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body { font-family: sans-serif; background: #0f172a; color: #94a3b8; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+    .card { background: #1e293b; padding: 32px; border-radius: 12px; border: 1px solid #334155; max-width: 420px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+    h2 { color: #f43f5e; margin-top: 0; }
+    p { font-size: 14px; line-height: 1.5; }
+    .btn { background: #6366f1; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 16px; }
+</style>
+</head>
+<body>
+    <div class="card">
+        <h2>Physical File Not Found</h2>
+        <p>This layout doesn't have a binary attachment registered on local disk.</p>
+        <p style="color:#38bdf8;">💡 You can toggle the <strong>"Plain Text"</strong> tab above to view and auto-extract the text representation of this document!</p>
+    </div>
+</body>
+</html>
+"""
+            return HTMLResponse(content=missing_html, media_type="text/html")
             
         attachments_dir = Path(__file__).parent.parent / "data" / "attachments"
         
@@ -232,7 +338,27 @@ async def get_raw_document_file(layout_hash: str):
                 
                 return FileResponse(path=f, media_type=media_type, filename=f.name)
                 
-        raise HTTPException(status_code=404, detail=f"Physical file '{filename}' was cleaned or deleted from disk.")
+        # File is in history database but missing physically from data/attachments directory
+        missing_file_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body {{ font-family: sans-serif; background: #0f172a; color: #94a3b8; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }}
+    .card {{ background: #1e293b; padding: 32px; border-radius: 12px; border: 1px solid #334155; max-width: 420px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }}
+    h2 {{ color: #e11d48; margin-top: 0; }}
+    p {{ font-size: 14px; line-height: 1.5; }}
+</style>
+</head>
+<body>
+    <div class="card">
+        <h2>Document Cleaned or Missing</h2>
+        <p>The original binary file <strong>{filename}</strong> is not present in local attachments storage.</p>
+        <p style="color:#0ea5e9;">💡 Toggle the <strong>"Plain Text"</strong> view above to view and auto-extract the cached text representation!</p>
+    </div>
+</body>
+</html>
+"""
+        return HTMLResponse(content=missing_file_html, media_type="text/html")
     finally:
         conn.close()
 
