@@ -369,7 +369,7 @@ class DeterministicParser:
                                         
                         # 1b. Fallback to whitespace splits
                         if not rows:
-                            text_lines = cropped.extract_text()
+                            text_lines = cropped.extract_text(layout=True)
                             if text_lines:
                                 for line in text_lines.splitlines():
                                     if line.strip():

@@ -1426,11 +1426,17 @@
             // Build visual coordinate preview indicator pill if coordinate rule exists
             let coordinatePillHtml = "";
             if (isCoordinates && rule.box) {
+                const previewVal = rule.extracted_value || "";
                 coordinatePillHtml = `
-                    <div class="coordinate-pill">
+                    <div class="coordinate-pill" style="margin-bottom: 6px;">
                         Page ${rule.page || 1} Box: ${JSON.stringify(rule.box.map(b => parseFloat(b.toFixed(3))))}
                         <button class="pixel-btn-secondary" onclick="clearFieldCoordinates('${fieldKey}')" style="padding: 2px 4px; font-size: 7px; margin-left: 8px; border-radius: 3px; border-color: rgba(255,255,255,0.06); text-transform:none;">Clear</button>
                     </div>
+                    ${previewVal ? `
+                    <div style="margin-top: 4px; margin-bottom: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--neon-cyan); background: rgba(0,0,0,0.25); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(6,182,212,0.2); display: inline-block; width: fit-content; max-width: 100%; word-break: break-all;">
+                        🔍 Swept Crop: <strong style="color: #fff;">"${escapeHtml(previewVal)}"</strong>
+                    </div>
+                    ` : ''}
                 `;
             }
 
@@ -2281,7 +2287,8 @@
                     strategy: "coordinate",
                     page: pageNum,
                     box: boxPct,
-                    regex_pattern: regex
+                    regex_pattern: regex,
+                    extracted_value: extractedValue
                 };
             }
 
