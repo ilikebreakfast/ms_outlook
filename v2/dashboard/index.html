@@ -4,26 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>THE MEAT EXTRACTOR — Operational Console</title>
-    <!-- Retro Google Fonts -->
+    <!-- Sleek Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --bg-dark: #140d0d; /* Cast iron skillet charcoal */
-            --panel-bg: #2d1b1b; /* Raw meat deep maroon */
-            --border-color: #1a0a0a; /* Burnt crust black */
-            --primary: #ff7da0; /* Juicy pork pink */
-            --primary-hover: #ff5480;
-            --accent-red: #ef4444; /* Premium ribeye red */
-            --accent-green: #22c55e; /* Herb garnish green */
-            --accent-orange: #f59e0b; /* Golden fat yellow */
-            --text-main: #fbf6f0; /* Garlic white */
-            --text-muted: #a88a8a; /* Smoked meat ash */
-            --font-pixel: 'Press Start 2P', monospace;
-            --font-retro: 'VT323', monospace;
-            --font-mono: 'Courier Prime', monospace;
+            /* Sleek Glassmorphism Color Palette */
+            --bg-dark: #070505;           /* Obsidian deep black */
+            --bg-gradient: linear-gradient(135deg, #070505 0%, #160d0d 100%);
+            --panel-bg: rgba(26, 15, 15, 0.65); /* Translucent cast iron maroon backing */
+            --panel-border: rgba(255, 255, 255, 0.08); /* Frosted silver border */
+            
+            /* Neon Accent Outlines */
+            --primary-pink: #ff7da0;      /* Juicy neon pork pink */
+            --neon-green: #10b981;        /* Crisp garnish emerald green */
+            --neon-cyan: #06b6d4;         /* Electric cyan */
+            --neon-orange: #f59e0b;       /* Golden caramel yellow */
+            --accent-red: #f43f5e;        /* Ribeye rose red */
+            
+            /* Text Elements */
+            --text-main: #fbf6f0;         /* Garlic white */
+            --text-muted: #a88a8a;        /* Smoked meat ash */
+            
+            /* Typography */
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
         }
 
         * {
@@ -33,65 +40,86 @@
         }
 
         body {
+            background: var(--bg-gradient);
             background-color: var(--bg-dark);
             color: var(--text-main);
-            font-family: var(--font-mono);
+            font-family: var(--font-main);
             min-height: 100vh;
             overflow-x: hidden;
-            background-size: 32px 32px;
-            background-image: 
-                linear-gradient(to right, rgba(76, 43, 43, 0.15) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(76, 43, 43, 0.15) 1px, transparent 1px);
             position: relative;
+            background-attachment: fixed;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* CRT Scanline Overlay */
-        body::before {
-            content: " ";
-            display: block;
+        /* Ambient Glow Blobs background */
+        body::after {
+            content: "";
             position: fixed;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 13, 13, 0) 50%, rgba(0, 0, 0, 0.18) 50%);
-            background-size: 100% 4px;
-            z-index: 9999;
+            top: 15%;
+            left: 20%;
+            width: 450px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(255, 125, 160, 0.05) 0%, transparent 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        body::before {
+            content: "";
+            position: fixed;
+            bottom: 10%;
+            right: 15%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.04) 0%, transparent 70%);
+            z-index: -1;
             pointer-events: none;
         }
 
-        /* Pixel art containers */
-        .pixel-panel {
+        /* Glassmorphic Panels */
+        .glass-panel {
             background: var(--panel-bg);
-            border: 4px solid #1c0e0e;
-            box-shadow: 6px 6px 0px #1c0e0e;
-            image-rendering: pixelated;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s ease;
         }
 
-        .pixel-header-tag {
-            font-family: var(--font-pixel);
+        .panel-header-tag {
+            font-family: var(--font-main);
             font-size: 10px;
-            color: #1c0e0e;
-            background: var(--primary);
-            padding: 4px 8px;
-            border-bottom: 4px solid #1c0e0e;
-            border-right: 4px solid #1c0e0e;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent-red), var(--primary-pink));
+            padding: 5px 12px;
+            border-bottom-right-radius: 8px;
             position: absolute;
             top: 0;
             left: 0;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
             z-index: 2;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
         /* Navigation Header */
         header {
-            padding: 20px 40px;
-            background: #231414;
-            border-bottom: 6px solid #1c0e0e;
+            padding: 16px 40px;
+            background: rgba(22, 12, 12, 0.7);
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: sticky;
             top: 0;
             z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
         .logo-group {
@@ -101,35 +129,39 @@
         }
 
         h1 {
-            font-family: var(--font-pixel);
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
-            color: var(--accent-red);
-            text-shadow: 3px 3px 0 #1c0e0e;
-            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff 0%, #ffcbd7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
         }
 
         .system-status {
-            font-family: var(--font-pixel);
-            font-size: 10px;
+            font-size: 11px;
+            font-weight: 600;
             color: var(--text-muted);
             display: flex;
             align-items: center;
             gap: 10px;
+            background: rgba(255,255,255,0.03);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
         }
 
         .status-dot {
-            width: 12px;
-            height: 12px;
-            background-color: var(--accent-green);
-            border: 2px solid #1c0e0e;
-            box-shadow: 0 0 8px var(--accent-green);
-            animation: blink 1.2s infinite;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+            animation: blink 2s infinite;
         }
 
         @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.9); }
         }
 
         /* Stats Grid */
@@ -141,48 +173,51 @@
         }
 
         .stat-card {
-            padding: 20px 20px 14px 20px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            border-radius: 0;
-            background: #2d1818;
-            transition: transform 0.2s;
+            gap: 8px;
+            background: rgba(30, 20, 20, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .stat-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            border-color: rgba(255, 125, 160, 0.15);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+            background: rgba(30, 20, 20, 0.45);
         }
 
         .stat-label-group {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .stat-label {
-            font-family: var(--font-pixel);
-            font-size: 9px;
+            font-size: 11px;
+            font-weight: 600;
             color: var(--text-muted);
             text-transform: uppercase;
-            line-height: 1.4;
+            letter-spacing: 0.5px;
         }
 
         .stat-value {
-            font-family: var(--font-retro);
-            font-size: 42px;
+            font-family: var(--font-mono);
+            font-size: 32px;
             font-weight: 700;
             color: #fff;
-            text-shadow: 2px 2px 0 #1c0e0e;
-            line-height: 1;
+            line-height: 1.1;
         }
 
         .stat-value.highlight-green {
-            color: var(--accent-green);
+            color: var(--neon-green);
         }
 
         .stat-value.highlight-orange {
-            color: var(--accent-orange);
+            color: var(--neon-orange);
         }
 
         /* Main Workspace Layout */
@@ -192,7 +227,7 @@
             gap: 24px;
             padding: 0 40px 40px 40px;
             height: calc(100vh - 220px);
-            min-height: 650px;
+            min-height: 700px;
         }
 
         /* Queue List Column */
@@ -208,50 +243,45 @@
         .queue-list {
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
             overflow-y: auto;
             margin-top: 10px;
         }
 
         .queue-item {
             padding: 14px;
-            border: 3px solid #1c0e0e;
-            background: #3a2222;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
             cursor: pointer;
-            box-shadow: 3px 3px 0 #1c0e0e;
-            transition: all 0.1s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .queue-item:hover {
-            background: #472b2b;
-            transform: translate(-1px, -1px);
-            box-shadow: 4px 4px 0 #1c0e0e;
+            background: rgba(255, 125, 160, 0.05);
+            border-color: rgba(255, 125, 160, 0.15);
+            transform: translateX(2px);
         }
 
         .queue-item.active {
-            background: #572931; /* Glowing pork active tab */
-            border-color: var(--primary);
-            box-shadow: inset 0 0 8px rgba(255, 125, 160, 0.2);
-            transform: translate(2px, 2px);
-            box-shadow: 1px 1px 0 #1c0e0e;
+            background: rgba(255, 125, 160, 0.12);
+            border-color: var(--primary-pink);
+            box-shadow: 0 0 16px rgba(255, 125, 160, 0.1);
         }
 
         .queue-supplier {
-            font-family: var(--font-pixel);
-            font-size: 10px;
+            font-size: 13px;
             font-weight: 600;
             color: #fff;
-            margin-bottom: 8px;
-            text-shadow: 1px 1px 0 #000;
+            margin-bottom: 6px;
         }
 
         .queue-meta {
             display: flex;
             justify-content: space-between;
-            font-size: 12px;
-            font-family: var(--font-retro);
+            font-size: 11px;
+            font-family: var(--font-mono);
             color: var(--text-muted);
-            letter-spacing: 0.5px;
         }
 
         /* Workspace Core Panel */
@@ -265,11 +295,11 @@
 
         .workspace-header {
             padding: 16px 24px;
-            border-bottom: 4px solid #1c0e0e;
+            border-bottom: 1px solid var(--panel-border);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #331e1e;
+            background: rgba(50, 30, 30, 0.25);
         }
 
         .workspace-title-group {
@@ -282,16 +312,17 @@
             font-family: var(--font-mono);
             font-size: 11px;
             color: var(--text-muted);
-            background: #1c0e0e;
+            background: rgba(0,0,0,0.3);
             padding: 4px 8px;
-            border: 2px solid #4c3232;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 4px;
             width: fit-content;
         }
 
-        /* Split panes inside Workspace */
+        /* Asymmetric Split Layout (62% Viewer / 38% Sidebar Form) */
         .workspace-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 62% 38%;
             flex-grow: 1;
             overflow: hidden;
         }
@@ -304,18 +335,17 @@
         }
 
         .pane-left {
-            border-right: 4px solid #1c0e0e;
+            border-right: 1px solid var(--panel-border);
         }
 
         .pane-header {
             padding: 10px 24px;
-            background: #211313;
-            font-family: var(--font-pixel);
-            font-size: 9px;
-            font-weight: 600;
+            background: rgba(30, 18, 18, 0.4);
+            font-size: 11px;
+            font-weight: 700;
             letter-spacing: 0.5px;
-            color: var(--primary);
-            border-bottom: 4px solid #1c0e0e;
+            color: var(--primary-pink);
+            border-bottom: 1px solid var(--panel-border);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -329,26 +359,26 @@
             font-size: 13px;
             line-height: 1.6;
             white-space: pre-wrap;
-            background: #1a0f0f;
+            background: rgba(10, 6, 6, 0.4);
             flex-grow: 1;
             color: #f7e8d8;
         }
 
         /* Interactive rules config form pane */
         .rules-form-container {
-            padding: 24px;
+            padding: 20px;
             overflow-y: auto;
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            background: #231515;
+            gap: 16px;
+            background: rgba(35, 21, 21, 0.15);
         }
 
         .form-row-group {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 10px;
+            margin-top: 8px;
         }
 
         .form-field {
@@ -360,152 +390,155 @@
 
         .form-field.small {
             flex-grow: 0;
-            width: 110px;
+            width: 100px;
         }
 
         label {
-            font-family: var(--font-pixel);
-            font-size: 8px;
+            font-size: 10px;
+            font-weight: 600;
             color: var(--text-muted);
+            text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         input, select {
-            background: #1c0e0e;
-            border: 3px solid #4c3232;
-            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 8px 12px;
             color: #fff;
             font-family: var(--font-mono);
             font-size: 13px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: all 0.2s ease;
         }
 
         input:focus, select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 8px rgba(255, 125, 160, 0.4);
+            border-color: var(--primary-pink);
+            box-shadow: 0 0 10px rgba(255, 125, 160, 0.2);
+            background: rgba(0,0,0,0.5);
         }
 
-        /* Field configuration block */
+        /* Field configuration block card */
         .field-block {
-            border: 3px solid #1c0e0e;
-            background: #2d1b1b;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.01);
+            border-radius: 10px;
             padding: 16px;
-            box-shadow: 3px 3px 0 #1c0e0e;
+            transition: all 0.3s ease;
         }
 
         .field-block:hover {
-            border-color: var(--primary);
+            border-color: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.02);
         }
+        
+        /* Coordinate hover glowing pulse */
+        .field-block.pulse-glow-pink { border-color: var(--primary-pink) !important; box-shadow: 0 0 15px rgba(255, 125, 160, 0.25); }
+        .field-block.pulse-glow-green { border-color: var(--neon-green) !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.25); }
+        .field-block.pulse-glow-cyan { border-color: var(--neon-cyan) !important; box-shadow: 0 0 15px rgba(6, 182, 212, 0.25); }
+        .field-block.pulse-glow-orange { border-color: var(--neon-orange) !important; box-shadow: 0 0 15px rgba(245, 158, 11, 0.25); }
+        .field-block.pulse-glow-red { border-color: var(--accent-red) !important; box-shadow: 0 0 15px rgba(244, 63, 94, 0.25); }
 
         .field-title-badge {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
         .badge {
-            font-family: var(--font-pixel);
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 600;
             color: var(--text-main);
-            background: var(--accent-red);
-            padding: 6px 12px;
-            border: 3px solid #1c0e0e;
-            box-shadow: 2px 2px 0 #1c0e0e;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
         }
 
-        /* Action Buttons footer */
+        /* Action Buttons */
         .workspace-footer {
             padding: 16px 24px;
-            border-top: 4px solid #1c0e0e;
+            border-top: 1px solid var(--panel-border);
             display: flex;
             justify-content: flex-end;
             gap: 16px;
-            background: #211313;
+            background: rgba(33, 19, 19, 0.35);
         }
 
         button {
-            padding: 12px 20px;
-            font-family: var(--font-pixel);
-            font-size: 9px;
+            padding: 10px 18px;
+            font-family: var(--font-main);
+            font-weight: 600;
+            font-size: 11px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.1s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             outline: none;
             text-transform: uppercase;
-            image-rendering: pixelated;
+            letter-spacing: 0.5px;
         }
 
         .pixel-btn-secondary {
-            background: #4c3232;
-            border: 3px solid #1c0e0e;
-            box-shadow: 4px 4px 0 #1c0e0e;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             color: #fff;
         }
 
         .pixel-btn-secondary:hover {
-            background: #5d3f3f;
-            transform: translate(-1px, -1px);
-            box-shadow: 5px 5px 0 #1c0e0e;
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
         }
 
         .pixel-btn-secondary:active {
-            transform: translate(3px, 3px);
-            box-shadow: 1px 1px 0 #1c0e0e;
+            transform: translateY(1px);
         }
 
         .pixel-btn-primary {
-            background: var(--primary);
-            border: 3px solid #1c0e0e;
-            box-shadow: 4px 4px 0 #1c0e0e;
-            color: #1c0e0e;
+            background: linear-gradient(135deg, var(--accent-red), var(--primary-pink));
+            border: none;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(255, 125, 160, 0.2);
         }
 
         .pixel-btn-primary:hover {
-            background: var(--primary-hover);
-            transform: translate(-1px, -1px);
-            box-shadow: 5px 5px 0 #1c0e0e;
-        }
-
-        .pixel-btn-primary:active {
-            transform: translate(3px, 3px);
-            box-shadow: 1px 1px 0 #1c0e0e;
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(255, 125, 160, 0.3);
         }
 
         .pixel-btn-success {
-            background: var(--accent-green);
-            border: 3px solid #1c0e0e;
-            box-shadow: 4px 4px 0 #1c0e0e;
-            color: #1c0e0e;
+            background: linear-gradient(135deg, #059669, var(--neon-green));
+            border: none;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
         }
 
         .pixel-btn-success:hover {
-            background: #4ade80;
-            transform: translate(-1px, -1px);
-            box-shadow: 5px 5px 0 #1c0e0e;
-        }
-
-        .pixel-btn-success:active {
-            transform: translate(3px, 3px);
-            box-shadow: 1px 1px 0 #1c0e0e;
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
         }
 
         /* Trial execution preview overlays */
         .preview-output-section {
-            border: 3px dashed var(--accent-green);
-            background: #15291c;
+            border: 1px solid var(--neon-green);
+            background: rgba(16, 185, 129, 0.08);
+            border-radius: 8px;
             padding: 16px;
             margin-top: 10px;
         }
 
         .preview-title {
-            font-family: var(--font-pixel);
-            font-size: 9px;
-            font-weight: 600;
-            color: var(--accent-green);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--neon-green);
             text-transform: uppercase;
             margin-bottom: 12px;
+            letter-spacing: 0.5px;
         }
 
         .preview-grid {
@@ -515,20 +548,22 @@
         }
 
         .preview-card {
-            background: #1c0e0e;
-            border: 2px solid #1c2e21;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 6px;
             padding: 10px 14px;
         }
 
         .preview-card-lbl {
-            font-family: var(--font-pixel);
-            font-size: 8px;
+            font-size: 9px;
+            font-weight: 600;
             color: var(--text-muted);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
         }
 
         .preview-card-val {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: #fff;
             word-break: break-all;
@@ -545,69 +580,77 @@
             text-align: center;
             padding: 40px;
             gap: 16px;
-            background: #231515;
+            background: rgba(25, 15, 15, 0.15);
         }
 
         .placeholder-icon {
-            font-size: 64px;
-            filter: drop-shadow(4px 4px 0 #000);
-            animation: float 3s ease-in-out infinite;
+            font-size: 54px;
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));
+            animation: float 4s ease-in-out infinite;
         }
 
         @keyframes float {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+            50% { transform: translateY(-8px); }
         }
 
         @keyframes pulse-border {
-            0% { border-color: var(--accent-green); }
-            50% { border-color: #4ade80; }
-            100% { border-color: var(--accent-green); }
+            0% { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 0 4px rgba(16, 185, 129, 0.2); }
+            50% { border-color: var(--neon-green); box-shadow: 0 0 14px rgba(16, 185, 129, 0.45); }
+            100% { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 0 4px rgba(16, 185, 129, 0.2); }
         }
         .pulse-btn-anim {
-            animation: pulse-border 1s infinite !important;
+            animation: pulse-border 1.5s infinite !important;
         }
 
-        /* Segmented Toggle Control */
+        /* Segmented Toggle Control Tabs */
         .view-toggle-bar {
             display: flex;
-            gap: 6px;
-            background: #1c0e0e;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.4);
             padding: 4px;
-            border: 3px solid #1c0e0e;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
             margin: 8px 16px;
         }
+        
         .view-btn {
             flex: 1;
             padding: 6px 12px;
-            font-family: var(--font-pixel);
-            font-size: 8px;
+            font-size: 10px;
+            font-weight: 600;
             color: var(--text-muted);
             background: none;
             border: none;
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.1s ease;
+            transition: all 0.2s ease;
             text-align: center;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
+        
         .view-btn:hover {
             color: #fff;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.03);
         }
+        
         .view-btn.active {
-            color: #1c0e0e;
-            background: var(--primary) !important;
-            border: 2px solid #1c0e0e !important;
-            box-shadow: 2px 2px 0 #1c0e0e;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         /* Spreadsheet interactive grid table */
         .spreadsheet-table-container {
             flex-grow: 1;
             overflow: auto;
-            padding: 16px;
-            background: #1a0f0f;
+            padding: 20px;
+            background: rgba(10, 6, 6, 0.4);
+            border-bottom-left-radius: 12px;
         }
+        
         .spreadsheet-table {
             width: 100%;
             border-collapse: collapse;
@@ -615,50 +658,232 @@
             font-size: 12px;
             color: var(--text-main);
         }
+        
         .spreadsheet-table th {
-            background: #2d1818;
-            color: var(--primary);
+            background: rgba(45, 24, 24, 0.85);
+            color: var(--primary-pink);
             text-transform: uppercase;
-            font-family: var(--font-pixel);
-            font-size: 8px;
+            font-size: 9px;
             font-weight: 700;
-            padding: 10px 14px;
+            letter-spacing: 0.5px;
+            padding: 12px 14px;
             text-align: left;
-            border: 3px solid #1c0e0e;
+            border: 1px solid var(--panel-border);
             position: sticky;
             top: 0;
             z-index: 10;
         }
+        
         .spreadsheet-table td {
-            padding: 10px 14px;
-            border: 2px solid #1c0e0e;
+            padding: 12px 14px;
+            border: 1px solid rgba(255,255,255,0.03);
             cursor: pointer;
-            transition: all 0.1s ease;
+            transition: all 0.15s ease;
             white-space: nowrap;
             max-width: 250px;
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        
         .spreadsheet-table tr:nth-child(even) {
-            background: rgba(255, 255, 255, 0.02);
+            background: rgba(255, 255, 255, 0.01);
         }
+        
         .spreadsheet-table td:hover {
-            background: var(--primary) !important;
-            color: #1c0e0e !important;
-            font-weight: bold;
-        }
-        .spreadsheet-table td.selected-cell {
-            background: var(--accent-green) !important;
-            color: #1c0e0e !important;
+            background: var(--primary-pink) !important;
+            color: #070505 !important;
             font-weight: bold;
         }
         
-        /* Iframe container */
+        .spreadsheet-table td.selected-cell {
+            background: var(--neon-green) !important;
+            color: #070505 !important;
+            font-weight: bold;
+        }
+        
+        /* PDF.js visual custom page wrappers */
         .pdf-viewer-container {
             flex-grow: 1;
-            overflow: hidden;
+            overflow-y: auto;
             position: relative;
+            background: rgba(10, 6, 6, 0.4);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            border-bottom-left-radius: 12px;
+        }
+
+        .pdf-page-wrapper {
+            position: relative;
+            margin-bottom: 24px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
             background: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .pdf-page-wrapper canvas {
+            display: block;
+        }
+
+        .textLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            opacity: 0.25;
+            line-height: 1.0;
+            z-index: 10;
+        }
+
+        .textLayer span {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+        }
+
+        .textLayer ::selection {
+            background: rgba(255, 125, 160, 0.4) !important;
+            color: transparent !important;
+        }
+
+        /* absolute Cover Canvas Overlay for Drag Bounding Boxes */
+        .pdf-draw-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 20;
+            overflow: hidden;
+            pointer-events: auto;
+        }
+        
+        .pdf-draw-overlay.drawing-active {
+            cursor: crosshair !important;
+        }
+
+        /* Glowing Dashed rectangle for visual drawing drag */
+        .active-draw-box {
+            position: absolute;
+            border: 2px dashed var(--box-color, var(--primary-pink));
+            background: var(--box-bg, rgba(255, 125, 160, 0.12));
+            box-shadow: 0 0 12px var(--box-color, var(--primary-pink));
+            pointer-events: none;
+            z-index: 30;
+        }
+
+        /* Persistent coordinate highlighting overlays */
+        .coordinate-highlight-box {
+            position: absolute;
+            border: 2px solid var(--box-color);
+            background: var(--box-bg);
+            box-shadow: 0 0 8px var(--box-color);
+            border-radius: 3px;
+            cursor: pointer;
+            z-index: 25;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .coordinate-highlight-box:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 18px var(--box-color);
+            z-index: 28;
+        }
+
+        .coordinate-highlight-box.pulse-highlight {
+            animation: coordinate-pulse 1.2s infinite alternate ease-in-out;
+        }
+
+        @keyframes coordinate-pulse {
+            0% { box-shadow: 0 0 6px var(--box-color); border-width: 2px; }
+            100% { box-shadow: 0 0 20px var(--box-color); border-width: 3.5px; }
+        }
+
+        /* Coordinate rules info display bubble */
+        .coordinate-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            width: fit-content;
+        }
+
+        /* Tab content management classes */
+        .tab-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Column Selector Line Items Grid */
+        .mapping-column-row {
+            display: grid;
+            grid-template-columns: 1fr 120px;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .mapping-column-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        /* Bounding Box Highlights Legend */
+        .visual-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-left: 16px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Modern Custom Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.18);
         }
     </style>
 </head>
@@ -667,72 +892,54 @@
     <!-- Header Section -->
     <header>
         <div class="logo-group">
-            <!-- Retro Pixel Art T-Bone Steak SVG Logo -->
-            <svg viewBox="0 0 16 16" width="48" height="48" style="image-rendering: pixelated; fill: var(--accent-red); filter: drop-shadow(3px 3px 0 #1c0e0e);">
-                <path d="M4,1 h8 v2 h2 v2 h1 v6 h-1 v2 h-2 v1 h-2 v1 h-4 v-1 h-1 v-1 h-1 v-8 h2 Z" fill="#7f1d1d" />
-                <path d="M5,2 h6 v1 h2 v2 h1 v4 h-1 v2 h-1 v1 h-1 v1 h-2 v-1 h-1 v-1 h-1 v-6 h1 Z" fill="#ef4444" />
-                <!-- Marbling -->
-                <path d="M6,4 h1 v1 h-1 Z M10,3 h1 v1 h-1 Z M6,8 h1 v2 h-1 Z" fill="#fff" />
-                <!-- T-Bone -->
-                <path d="M8,2 v10 M5,7 h6" stroke="#fff" stroke-width="1.5" stroke-linecap="square" />
+            <svg viewBox="0 0 16 16" width="36" height="36" style="fill: var(--accent-red); filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.4));">
+                <path d="M4,1 h8 v2 h2 v2 h1 v6 h-1 v2 h-2 v1 h-2 v1 h-4 v-1 h-1 v-1 h-1 v-8 h2 Z" fill="rgba(127, 29, 29, 0.5)" />
+                <path d="M5,2 h6 v1 h2 v2 h1 v4 h-1 v2 h-1 v1 h-1 v1 h-2 v-1 h-1 v-1 h-1 v-6 h1 Z" fill="var(--accent-red)" />
+                <path d="M8,2 v10 M5,7 h6" stroke="#fff" stroke-width="1.2" stroke-linecap="square" />
             </svg>
             <div>
                 <h1>THE MEAT EXTRACTOR</h1>
-                <p style="font-family: var(--font-pixel); font-size: 8px; color: var(--text-muted); margin-top: 4px;">OPERATIONAL INVOICE BUTCHER PIPELINE v2</p>
+                <p style="font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">Glassmorphism Command Center v2</p>
             </div>
         </div>
+        
+        <div class="visual-legend" id="header-legend" style="display: none;">
+            <div class="legend-item"><span class="legend-dot" style="background-color: var(--primary-pink); box-shadow: 0 0 6px var(--primary-pink);"></span>Inv Num</div>
+            <div class="legend-item"><span class="legend-dot" style="background-color: var(--neon-green); box-shadow: 0 0 6px var(--neon-green);"></span>Date</div>
+            <div class="legend-item"><span class="legend-dot" style="background-color: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan);"></span>ABN</div>
+            <div class="legend-item"><span class="legend-dot" style="background-color: var(--neon-orange); box-shadow: 0 0 6px var(--neon-orange);"></span>Total</div>
+            <div class="legend-item"><span class="legend-dot" style="background-color: var(--accent-red); box-shadow: 0 0 6px var(--accent-red);"></span>Table</div>
+        </div>
+
         <div class="system-status">
-            <span>CONSOLE MODE: ACTIVE</span>
+            <span>CONSOLE MODE: COGNITIVE EXTRACTION</span>
             <div class="status-dot"></div>
         </div>
     </header>
 
     <!-- Operational Metrics Stats Bar -->
     <section class="stats-grid">
-        <div class="stat-card pixel-panel">
+        <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <!-- Sausage Link SVG -->
-                <svg viewBox="0 0 16 16" width="24" height="24" style="image-rendering: pixelated; fill: var(--primary);">
-                    <path d="M2,5 h12 v6 h-12 Z" fill="#9f1239" />
-                    <path d="M3,6 h10 v4 h-10 Z" fill="#ff7da0" />
-                    <path d="M1,7 h1 v2 h-1 Z M14,7 h1 v2 h-1 Z" fill="#4c0519" />
-                </svg>
-                <span class="stat-label">Total Meat Ordered</span>
+                <span class="stat-label">Total Meats Processed</span>
             </div>
             <span class="stat-value" id="stat-total">0</span>
         </div>
-        <div class="stat-card pixel-panel">
+        <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <!-- T-Bone Steak Mini SVG -->
-                <svg viewBox="0 0 16 16" width="24" height="24" style="image-rendering: pixelated; fill: var(--accent-red);">
-                    <path d="M4,1 h8 v2 h2 v2 h1 v6 h-1 v2 h-2 v1 h-2 v1 h-4 v-1 h-1 v-1 h-1 v-8 h2 Z" fill="#7f1d1d" />
-                    <path d="M5,2 h6 v1 h2 v2 h1 v4 h-1 v2 h-1 v1 h-1 v-1 h-1 v-6 h1 Z" fill="#ef4444" />
-                    <path d="M8,2 v10 M5,7 h6" stroke="#fff" stroke-width="1.5" stroke-linecap="square" />
-                </svg>
-                <span class="stat-label">Beef Confidence Grade</span>
+                <span class="stat-label">Extraction Yield Quality</span>
             </div>
             <span class="stat-value highlight-green" id="stat-success">0.0%</span>
         </div>
-        <div class="stat-card pixel-panel">
+        <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <!-- Butcher Knife SVG -->
-                <svg viewBox="0 0 16 16" width="24" height="24" style="image-rendering: pixelated;">
-                    <path d="M3,3 h8 v6 h-2 v2 h-6 Z" fill="#cbd5e1" />
-                    <path d="M11,3 h1 v4 h-1 Z" fill="#94a3b8" />
-                    <path d="M11,9 h4 v2 h-4 Z" fill="#78350f" />
-                </svg>
-                <span class="stat-label">Unsliced Invoices</span>
+                <span class="stat-label">Ledger Queue Ledger</span>
             </div>
             <span class="stat-value highlight-orange" id="stat-pending">0</span>
         </div>
-        <div class="stat-card pixel-panel">
+        <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <!-- Chef Hat SVG -->
-                <svg viewBox="0 0 16 16" width="24" height="24" style="image-rendering: pixelated;">
-                    <path d="M4,6 c0,-3 8,-3 8,0 c3,0 3,4 0,4 h-8 c-3,0 -3,-4 0,-4 Z" fill="#ffffff" />
-                    <path d="M5,10 h6 v3 h-6 Z" fill="#cbd5e1" />
-                </svg>
-                <span class="stat-label">Active Butcher Recipes</span>
+                <span class="stat-label">Active Carving Recipes</span>
             </div>
             <span class="stat-value" id="stat-active">0</span>
         </div>
@@ -742,20 +949,20 @@
     <main class="main-container">
         
         <!-- Left Sidebar: Pending reviews -->
-        <aside class="pixel-panel queue-sidebar">
-            <div class="pixel-header-tag">Player Select</div>
+        <aside class="glass-panel queue-sidebar">
+            <div class="panel-header-tag">Ledger List</div>
             <div class="queue-list" id="queue-list-container">
-                <p style="font-family: var(--font-pixel); font-size: 8px; color: var(--text-muted); text-align: center; margin-top: 20px;">LOADING SLICES...</p>
+                <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 20px;">LOADING LEDGERS...</p>
             </div>
         </aside>
 
         <!-- Right Main: Workspace configuration layout -->
-        <section class="pixel-panel workspace-panel" id="workspace-panel-container">
-            <div class="pixel-header-tag">Active Slice</div>
+        <section class="glass-panel workspace-panel" id="workspace-panel-container">
+            <div class="panel-header-tag">Workspace Canvas</div>
             <div class="placeholder-workspace">
                 <div class="placeholder-icon">🥩</div>
-                <h3 style="font-family: var(--font-pixel); font-size: 12px; color: #fff; margin-top: 10px;">Select a slice of meat</h3>
-                <p style="font-size: 13px; max-width: 320px; line-height: 1.5;">Choose a raw invoice layout from the left ledger list to define its carving rules.</p>
+                <h3 style="font-size: 15px; font-weight: 600; color: #fff;">Select an invoice layout</h3>
+                <p style="font-size: 13px; max-width: 320px; color: var(--text-muted); line-height: 1.5;">Choose a layout template from the left ledger list to define visual parsing coordinate rules.</p>
             </div>
         </section>
 
@@ -765,6 +972,15 @@
     <script>
         let currentLayoutHash = null;
         let selectedLayoutData = null;
+        
+        // Field color variables
+        const FIELD_COLORS = {
+            "invoice_number": { color: "#ff7da0", bg: "rgba(255, 125, 160, 0.08)", text: "pink" },
+            "invoice_date": { color: "#10b981", bg: "rgba(16, 185, 129, 0.08)", text: "green" },
+            "abn": { color: "#06b6d4", bg: "rgba(6, 182, 212, 0.08)", text: "cyan" },
+            "total_amount": { color: "#f59e0b", bg: "rgba(245, 158, 11, 0.08)", text: "orange" },
+            "line_items": { color: "#f43f5e", bg: "rgba(244, 63, 94, 0.08)", text: "red" }
+        };
 
         document.addEventListener("DOMContentLoaded", () => {
             loadMetrics();
@@ -796,8 +1012,8 @@
                 if (list.length === 0) {
                     container.innerHTML = `
                         <div style="text-align: center; margin-top: 40px; color: var(--text-muted)">
-                            <div style="font-size: 48px; margin-bottom: 10px; filter: drop-shadow(2px 2px 0 #000);">🏆</div>
-                            <p style="font-family: var(--font-pixel); font-size: 8px; line-height: 1.5;">LEDGER COMPLETELY CLEAR!</p>
+                            <div style="font-size: 36px; margin-bottom: 10px;">🏆</div>
+                            <p style="font-size: 11px; font-weight:600;">LEDGER COMPLETELY CLEAR!</p>
                         </div>
                     `;
                     return;
@@ -812,7 +1028,7 @@
                         <div class="queue-supplier">${escapeHtml(item.supplier_name)}</div>
                         <div class="queue-meta">
                             <span>Format: ${escapeHtml(item.document_type.toUpperCase())}</span>
-                            <span>CUT: ${item.layout_hash.substring(0, 8)}</span>
+                            <span>HASH: ${item.layout_hash.substring(0, 8)}</span>
                         </div>
                     `;
                     container.appendChild(el);
@@ -833,7 +1049,7 @@
             const container = document.getElementById("workspace-panel-container");
             container.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted)">
-                    <p style="font-family: var(--font-pixel); font-size: 8px;">PREPARING THE CUT...</p>
+                    <p style="font-size: 11px; font-weight:600; letter-spacing:0.5px;">PREPARING WORKSPACE CARVING CANVAS...</p>
                 </div>
             `;
 
@@ -844,21 +1060,24 @@
                 
                 const rules = data.extraction_rules;
                 const fields = rules.fields || {};
+                const lineItems = rules.line_items || { strategy: "tabular_columns", columns: {} };
+
+                document.getElementById("header-legend").style.display = "flex";
 
                 container.innerHTML = `
                     <div class="workspace-header">
                         <div class="workspace-title-group">
-                            <input type="text" id="ws-supplier-name" value="${escapeHtml(data.supplier_name)}" style="font-family: var(--font-pixel); font-size:12px; font-weight:700; background:none; border:none; border-bottom:3px dashed var(--primary); padding: 2px 0; border-radius:0; width: 340px; color:#fff; text-shadow: 2px 2px 0 #000;">
+                            <input type="text" id="ws-supplier-name" value="${escapeHtml(data.supplier_name)}" style="font-size:14px; font-weight:700; background:none; border:none; border-bottom:1px dashed var(--primary-pink); padding: 2px 0; border-radius:0; width: 340px; color:#fff; font-family: var(--font-main);">
                             <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
                                 <div class="fingerprint-tag">SIGNATURE: ${data.layout_hash}</div>
-                                <select id="ws-doc-type" style="padding: 2px 6px; font-size:12px; border-radius:0; font-family: var(--font-retro); background:#1c0e0e; border: 2px solid #4c3232; color: var(--primary);">
+                                <select id="ws-doc-type" style="padding: 2px 6px; font-size:11px; border-radius:4px; background:#1c0e0e; border: 1px solid rgba(255,255,255,0.08); color: var(--primary-pink); font-family: var(--font-main); font-weight:600;">
                                     <option value="pdf" ${data.document_type === 'pdf' ? 'selected' : ''}>PDF</option>
                                     <option value="excel" ${data.document_type === 'excel' ? 'selected' : ''}>EXCEL</option>
                                     <option value="csv" ${data.document_type === 'csv' ? 'selected' : ''}>CSV</option>
                                 </select>
                             </div>
                         </div>
-                        <div style="font-family: var(--font-pixel); font-size:8px; color:var(--accent-orange)">
+                        <div style="font-size:11px; font-weight: 700; color:var(--neon-orange); text-transform:uppercase; letter-spacing: 0.5px;">
                             STATUS: REVIEW
                         </div>
                     </div>
@@ -880,15 +1099,57 @@
                             </div>
                         </div>
 
-                        <!-- Right pane: Interactive Proximity Rules Form -->
+                        <!-- Right pane: Glassmorphism Interactive Carving Tab Form -->
                         <div class="pane">
-                            <div class="pane-header">CARVING SPECIFICATION</div>
+                            <div class="pane-header" style="display:flex; justify-content:space-between; align-items:center;">
+                                <span>CARVING SPECIFICATION</span>
+                                <div class="view-toggle-bar" style="margin: 0; padding: 2px; width: 190px;">
+                                    <button id="tab-btn-headers" class="view-btn active" onclick="switchSidebarTab('headers')">Headers</button>
+                                    <button id="tab-btn-line-items" class="view-btn" onclick="switchSidebarTab('line-items')">Line Items</button>
+                                </div>
+                            </div>
+                            
                             <div class="rules-form-container" id="ws-rules-form">
                                 
-                                ${renderFieldBlock("invoice_number", "Invoice Number", fields.invoice_number)}
-                                ${renderFieldBlock("invoice_date", "Invoice Date", fields.invoice_date)}
-                                ${renderFieldBlock("abn", "Supplier ABN", fields.abn)}
-                                ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
+                                <!-- Tab content headers -->
+                                <div id="tab-content-headers" class="tab-content">
+                                    ${renderFieldBlock("invoice_number", "Invoice Number", fields.invoice_number)}
+                                    ${renderFieldBlock("invoice_date", "Invoice Date", fields.invoice_date)}
+                                    ${renderFieldBlock("abn", "Supplier ABN", fields.abn)}
+                                    ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
+                                </div>
+                                
+                                <!-- Tab content line items -->
+                                <div id="tab-content-line-items" class="tab-content" style="display: none;">
+                                    <div class="field-block" data-field="line_items" style="display: flex; flex-direction: column; gap: 14px;">
+                                        <div class="field-title-badge">
+                                            <span class="badge" style="border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);">Order Line Items Table</span>
+                                            <button class="pixel-btn-secondary auto-extract-btn" onclick="activateAutoExtract('line_items', this)" style="padding: 4px 8px; font-size: 8px; margin: 0; box-shadow: none; border-color: rgba(255,255,255,0.08);">
+                                                🎯 Select Table Area
+                                            </button>
+                                        </div>
+                                        
+                                        <div style="display:flex; align-items:center; gap:8px;">
+                                            <input type="checkbox" id="line-items-enabled" ${rules.line_items ? 'checked' : ''} onchange="toggleLineItemsEnable(this)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--primary-pink);">
+                                            <label for="line-items-enabled" style="cursor: pointer; font-size: 9px; color: var(--primary-pink);">Enable Line Items Extraction</label>
+                                        </div>
+                                        
+                                        <div id="line-items-coordinate-info" class="coordinate-pill" style="${rules.line_items && rules.line_items.box ? '' : 'display:none;'}">
+                                            Page: <span id="line-items-page-val">${rules.line_items ? rules.line_items.page : 1}</span>, Box: <span id="line-items-box-val">${rules.line_items && rules.line_items.box ? JSON.stringify(rules.line_items.box.map(b => parseFloat(b.toFixed(3)))) : '[]'}</span>
+                                        </div>
+                                        
+                                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 8px;" id="line-items-mappings-grid">
+                                            <div style="font-size: 9px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px;">Column Mapping Matrix</div>
+                                            
+                                            ${renderColumnMappingSelect("product_code", "Product Code Column", lineItems.columns ? lineItems.columns.product_code : null)}
+                                            ${renderColumnMappingSelect("product_name", "Product Name Column", lineItems.columns ? (lineItems.columns.product_name || lineItems.columns.description) : null)}
+                                            ${renderColumnMappingSelect("uom", "Unit of Measure Column", lineItems.columns ? lineItems.columns.uom : null)}
+                                            ${renderColumnMappingSelect("quantity", "Quantity Column", lineItems.columns ? lineItems.columns.quantity : null)}
+                                            ${renderColumnMappingSelect("unit_price", "Unit Price Column", lineItems.columns ? (lineItems.columns.unit_price || lineItems.columns.price) : null)}
+                                            ${renderColumnMappingSelect("total", "Subtotal Column", lineItems.columns ? lineItems.columns.total : null)}
+                                        </div>
+                                    </div>
+                                </div>
                                 
                                 <!-- Dynamic Live trials output panel -->
                                 <div id="live-preview-panel"></div>
@@ -907,11 +1168,12 @@
                 
                 // Initialize visual/text document viewer layout
                 await switchDocumentView('visual');
+                setupFieldCardHoverTriggers();
             } catch (err) {
                 console.error("Failed to load workspace layout details:", err);
                 container.innerHTML = `
                     <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--accent-orange)">
-                        <p style="font-family: var(--font-pixel); font-size: 8px;">FAILED TO CARVE: ${err}</p>
+                        <p style="font-size: 11px; font-weight:600;">FAILED TO PREPARE WORKSPACE: ${err}</p>
                     </div>
                 `;
             }
@@ -919,38 +1181,163 @@
 
         // Render HTML for an individual field configuration block
         function renderFieldBlock(fieldKey, labelName, fieldRule) {
-            const rule = fieldRule || { anchor_keyword: "", search_direction: "relative_right", window_characters: 80, regex_pattern: "" };
+            const rule = fieldRule || { anchor_keyword: "", search_direction: "relative_right", window_characters: 80, regex_pattern: "", use_filename: false };
+            const isDisabled = rule.use_filename || rule.strategy === "coordinate" ? "disabled" : "";
+            const isDimmed = rule.use_filename ? "style='opacity: 0.7;'" : "";
+            
+            let filenameToggleHtml = "";
+            if (fieldKey === "invoice_number") {
+                const isChecked = rule.use_filename ? "checked" : "";
+                filenameToggleHtml = `
+                    <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" class="field-use-filename" id="toggle-use-filename" ${isChecked} onchange="toggleFilenameOption(this)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--primary-pink);">
+                        <label for="toggle-use-filename" style="cursor: pointer; font-size: 9px; color: var(--primary-pink);">Use filename as value</label>
+                    </div>
+                `;
+            }
+
+            const borderStyle = FIELD_COLORS[fieldKey] ? `border-left: 3px solid ${FIELD_COLORS[fieldKey].color};` : "";
+            
+            // Build visual coordinate preview indicator pill if coordinate rule exists
+            let coordinatePillHtml = "";
+            if (rule.strategy === "coordinate" && rule.box) {
+                coordinatePillHtml = `
+                    <div class="coordinate-pill">
+                        Page ${rule.page || 1} Box: ${JSON.stringify(rule.box.map(b => parseFloat(b.toFixed(3))))}
+                        <button class="pixel-btn-secondary" onclick="clearFieldCoordinates('${fieldKey}')" style="padding: 2px 4px; font-size: 7px; margin-left: 8px; border-radius: 3px; border-color: rgba(255,255,255,0.06); text-transform:none;">Clear</button>
+                    </div>
+                `;
+            }
+            
             return `
-                <div class="field-block" data-field="${fieldKey}">
+                <div class="field-block" data-field="${fieldKey}" ${isDimmed} style="${borderStyle}">
                     <div class="field-title-badge">
-                        <span class="badge">${labelName}</span>
-                        <button class="pixel-btn-secondary auto-extract-btn" onclick="activateAutoExtract('${fieldKey}', this)" style="padding: 4px 8px; font-size: 8px; margin: 0; box-shadow: 2px 2px 0 #1c0e0e;">
-                            🎯 Auto-Carve
+                        <span class="badge" style="color: ${FIELD_COLORS[fieldKey].color}; border-color: ${FIELD_COLORS[fieldKey].color}55; background: ${FIELD_COLORS[fieldKey].color}11;">${labelName}</span>
+                        <button class="pixel-btn-secondary auto-extract-btn" onclick="activateAutoExtract('${fieldKey}', this)" style="padding: 4px 8px; font-size: 8px; margin: 0; box-shadow: none; border-color: rgba(255,255,255,0.08); ${rule.use_filename ? 'display: none;' : ''}">
+                            🎯 Draw Box
                         </button>
                     </div>
-                    <div class="form-row-group">
-                        <div class="form-field">
-                            <label>Anchor Keyword</label>
-                            <input type="text" class="field-anchor" value="${escapeHtml(rule.anchor_keyword)}">
-                        </div>
-                        <div class="form-field small">
-                            <label>Direction</label>
-                            <select class="field-direction">
-                                <option value="relative_right" ${rule.search_direction === 'relative_right' ? 'selected' : ''}>Right</option>
-                                <option value="relative_below" ${rule.search_direction === 'relative_below' ? 'selected' : ''}>Below</option>
-                            </select>
-                        </div>
-                        <div class="form-field small">
-                            <label>Window</label>
-                            <input type="number" class="field-window" value="${rule.window_characters}">
+                    ${filenameToggleHtml}
+                    ${coordinatePillHtml}
+                    
+                    <div class="proximity-settings" style="${rule.strategy === 'coordinate' ? 'display:none;' : ''}">
+                        <div class="form-row-group">
+                            <div class="form-field">
+                                <label>Anchor Keyword</label>
+                                <input type="text" class="field-anchor" value="${escapeHtml(rule.anchor_keyword)}" ${isDisabled}>
+                            </div>
+                            <div class="form-field small">
+                                <label>Search Direction</label>
+                                <select class="field-direction" ${isDisabled}>
+                                    <option value="relative_right" ${rule.search_direction === 'relative_right' ? 'selected' : ''}>Same Line (Right)</option>
+                                    <option value="relative_below" ${rule.search_direction === 'relative_below' ? 'selected' : ''}>Below Anchor</option>
+                                </select>
+                            </div>
+                            <div class="form-field small">
+                                <label>Search Range (Chars)</label>
+                                <input type="number" class="field-window" value="${rule.window_characters}" ${isDisabled}>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-field">
-                        <label>Regex Local Window Pattern</label>
-                        <input type="text" class="field-regex" value="${escapeHtml(rule.regex_pattern)}" style="font-family: monospace;">
+                    <div class="form-field" style="margin-top: 10px;">
+                        <label>Regex Value Filter Pattern</label>
+                        <input type="text" class="field-regex" value="${escapeHtml(rule.regex_pattern)}" style="font-family: var(--font-mono); font-size:12px;">
                     </div>
                 </div>
             `;
+        }
+
+        // Render Column index selection select element
+        function renderColumnMappingSelect(fieldKey, labelText, mappedVal) {
+            let colIndex = -1;
+            if (mappedVal !== undefined && mappedVal !== null) {
+                colIndex = typeof mappedVal === 'object' ? mappedVal.col_index : mappedVal;
+            }
+            if (colIndex === undefined || colIndex === null) colIndex = -1;
+
+            let optionsHtml = `<option value="-1" ${colIndex === -1 ? 'selected' : ''}>Not Mapped</option>`;
+            for (let i = 0; i <= 10; i++) {
+                optionsHtml += `<option value="${i}" ${colIndex === i ? 'selected' : ''}>Column ${i}</option>`;
+            }
+
+            return `
+                <div class="mapping-column-row" data-field-col="${fieldKey}">
+                    <span class="mapping-column-label">${labelText}</span>
+                    <select class="mapping-column-select" onchange="testRules()" style="padding: 4px 8px; font-size:11px;">
+                        ${optionsHtml}
+                    </select>
+                </div>
+            `;
+        }
+
+        function switchSidebarTab(tabName) {
+            const btnHeaders = document.getElementById("tab-btn-headers");
+            const btnLineItems = document.getElementById("tab-btn-line-items");
+            const contentHeaders = document.getElementById("tab-content-headers");
+            const contentLineItems = document.getElementById("tab-content-line-items");
+            
+            if (tabName === 'headers') {
+                btnHeaders.classList.add("active");
+                btnLineItems.classList.remove("active");
+                contentHeaders.style.display = "flex";
+                contentLineItems.style.display = "none";
+            } else {
+                btnHeaders.classList.remove("active");
+                btnLineItems.classList.add("active");
+                contentHeaders.style.display = "none";
+                contentLineItems.style.display = "flex";
+            }
+        }
+
+        function toggleLineItemsEnable(checkbox) {
+            const mappingsGrid = document.getElementById("line-items-mappings-grid");
+            const drawBtn = document.querySelector('[data-field="line_items"] .auto-extract-btn');
+            
+            if (checkbox.checked) {
+                mappingsGrid.style.opacity = "1";
+                mappingsGrid.querySelectorAll("select").forEach(s => s.disabled = false);
+                if (drawBtn) drawBtn.style.display = "inline-block";
+            } else {
+                mappingsGrid.style.opacity = "0.5";
+                mappingsGrid.querySelectorAll("select").forEach(s => s.disabled = true);
+                if (drawBtn) drawBtn.style.display = "none";
+            }
+            testRules();
+        }
+
+        function clearFieldCoordinates(fieldKey) {
+            if (!selectedLayoutData) return;
+            const rules = selectedLayoutData.extraction_rules;
+            if (rules.fields && rules.fields[fieldKey]) {
+                delete rules.fields[fieldKey].box;
+                delete rules.fields[fieldKey].page;
+                rules.fields[fieldKey].strategy = "proximity"; // fallback
+            }
+            
+            // Re-render layout details
+            selectLayout(currentLayoutHash);
+        }
+
+        function toggleFilenameOption(checkbox) {
+            const block = checkbox.closest(".field-block");
+            const proximitySettings = block.querySelector(".proximity-settings");
+            const autoCarveBtn = block.querySelector(".auto-extract-btn");
+            
+            if (checkbox.checked) {
+                if (proximitySettings) proximitySettings.style.display = "none";
+                if (autoCarveBtn) autoCarveBtn.style.display = "none";
+                block.style.opacity = "0.7";
+                
+                const regexInput = block.querySelector(".field-regex");
+                if (!regexInput.value.trim()) {
+                    regexInput.value = "([0-9]+)";
+                }
+            } else {
+                if (proximitySettings) proximitySettings.style.display = "block";
+                if (autoCarveBtn) autoCarveBtn.style.display = "inline-block";
+                block.style.opacity = "1.0";
+            }
+            testRules();
         }
 
         // 4. Test extraction rules in real-time
@@ -962,25 +1349,67 @@
                 const res = await fetch("/api/test-extraction", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ raw_text: rawText, rules: rules })
+                    body: JSON.stringify({ raw_text: rawText, rules: rules, layout_hash: currentLayoutHash })
                 });
                 const result = await res.json();
                 const previewPanel = document.getElementById("live-preview-panel");
 
                 if (!result.success) {
                     previewPanel.innerHTML = `
-                        <div class="preview-output-section" style="border-color: red; background: #291515;">
-                            <div class="preview-title" style="color: red;">CARVING ERROR</div>
-                            <p style="font-size:12px; color: red;">${escapeHtml(result.error)}</p>
+                        <div class="preview-output-section" style="border-color: var(--accent-red); background: rgba(244,63,94,0.08);">
+                            <div class="preview-title" style="color: var(--accent-red);">Rule Execution Error</div>
+                            <p style="font-size:12px; color: var(--accent-red); font-family:var(--font-mono);">${escapeHtml(result.error)}</p>
                         </div>
                     `;
                     return;
                 }
 
                 const ext = result.extracted;
+                
+                // Render order line items grid table if enabled and returned
+                let lineItemsTableHtml = "";
+                if (ext.line_items && ext.line_items.length > 0) {
+                    const rowsHtml = ext.line_items.map(item => `
+                        <tr>
+                            <td style="font-family:var(--font-mono); font-size:11px;">${escapeHtml(item.product_code || item.code || "-")}</td>
+                            <td style="font-size:12px; font-weight:500;">${escapeHtml(item.product_name || item.description || "-")}</td>
+                            <td style="font-family:var(--font-mono); font-size:11px; text-align:center;">${escapeHtml(item.uom || "-")}</td>
+                            <td style="font-family:var(--font-mono); font-size:11px; text-align:right;">${item.quantity !== null && item.quantity !== undefined ? item.quantity : "-"}</td>
+                            <td style="font-family:var(--font-mono); font-size:11px; text-align:right;">$${item.unit_price !== null && item.unit_price !== undefined ? parseFloat(item.unit_price).toFixed(2) : "-"}</td>
+                            <td style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--neon-green); text-align:right;">$${item.total !== null && item.total !== undefined ? parseFloat(item.total).toFixed(2) : "-"}</td>
+                        </tr>
+                    `).join("");
+                    
+                    lineItemsTableHtml = `
+                        <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px;">
+                            <div class="preview-title" style="color:var(--primary-pink); display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                                <span>Extracted Order Line Items</span>
+                                <span style="font-size: 9px; background:rgba(255,125,160,0.1); border:1px solid rgba(255,125,160,0.2); padding: 2px 6px; border-radius:4px; font-weight:normal;">${ext.line_items.length} Items</span>
+                            </div>
+                            <div style="max-height:220px; overflow-y:auto; border:1px solid rgba(255,255,255,0.05); border-radius:6px;">
+                                <table class="spreadsheet-table" style="font-size:11px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="padding:8px; font-size:8px;">Code</th>
+                                            <th style="padding:8px; font-size:8px;">Description</th>
+                                            <th style="padding:8px; font-size:8px; text-align:center;">UOM</th>
+                                            <th style="padding:8px; font-size:8px; text-align:right;">Qty</th>
+                                            <th style="padding:8px; font-size:8px; text-align:right;">Price</th>
+                                            <th style="padding:8px; font-size:8px; text-align:right;">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 previewPanel.innerHTML = `
                     <div class="preview-output-section">
-                        <div class="preview-title">Meat Quality Result (Yield: ${result.confidence * 100}%)</div>
+                        <div class="preview-title">Meat Extraction Result (Confidence: ${Math.round(result.confidence * 100)}%)</div>
                         <div class="preview-grid">
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Invoice Number</div>
@@ -996,9 +1425,10 @@
                             </div>
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Total Amount</div>
-                                <div class="preview-card-val" style="color: var(--accent-green)">$${ext.total_amount !== undefined ? ext.total_amount : "NULL"}</div>
+                                <div class="preview-card-val" style="color: var(--neon-orange)">$${ext.total_amount !== undefined ? parseFloat(ext.total_amount).toFixed(2) : "NULL"}</div>
                             </div>
                         </div>
+                        ${lineItemsTableHtml}
                     </div>
                 `;
             } catch (err) {
@@ -1025,15 +1455,16 @@
                 
                 const result = await res.json();
                 if (result.success) {
-                    alert(`Layout rules for '${supplierName}' successfully activated and locked!`);
+                    alert(`Layout carving rules for '${supplierName}' locked & activated!`);
                     
                     // Reset selected views
                     currentLayoutHash = null;
+                    document.getElementById("header-legend").style.display = "none";
                     document.getElementById("workspace-panel-container").innerHTML = `
                         <div class="placeholder-workspace">
                             <div class="placeholder-icon">🥩</div>
-                            <h3 style="font-family: var(--font-pixel); font-size: 10px; color: #fff; margin-top: 10px;">RECIPE STORED SUCCESSFULLY!</h3>
-                            <p style="font-size: 13px; max-width: 320px; line-height: 1.5;">Subsequent meats of this shape will be sliced 100% deterministically.</p>
+                            <h3 style="font-size: 15px; color: #fff;">RECIPE STORED SUCCESSFULLY!</h3>
+                            <p style="font-size: 13px; max-width: 320px; color: var(--text-muted); line-height: 1.5;">Deterministic invoice carving recipe has been synchronized with the engine database.</p>
                         </div>
                     `;
 
@@ -1054,25 +1485,68 @@
                 fields: {}
             };
 
-            document.querySelectorAll(".field-block").forEach(block => {
+            document.querySelectorAll("#tab-content-headers .field-block").forEach(block => {
                 const fieldKey = block.dataset.field;
-                compiled.fields[fieldKey] = {
-                    anchor_keyword: block.querySelector(".field-anchor").value,
-                    search_direction: block.querySelector(".field-direction").value,
-                    window_characters: parseInt(block.querySelector(".field-window").value) || 80,
-                    regex_pattern: block.querySelector(".field-regex").value
-                };
+                const useFilenameCheckbox = block.querySelector(".field-use-filename");
+                const useFilename = useFilenameCheckbox ? useFilenameCheckbox.checked : false;
+                
+                // Carry over coordinate rules directly if visual coordinates have been drawn
+                if (selectedLayoutData && selectedLayoutData.extraction_rules.fields && 
+                    selectedLayoutData.extraction_rules.fields[fieldKey] && 
+                    selectedLayoutData.extraction_rules.fields[fieldKey].strategy === "coordinate") {
+                    
+                    const origRule = selectedLayoutData.extraction_rules.fields[fieldKey];
+                    compiled.fields[fieldKey] = {
+                        strategy: "coordinate",
+                        page: origRule.page,
+                        box: origRule.box,
+                        regex_pattern: block.querySelector(".field-regex").value
+                    };
+                } else {
+                    compiled.fields[fieldKey] = {
+                        strategy: "proximity",
+                        anchor_keyword: block.querySelector(".field-anchor").value,
+                        search_direction: block.querySelector(".field-direction").value,
+                        window_characters: parseInt(block.querySelector(".field-window").value) || 80,
+                        regex_pattern: block.querySelector(".field-regex").value,
+                        use_filename: useFilename
+                    };
+                }
             });
 
-            // Carry over legacy line items definition if present
-            if (selectedLayoutData && selectedLayoutData.extraction_rules.line_items) {
-                compiled.line_items = selectedLayoutData.extraction_rules.line_items;
+            // Formulate Line Items Mapping payload if active
+            const lineItemsEnabled = document.getElementById("line-items-enabled");
+            if (lineItemsEnabled && lineItemsEnabled.checked) {
+                const columns = {};
+                document.querySelectorAll("#line-items-mappings-grid .mapping-column-row").forEach(row => {
+                    const colKey = row.dataset.fieldCol;
+                    const select = row.querySelector("select");
+                    const val = parseInt(select.value);
+                    if (val !== -1) {
+                        columns[colKey] = { col_index: val };
+                    }
+                });
+
+                let tableBox = null;
+                let tablePage = 1;
+                if (selectedLayoutData && selectedLayoutData.extraction_rules.line_items && 
+                    selectedLayoutData.extraction_rules.line_items.strategy === "coordinate_table") {
+                    tableBox = selectedLayoutData.extraction_rules.line_items.box;
+                    tablePage = selectedLayoutData.extraction_rules.line_items.page || 1;
+                }
+
+                compiled.line_items = {
+                    strategy: tableBox ? "coordinate_table" : "tabular_columns",
+                    page: tablePage,
+                    box: tableBox,
+                    columns: columns
+                };
             }
 
             return compiled;
         }
 
-        // --- Segmented Document Viewer Logic ---
+        // --- Segmented Document Viewer View Mode ---
         let currentViewMode = 'visual';
 
         async function switchDocumentView(viewMode) {
@@ -1101,15 +1575,7 @@
             viewerContent.innerHTML = `
                 <div class="text-viewer" id="ws-raw-text">${escapeHtml(selectedLayoutData.sample_text)}</div>
             `;
-            
-            // Re-apply visual outlines if we were actively targeting
-            if (activeTargetField) {
-                const textViewer = document.getElementById("ws-raw-text");
-                if (textViewer) {
-                    textViewer.style.outline = "2px dashed var(--accent-green)";
-                    textViewer.style.background = "rgba(34, 197, 94, 0.05)";
-                }
-            }
+            updateLiveHighlighting();
         }
 
         async function renderVisualDocumentView() {
@@ -1121,18 +1587,94 @@
             
             viewerContent.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted)">
-                    <p style="font-family: var(--font-pixel); font-size: 8px;">UNWRAPPING THE CUT...</p>
+                    <p style="font-size: 11px; font-weight:600; letter-spacing:0.5px;">UNWRAPPING DOC PIECE...</p>
                 </div>
             `;
             
             if (docType === 'pdf') {
                 viewerContent.innerHTML = `
-                    <div class="pdf-viewer-container" style="width:100%; height:100%; overflow:hidden; display:flex; flex-direction:column;">
-                        <iframe id="pdf-iframe" src="/api/document/file/${layoutHash}" style="width:100%; flex-grow:1; border:none; background:#fff;"></iframe>
+                    <div class="pdf-viewer-container" id="pdf-viewer-root">
+                        <div id="pdf-pages-container" style="width: 100%; display: flex; flex-direction: column; align-items: center;"></div>
                         <div id="ws-raw-text" style="display:none;">${escapeHtml(selectedLayoutData.sample_text)}</div>
                     </div>
                 `;
-                setupIframeSelectionPolling();
+                
+                // Load PDF.js library if not loaded
+                if (typeof pdfjsLib === 'undefined') {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                }
+                
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+                
+                try {
+                    const pdfUrl = `/api/document/file/${layoutHash}`;
+                    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+                    const pdf = await loadingTask.promise;
+                    
+                    const pagesContainer = document.getElementById("pdf-pages-container");
+                    pagesContainer.innerHTML = "";
+                    
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        
+                        const containerWidth = document.getElementById("pdf-viewer-root").clientWidth - 48;
+                        const unscaledViewport = page.getViewport({ scale: 1.0 });
+                        const scale = Math.max(1.0, containerWidth / unscaledViewport.width);
+                        const viewport = page.getViewport({ scale: scale });
+                        
+                        const pageWrapper = document.createElement("div");
+                        pageWrapper.className = "pdf-page-wrapper";
+                        pageWrapper.style.width = viewport.width + "px";
+                        pageWrapper.style.height = viewport.height + "px";
+                        pageWrapper.dataset.page = pageNum;
+                        
+                        const canvas = document.createElement("canvas");
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        pageWrapper.appendChild(canvas);
+                        
+                        const context = canvas.getContext("2d");
+                        
+                        const textLayerDiv = document.createElement("div");
+                        textLayerDiv.className = "textLayer";
+                        textLayerDiv.style.width = viewport.width + "px";
+                        textLayerDiv.style.height = viewport.height + "px";
+                        pageWrapper.appendChild(textLayerDiv);
+
+                        // Invisible Cover Canvas Overlay to capture coordinates drag
+                        const drawOverlay = document.createElement("div");
+                        drawOverlay.className = "pdf-draw-overlay";
+                        if (activeTargetField) {
+                            drawOverlay.classList.add("drawing-active");
+                        }
+                        pageWrapper.appendChild(drawOverlay);
+                        
+                        pagesContainer.appendChild(pageWrapper);
+                        
+                        await page.render({ canvasContext: context, viewport: viewport }).promise;
+                        
+                        const textContent = await page.getTextContent();
+                        await pdfjsLib.renderTextLayer({
+                            textContent: textContent,
+                            container: textLayerDiv,
+                            viewport: viewport,
+                            textDivs: []
+                        }).promise;
+                    }
+
+                    // Render existing coordinate rectangular boxes overlays
+                    renderCoordinateBoundingBoxes();
+                    setupDrawingCanvasEvents();
+                } catch (err) {
+                    console.error("PDFjs rendering failed, falling back to text:", err);
+                    renderPlainTextView();
+                }
             } else if (docType === 'excel' || docType === 'csv') {
                 try {
                     const res = await fetch(`/api/document/grid/${layoutHash}`);
@@ -1141,8 +1683,8 @@
                     
                     let html = `
                         <div class="spreadsheet-table-container">
-                            <div style="font-family: var(--font-pixel); font-size:8px; color:var(--accent-green); margin-bottom:12px; display:flex; align-items:center; gap:4px;">
-                                💡 <span>CLICK ANY PIECE TO MAP IT!</span>
+                            <div style="font-size:11px; font-weight:600; color:var(--neon-green); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                                💡 <span>Click cells inside the sheet below to instantly populate active field settings!</span>
                             </div>
                             <table class="spreadsheet-table">
                                 <thead>
@@ -1173,10 +1715,300 @@
             }
         }
 
-        // Click interaction for grid/tables
+        // Render rectangular visual highlight highlights representing active mapped coordinate boxes
+        function renderCoordinateBoundingBoxes() {
+            if (!selectedLayoutData) return;
+            const rules = selectedLayoutData.extraction_rules;
+            if (!rules) return;
+
+            // Remove existing overlays first
+            document.querySelectorAll(".coordinate-highlight-box").forEach(b => b.remove());
+
+            // 1. Traverse fields for strategy == "coordinate"
+            if (rules.fields) {
+                Object.keys(rules.fields).forEach(fieldKey => {
+                    const rule = rules.fields[fieldKey];
+                    if (rule.strategy === "coordinate" && rule.box) {
+                        drawStaticHighlight(fieldKey, rule.page || 1, rule.box, FIELD_COLORS[fieldKey]);
+                    }
+                });
+            }
+
+            // 2. Tabular line items table bounding box
+            if (rules.line_items && rules.line_items.strategy === "coordinate_table" && rules.line_items.box) {
+                drawStaticHighlight("line_items", rules.line_items.page || 1, rules.line_items.box, FIELD_COLORS.line_items);
+            }
+        }
+
+        function drawStaticHighlight(fieldKey, pageNum, box, colorMeta) {
+            const pageWrapper = document.querySelector(`.pdf-page-wrapper[data-page="${pageNum}"]`);
+            if (!pageWrapper) return;
+
+            const [x_pct, y_pct, w_pct, h_pct] = box;
+            const width = pageWrapper.clientWidth;
+            const height = pageWrapper.clientHeight;
+
+            const el = document.createElement("div");
+            el.className = "coordinate-highlight-box";
+            el.dataset.fieldHighlight = fieldKey;
+            el.style.left = (x_pct * width) + "px";
+            el.style.top = (y_pct * height) + "px";
+            el.style.width = (w_pct * width) + "px";
+            el.style.height = (h_pct * height) + "px";
+            el.style.setProperty("--box-color", colorMeta.color);
+            el.style.setProperty("--box-bg", colorMeta.bg);
+            
+            // Set sync hover triggers
+            el.onmouseenter = () => {
+                el.classList.add("pulse-highlight");
+                const block = document.querySelector(`.field-block[data-field="${fieldKey}"]`);
+                if (block) {
+                    block.classList.add(`pulse-glow-${colorMeta.text}`);
+                    block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            };
+            
+            el.onmouseleave = () => {
+                el.classList.remove("pulse-highlight");
+                const block = document.querySelector(`.field-block[data-field="${fieldKey}"]`);
+                if (block) {
+                    block.classList.remove(`pulse-glow-${colorMeta.text}`);
+                }
+            };
+
+            pageWrapper.appendChild(el);
+        }
+
+        // Setup dual-directional hover sync highlights between sidebar card rules and PDF bounding box elements
+        function setupFieldCardHoverTriggers() {
+            document.querySelectorAll(".field-block").forEach(block => {
+                const fieldKey = block.dataset.field;
+                const colorMeta = FIELD_COLORS[fieldKey];
+                if (!colorMeta) return;
+
+                block.onmouseenter = () => {
+                    const highlight = document.querySelector(`.coordinate-highlight-box[data-field-highlight="${fieldKey}"]`);
+                    if (highlight) {
+                        highlight.classList.add("pulse-highlight");
+                        highlight.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                };
+
+                block.onmouseleave = () => {
+                    const highlight = document.querySelector(`.coordinate-highlight-box[data-field-highlight="${fieldKey}"]`);
+                    if (highlight) {
+                        highlight.classList.remove("pulse-highlight");
+                    }
+                };
+            });
+        }
+
+        // --- Visual Drag-and-Draw Canvas Event Engine ---
+        let isDrawing = false;
+        let startX = 0;
+        let startY = 0;
+        let activeDrawBox = null;
+        let drawOverlayPageNum = 1;
+
+        function setupDrawingCanvasEvents() {
+            const overlays = document.querySelectorAll(".pdf-draw-overlay");
+            overlays.forEach(overlay => {
+                overlay.addEventListener("mousedown", (e) => {
+                    if (!activeTargetField) return; // Only draw when a field Draw Box button is clicked
+                    
+                    isDrawing = true;
+                    drawOverlayPageNum = parseInt(overlay.closest(".pdf-page-wrapper").dataset.page);
+                    
+                    const rect = overlay.getBoundingClientRect();
+                    startX = e.clientX - rect.left;
+                    startY = e.clientY - rect.top;
+                    
+                    // Create dashed highlight box
+                    activeDrawBox = document.createElement("div");
+                    activeDrawBox.className = "active-draw-box";
+                    const colorMeta = FIELD_COLORS[activeTargetField];
+                    activeDrawBox.style.setProperty("--box-color", colorMeta.color);
+                    activeDrawBox.style.setProperty("--box-bg", colorMeta.bg);
+                    
+                    activeDrawBox.style.left = startX + "px";
+                    activeDrawBox.style.top = startY + "px";
+                    activeDrawBox.style.width = "0px";
+                    activeDrawBox.style.height = "0px";
+                    
+                    overlay.appendChild(activeDrawBox);
+                    e.preventDefault();
+                });
+                
+                overlay.addEventListener("mousemove", (e) => {
+                    if (!isDrawing || !activeDrawBox) return;
+                    
+                    const rect = overlay.getBoundingClientRect();
+                    const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                    const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+                    
+                    const x = Math.min(startX, currentX);
+                    const y = Math.min(startY, currentY);
+                    const w = Math.abs(startX - currentX);
+                    const h = Math.abs(startY - currentY);
+                    
+                    activeDrawBox.style.left = x + "px";
+                    activeDrawBox.style.top = y + "px";
+                    activeDrawBox.style.width = w + "px";
+                    activeDrawBox.style.height = h + "px";
+                });
+                
+                overlay.addEventListener("mouseup", (e) => {
+                    if (!isDrawing || !activeDrawBox) return;
+                    isDrawing = false;
+                    
+                    const rect = overlay.getBoundingClientRect();
+                    const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                    const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+                    
+                    const x = Math.min(startX, currentX);
+                    const y = Math.min(startY, currentY);
+                    const w = Math.abs(startX - currentX);
+                    const h = Math.abs(startY - currentY);
+                    
+                    // 1. Calculate percentage bounds
+                    const x_pct = x / rect.width;
+                    const y_pct = y / rect.height;
+                    const w_pct = w / rect.width;
+                    const h_pct = h / rect.height;
+                    
+                    // 2. Perform text intersection sweep
+                    const textContent = sweepIntersectingSpans(overlay.closest(".pdf-page-wrapper"), x, y, w, h);
+                    
+                    // 3. Save coordinates into layouts rules schema
+                    saveCoordinatesToSchema(activeTargetField, drawOverlayPageNum, [x_pct, y_pct, w_pct, h_pct], textContent);
+                    
+                    // Cleanup drawing overlay box
+                    activeDrawBox.remove();
+                    activeDrawBox = null;
+                    
+                    cancelAutoExtract();
+                });
+            });
+        }
+
+        // Sweep all text span layers intersecting the bounding box coordinates rectangle
+        function sweepIntersectingSpans(pageWrapper, x, y, w, h) {
+            const spans = pageWrapper.querySelectorAll(".textLayer span");
+            const canvas = pageWrapper.querySelector("canvas");
+            
+            const scaleX = canvas.clientWidth / canvas.width;
+            const scaleY = canvas.clientHeight / canvas.height;
+            
+            const boxLeft = x;
+            const boxRight = x + w;
+            const boxTop = y;
+            const boxBottom = y + h;
+            
+            let items = [];
+            
+            spans.forEach(span => {
+                // PDF.js sets element positioning style values (left, top, transform scale, etc) directly
+                const left = parseFloat(span.style.left);
+                const top = parseFloat(span.style.top);
+                const spanWidth = span.getBoundingClientRect().width; // approximate
+                const spanHeight = span.getBoundingClientRect().height;
+                
+                const spanLeft = left;
+                const spanRight = left + spanWidth;
+                const spanTop = top;
+                const spanBottom = top + spanHeight;
+                
+                // Check rectangle intersection
+                const intersectX = Math.max(boxLeft, spanLeft) < Math.min(boxRight, spanRight);
+                const intersectY = Math.max(boxTop, spanTop) < Math.min(boxBottom, spanBottom);
+                
+                if (intersectX && intersectY) {
+                    items.push({
+                        text: span.innerText,
+                        left: left,
+                        top: top
+                    });
+                }
+            });
+            
+            // Sort spans top-to-bottom, then left-to-right (standard logical reading flow order)
+            items.sort((a, b) => {
+                if (Math.abs(a.top - b.top) < 6) { // same line threshold
+                    return a.left - b.left;
+                }
+                return a.top - b.top;
+            });
+            
+            const resultText = items.map(i => i.text).join(" ").replace(/\s+/g, " ").trim();
+            return resultText;
+        }
+
+        function saveCoordinatesToSchema(fieldKey, pageNum, boxPct, extractedValue) {
+            if (!selectedLayoutData) return;
+            const rules = selectedLayoutData.extraction_rules;
+            
+            if (fieldKey === "line_items") {
+                rules.line_items = {
+                    strategy: "coordinate_table",
+                    page: pageNum,
+                    box: boxPct,
+                    columns: rules.line_items ? rules.line_items.columns : {}
+                };
+                
+                // Show coordinates display inside tabular line items card UI
+                const infoCard = document.getElementById("line-items-coordinate-info");
+                if (infoCard) {
+                    infoCard.style.display = "inline-flex";
+                    document.getElementById("line-items-page-val").innerText = pageNum;
+                    document.getElementById("line-items-box-val").innerText = JSON.stringify(boxPct.map(b => parseFloat(b.toFixed(3))));
+                }
+                
+                // Check checkmark if disabled
+                document.getElementById("line-items-enabled").checked = true;
+                toggleLineItemsEnable(document.getElementById("line-items-enabled"));
+            } else {
+                if (!rules.fields) rules.fields = {};
+                rules.fields[fieldKey] = {
+                    strategy: "coordinate",
+                    page: pageNum,
+                    box: boxPct,
+                    regex_pattern: rules.fields[fieldKey] ? rules.fields[fieldKey].regex_pattern : "([\\s\\S]+)"
+                };
+                
+                // Populate the extracted text value straight into regular expression filter input
+                const block = document.querySelector(`.field-block[data-field="${fieldKey}"]`);
+                if (block && extractedValue) {
+                    const cleanVal = extractedValue.replace(/[\s,]/g, "");
+                    let regex = "([A-Za-z0-9-]+)";
+                    
+                    if (/^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/.test(extractedValue) || /^\d{11}$/.test(cleanVal)) {
+                        regex = "([\\d\\s]+)";
+                    } else if (/^\$?[0-9,.]+\d{2}$/.test(extractedValue) || /^[0-9,.]+\d{2}$/.test(cleanVal)) {
+                        regex = "([0-9.,$]+)";
+                    } else if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(extractedValue) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(extractedValue)) {
+                        regex = "([0-9/-]+)";
+                    } else if (/^\d+$/.test(cleanVal)) {
+                        regex = "(\\d+)";
+                    }
+                    
+                    block.querySelector(".field-regex").value = regex;
+                }
+            }
+            
+            // Redraw highlighting overlays
+            renderCoordinateBoundingBoxes();
+            
+            // Re-map hover triggers
+            setupFieldCardHoverTriggers();
+            
+            // Trigger trials rules validation in preview panel
+            testRules();
+        }
+
+        // Click interaction mapping for CSV/Excel spreadsheet cells
         function selectSpreadsheetCell(cellElement, rowIdx, colIdx) {
             if (!activeTargetField) {
-                cellElement.style.outline = "2px dashed var(--primary)";
+                cellElement.style.outline = "2px dashed var(--primary-pink)";
                 setTimeout(() => cellElement.style.outline = "", 1000);
                 return;
             }
@@ -1217,45 +2049,13 @@
                 setTimeout(() => cellElement.classList.remove("selected-cell"), 1500);
                 
                 const originalBorder = block.style.borderColor;
-                const originalShadow = block.style.boxShadow;
-                block.style.borderColor = "var(--accent-green)";
-                block.style.boxShadow = "0 0 15px rgba(34, 197, 94, 0.4)";
-                setTimeout(() => {
-                    block.style.borderColor = originalBorder;
-                    block.style.boxShadow = originalShadow;
-                }, 1200);
+                block.style.borderColor = "var(--neon-green)";
+                setTimeout(() => block.style.borderColor = originalBorder, 1500);
                 
                 testRules();
             }
             
             cancelAutoExtract();
-        }
-
-        // PDF iframe cross-boundary selection polling
-        let iframeSelectionInterval = null;
-
-        function setupIframeSelectionPolling() {
-            if (iframeSelectionInterval) clearInterval(iframeSelectionInterval);
-            
-            iframeSelectionInterval = setInterval(() => {
-                if (!activeTargetField) return;
-                
-                const iframe = document.getElementById("pdf-iframe");
-                if (!iframe) return;
-                
-                try {
-                    const iframeWindow = iframe.contentWindow;
-                    const selection = iframeWindow.getSelection();
-                    const selectedText = selection.toString().trim();
-                    
-                    if (selectedText) {
-                        processSelectionText(selectedText);
-                        selection.removeAllRanges();
-                    }
-                } catch (e) {
-                    // Safe catch-all for CORS warning
-                }
-            }, 400);
         }
 
         function processSelectionText(selectedText) {
@@ -1331,13 +2131,8 @@
             block.querySelector(".field-regex").value = regex;
             
             const originalBorder = block.style.borderColor;
-            const originalShadow = block.style.boxShadow;
-            block.style.borderColor = "var(--accent-green)";
-            block.style.boxShadow = "0 0 15px rgba(34, 197, 94, 0.4)";
-            setTimeout(() => {
-                block.style.borderColor = originalBorder;
-                block.style.boxShadow = originalShadow;
-            }, 1200);
+            block.style.borderColor = "var(--neon-green)";
+            setTimeout(() => block.style.borderColor = originalBorder, 1500);
             
             testRules();
             cancelAutoExtract();
@@ -1361,30 +2156,26 @@
             activeTargetField = fieldKey;
             activeTargetButton = buttonElement;
             
-            buttonElement.innerHTML = "🎯 DRAG OR SELECT TEXT...";
-            buttonElement.style.background = "var(--accent-green)";
-            buttonElement.style.color = "#1c0e0e";
-            buttonElement.style.borderColor = "#1c0e0e";
+            buttonElement.innerHTML = "🎯 Drag Bounding Box...";
+            buttonElement.style.background = "linear-gradient(135deg, #059669, var(--neon-green))";
+            buttonElement.style.color = "#fff";
+            buttonElement.style.borderColor = "transparent";
             buttonElement.classList.add("pulse-btn-anim");
             
             // Highlight text viewer if using plain text view
             const textViewer = document.getElementById("ws-raw-text");
             if (textViewer && textViewer.style.display !== "none") {
-                textViewer.style.outline = "2px dashed var(--accent-green)";
-                textViewer.style.background = "rgba(34, 197, 94, 0.05)";
+                textViewer.style.outline = "2px dashed var(--neon-green)";
+                textViewer.style.background = "rgba(16, 185, 129, 0.05)";
             }
             
-            // Pulsing highlight around interactive visual containers
-            const gridContainer = document.querySelector(".spreadsheet-table-container");
-            if (gridContainer) {
-                gridContainer.style.outline = "2px dashed var(--accent-green)";
-                gridContainer.style.background = "rgba(34, 197, 94, 0.03)";
-            }
+            // Highlight interactive visual overlays specifically on the rendered pages
+            document.querySelectorAll(".pdf-draw-overlay").forEach(o => o.classList.add("drawing-active"));
         }
 
         function cancelAutoExtract() {
             if (activeTargetButton) {
-                activeTargetButton.innerHTML = "🎯 Auto-Carve";
+                activeTargetButton.innerHTML = activeTargetField === "line_items" ? "🎯 Select Table Area" : "🎯 Draw Box";
                 activeTargetButton.style.background = "";
                 activeTargetButton.style.color = "";
                 activeTargetButton.style.borderColor = "";
@@ -1398,11 +2189,8 @@
                 textViewer.style.outline = "";
                 textViewer.style.background = "";
             }
-            const gridContainer = document.querySelector(".spreadsheet-table-container");
-            if (gridContainer) {
-                gridContainer.style.outline = "";
-                gridContainer.style.background = "";
-            }
+            
+            document.querySelectorAll(".pdf-draw-overlay").forEach(o => o.classList.remove("drawing-active"));
         }
 
         document.addEventListener("mouseup", () => {
@@ -1413,13 +2201,96 @@
             if (!selectedText) return;
             
             const textViewer = document.getElementById("ws-raw-text");
-            if (!textViewer || !textViewer.contains(selection.anchorNode)) {
-                // Click was outside raw text block, let spreadsheet or other handler deal with it
+            const pdfViewer = document.getElementById("pdf-viewer-root");
+            
+            const isInsideText = textViewer && textViewer.contains(selection.anchorNode);
+            const isInsidePdf = pdfViewer && pdfViewer.contains(selection.anchorNode);
+            
+            if (isInsideText || isInsidePdf) {
+                processSelectionText(selectedText);
+                selection.removeAllRanges();
+            }
+        });
+
+        // Live Proximity Scanning Window Highlighting inside Plain Text view
+        function updateLiveHighlighting() {
+            const textViewer = document.getElementById("ws-raw-text");
+            if (!textViewer || !selectedLayoutData) return;
+            
+            if (currentViewMode !== 'text') return;
+            
+            const rawText = selectedLayoutData.sample_text;
+            if (!rawText) return;
+            
+            const activeBlock = document.querySelector(".field-block:focus-within") || document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
+            if (!activeBlock) {
+                textViewer.innerHTML = escapeHtml(rawText);
                 return;
             }
             
-            processSelectionText(selectedText);
-            selection.removeAllRanges();
+            const useFilenameCheckbox = activeBlock.querySelector(".field-use-filename");
+            if (useFilenameCheckbox && useFilenameCheckbox.checked) {
+                textViewer.innerHTML = escapeHtml(rawText);
+                return;
+            }
+            
+            // Ignore highlighting proximity window if visual coordinates active
+            const fieldKey = activeBlock.dataset.field;
+            if (selectedLayoutData.extraction_rules.fields && 
+                selectedLayoutData.extraction_rules.fields[fieldKey] && 
+                selectedLayoutData.extraction_rules.fields[fieldKey].strategy === "coordinate") {
+                textViewer.innerHTML = escapeHtml(rawText);
+                return;
+            }
+
+            const anchor = activeBlock.querySelector(".field-anchor").value;
+            const windowChars = parseInt(activeBlock.querySelector(".field-window").value) || 80;
+            
+            if (!anchor) {
+                textViewer.innerHTML = escapeHtml(rawText);
+                return;
+            }
+            
+            const idx = rawText.toLowerCase().indexOf(anchor.toLowerCase());
+            if (idx === -1) {
+                textViewer.innerHTML = escapeHtml(rawText);
+                return;
+            }
+            
+            const preAnchor = rawText.substring(0, idx);
+            const matchedAnchor = rawText.substring(idx, idx + anchor.length);
+            
+            let windowStart = idx + anchor.length;
+            let windowEnd = windowStart + windowChars;
+            if (windowEnd > rawText.length) windowEnd = rawText.length;
+            
+            const windowText = rawText.substring(windowStart, windowEnd);
+            const postWindow = rawText.substring(windowEnd);
+            
+            textViewer.innerHTML = `
+                ${escapeHtml(preAnchor)}<span class="highlight-anchor" style="background-color: var(--neon-orange); color: #000; font-weight: bold; padding: 0 2px; border-radius:3px;">${escapeHtml(matchedAnchor)}</span><span class="highlight-window" style="background-color: rgba(16, 185, 129, 0.2); color: #fff; border-bottom: 1.5px dashed var(--neon-green); padding: 0 2px;">${escapeHtml(windowText)}</span>${escapeHtml(postWindow)}
+            `;
+        }
+
+        // Setup real-time input event listeners to trigger live highlighting
+        document.addEventListener("input", (e) => {
+            if (e.target.matches(".field-anchor, .field-window, .field-regex")) {
+                updateLiveHighlighting();
+                testRules();
+            }
+        });
+            
+        document.addEventListener("change", (e) => {
+            if (e.target.matches(".field-direction, .field-use-filename")) {
+                updateLiveHighlighting();
+                testRules();
+            }
+        });
+        
+        document.addEventListener("focusin", (e) => {
+            if (e.target.closest(".field-block")) {
+                updateLiveHighlighting();
+            }
         });
 
         // Standard escaping security utility

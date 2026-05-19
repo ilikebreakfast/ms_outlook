@@ -129,7 +129,7 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                     # --- DETERMINISTIC PARSING ENGINE ---
                     log.info(f"Matching active template rules found. Executing deterministic rule engine.")
                     rules = json.loads(rule_details["extraction_rules"])
-                    parser = DeterministicParser(raw_text, rules)
+                    parser = DeterministicParser(raw_text, rules, pdf_path=path)
                     
                     extracted, confidence = parser.extract_fields()
                     log.info(f"Extraction completed. Confidence rating: {confidence * 100}%")

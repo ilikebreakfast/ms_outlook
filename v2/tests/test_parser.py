@@ -156,6 +156,52 @@ class TestParserModule(unittest.TestCase):
         self.assertEqual(line_items[1]["unit_price"], 40.00)
         self.assertEqual(line_items[1]["total"], 200.00)
 
+    def test_date_normalization(self):
+        """Verify that various date string formats with/without timestamps normalize correctly."""
+        raw_text_template = "Invoice Date: {}"
+        rules = {
+            "fields": {
+                "invoice_date": {
+                    "anchor_keyword": "invoice date:",
+                    "search_direction": "relative_right",
+                    "window_characters": 80,
+                    "regex_pattern": r"([^\n]+)"
+                }
+            }
+        }
+        
+        test_cases = [
+            ("23-APR-26 14:30:00", "2026-04-23"),
+            ("2026-05-19T21:41:12+10:00", "2026-05-19"),
+            ("May 19, 2026 12:00 AM", "2026-05-19"),
+            ("19/05/2026 AEDT", "2026-05-19"),
+            ("23-Apr-26", "2026-04-23"),
+            ("23-APR-2026 UTC", "2026-04-23"),
+            ("19-05-2026 15:45 AEDT", "2026-05-19")
+        ]
+        
+        for input_val, expected_val in test_cases:
+            p = parser.DeterministicParser(raw_text_template.format(input_val), rules)
+            extracted, _ = p.extract_fields()
+            self.assertEqual(extracted["invoice_date"], expected_val, f"Failed for input: {input_val}")
+
+    def test_use_filename_extraction(self):
+        """Verify that invoice number can be extracted from filename metadata if specified."""
+        raw_text = "[FILENAME: PO_7760180.pdf]\n\nSome body text here..."
+        
+        rules = {
+            "fields": {
+                "invoice_number": {
+                    "use_filename": True,
+                    "regex_pattern": r"([0-9]+)"
+                }
+            }
+        }
+        
+        p = parser.DeterministicParser(raw_text, rules)
+        extracted, _ = p.extract_fields()
+        self.assertEqual(extracted["invoice_number"], "7760180")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,6 +25,7 @@ app.mount("/static", StaticFiles(directory=DASHBOARD_DIR), name="static")
 class TestParseRequest(BaseModel):
     raw_text: str
     rules: Dict[str, Any]
+    layout_hash: Optional[str] = None
 
 
 class ApproveRequest(BaseModel):
@@ -167,7 +168,25 @@ async def get_layout(layout_hash: str):
 async def test_extraction(req: TestParseRequest):
     """Perform live visual test execution of draft rules on sample document text."""
     try:
-        p = DeterministicParser(req.raw_text, req.rules)
+        pdf_path = None
+        if req.layout_hash:
+            conn = db.get_db_connection()
+            try:
+                hist_row = conn.execute(
+                    "SELECT filename FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
+                    (req.layout_hash,)
+                ).fetchone()
+                if hist_row:
+                    filename = hist_row["filename"]
+                    attachments_dir = Path(__file__).parent.parent / "data" / "attachments"
+                    for f in attachments_dir.glob("**/*"):
+                        if f.name.lower() == filename.lower() and f.is_file():
+                            pdf_path = str(f)
+                            break
+            finally:
+                conn.close()
+
+        p = DeterministicParser(req.raw_text, req.rules, pdf_path=pdf_path)
         extracted, confidence = p.extract_fields()
         return {
             "success": True,
