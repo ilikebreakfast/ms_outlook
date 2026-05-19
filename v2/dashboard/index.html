@@ -504,8 +504,97 @@
         .pulse-btn-anim {
             animation: pulse-border 1.5s infinite !important;
         }
-        #ws-raw-text {
-            transition: all 0.3s ease;
+        /* Segmented Toggle Control */
+        .view-toggle-bar {
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 2px;
+            border: 1px solid var(--border-color);
+            margin: 8px 16px;
+        }
+        .view-btn {
+            flex: 1;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .view-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .view-btn.active {
+            color: #fff;
+            background: var(--primary) !important;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Spreadsheet interactive grid table */
+        .spreadsheet-table-container {
+            flex-grow: 1;
+            overflow: auto;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .spreadsheet-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-sans);
+            font-size: 12px;
+            color: var(--text-main);
+        }
+        .spreadsheet-table th {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 10px 14px;
+            text-align: left;
+            border: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .spreadsheet-table td {
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .spreadsheet-table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.01);
+        }
+        .spreadsheet-table td:hover {
+            background: rgba(99, 102, 241, 0.15) !important;
+            color: #fff;
+            border-color: var(--primary);
+        }
+        .spreadsheet-table td.selected-cell {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: var(--accent-green) !important;
+            border-color: var(--accent-green) !important;
+            font-weight: 600;
+        }
+        
+        /* Iframe container */
+        .pdf-viewer-container {
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative;
+            background: #fff;
         }
     </style>
 </head>
@@ -673,10 +762,18 @@
                     <!-- Split workspace grid -->
                     <div class="workspace-grid">
                         
-                        <!-- Left pane: Raw Text sample -->
+                        <!-- Left pane: Segmented Visual / Text viewer -->
                         <div class="pane pane-left">
-                            <div class="pane-header">Source Document Text</div>
-                            <div class="text-viewer" id="ws-raw-text">${escapeHtml(data.sample_text)}</div>
+                            <div class="pane-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 24px;">
+                                <span>Source Document</span>
+                                <div class="view-toggle-bar" style="margin: 0; padding: 2px; width: 220px;">
+                                    <button id="btn-view-visual" class="view-btn active" onclick="switchDocumentView('visual')">Visual View</button>
+                                    <button id="btn-view-text" class="view-btn" onclick="switchDocumentView('text')">Plain Text</button>
+                                </div>
+                            </div>
+                            <div style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;" id="document-viewer-content">
+                                <!-- Loaded dynamically via JS -->
+                            </div>
                         </div>
 
                         <!-- Right pane: Interactive Proximity Rules Form -->
@@ -703,6 +800,9 @@
                         <button class="btn-success" onclick="approveAndActivate()">Approve & Activate Rule</button>
                     </div>
                 `;
+                
+                // Initialize visual/text document viewer layout
+                await switchDocumentView('visual');
             } catch (err) {
                 console.error("Failed to load workspace layout details:", err);
                 container.innerHTML = `
@@ -865,81 +965,207 @@
                 compiled.line_items = selectedLayoutData.extraction_rules.line_items;
             }
 
-            return compiled;
+            return compil        // --- Segmented Document Viewer Logic ---
+        let currentViewMode = 'visual';
+
+        async function switchDocumentView(viewMode) {
+            currentViewMode = viewMode;
+            
+            const btnVisual = document.getElementById("btn-view-visual");
+            const btnText = document.getElementById("btn-view-text");
+            
+            if (!btnVisual || !btnText) return;
+            
+            if (viewMode === 'visual') {
+                btnVisual.classList.add("active");
+                btnText.classList.remove("active");
+                await renderVisualDocumentView();
+            } else {
+                btnVisual.classList.remove("active");
+                btnText.classList.add("active");
+                renderPlainTextView();
+            }
         }
 
-        // --- Visual Text Selection Auto-Extraction Mapping ---
-        let activeTargetField = null;
-        let activeTargetButton = null;
+        function renderPlainTextView() {
+            const viewerContent = document.getElementById("document-viewer-content");
+            if (!viewerContent || !selectedLayoutData) return;
+            
+            viewerContent.innerHTML = `
+                <div class="text-viewer" id="ws-raw-text">${escapeHtml(selectedLayoutData.sample_text)}</div>
+            `;
+            
+            // Re-apply visual outlines if we were actively targeting
+            if (activeTargetField) {
+                const textViewer = document.getElementById("ws-raw-text");
+                if (textViewer) {
+                    textViewer.style.outline = "2px dashed var(--accent-green)";
+                    textViewer.style.background = "rgba(16, 185, 129, 0.05)";
+                    textViewer.style.borderRadius = "8px";
+                }
+            }
+        }
 
-        function activateAutoExtract(fieldKey, buttonElement) {
-            if (activeTargetField === fieldKey) {
-                cancelAutoExtract();
+        async function renderVisualDocumentView() {
+            const viewerContent = document.getElementById("document-viewer-content");
+            if (!viewerContent || !selectedLayoutData) return;
+            
+            const docType = selectedLayoutData.document_type.toLowerCase();
+            const layoutHash = selectedLayoutData.layout_hash;
+            
+            viewerContent.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-muted)">
+                    <p style="font-size:12px">Loading Visual Document...</p>
+                </div>
+            `;
+            
+            if (docType === 'pdf') {
+                viewerContent.innerHTML = `
+                    <div class="pdf-viewer-container" style="width:100%; height:100%; overflow:hidden; display:flex; flex-direction:column;">
+                        <iframe id="pdf-iframe" src="/api/document/file/${layoutHash}" style="width:100%; flex-grow:1; border:none; background:#fff;"></iframe>
+                        <div id="ws-raw-text" style="display:none;">${escapeHtml(selectedLayoutData.sample_text)}</div>
+                    </div>
+                `;
+                setupIframeSelectionPolling();
+            } else if (docType === 'excel' || docType === 'csv') {
+                try {
+                    const res = await fetch(`/api/document/grid/${layoutHash}`);
+                    if (!res.ok) throw new Error("File grid endpoints failed or is seed dummy");
+                    const grid = await res.json();
+                    
+                    let html = `
+                        <div class="spreadsheet-table-container">
+                            <div style="font-size:10px; color:var(--accent-green); margin-bottom:8px; display:flex; align-items:center; gap:4px;">
+                                💡 <span>Click any table cell below to map it to the active field!</span>
+                            </div>
+                            <table class="spreadsheet-table">
+                                <thead>
+                                    <tr>
+                                        ${grid.columns.map(col => `<th>${escapeHtml(col)}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${grid.rows.map((row, rIdx) => `
+                                        <tr>
+                                            ${row.map((cell, cIdx) => `
+                                                <td onclick="selectSpreadsheetCell(this, ${rIdx}, ${cIdx})" data-value="${escapeHtml(cell)}">${escapeHtml(cell)}</td>
+                                            `).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            <div id="ws-raw-text" style="display:none;">${escapeHtml(selectedLayoutData.sample_text)}</div>
+                        </div>
+                    `;
+                    viewerContent.innerHTML = html;
+                } catch (err) {
+                    console.error("Spreadsheet rendering failed, falling back to text:", err);
+                    renderPlainTextView();
+                }
+            } else {
+                renderPlainTextView();
+            }
+        }
+
+        // Click interaction for grid/tables
+        function selectSpreadsheetCell(cellElement, rowIdx, colIdx) {
+            if (!activeTargetField) {
+                cellElement.style.outline = "2px dashed var(--primary)";
+                setTimeout(() => cellElement.style.outline = "", 1000);
                 return;
             }
+            
+            const cellValue = cellElement.dataset.value.trim();
+            if (!cellValue) return;
+            
+            const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
+            if (block) {
+                let anchor = "";
+                const table = cellElement.closest("table");
+                if (table) {
+                    const headers = table.querySelectorAll("thead th");
+                    if (headers && headers[colIdx]) {
+                        anchor = headers[colIdx].innerText.trim();
+                    }
+                }
+                
+                block.querySelector(".field-anchor").value = anchor || "Header";
+                block.querySelector(".field-direction").value = "relative_right";
+                block.querySelector(".field-window").value = 80;
+                
+                let regex = "([A-Za-z0-9-]+)";
+                const cleanVal = cellValue.replace(/[\s,]/g, "");
+                if (/^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/.test(cellValue) || /^\d{11}$/.test(cleanVal)) {
+                    regex = "([\\d\\s]+)";
+                } else if (/^\$?[0-9,.]+\d{2}$/.test(cellValue) || /^[0-9,.]+\d{2}$/.test(cleanVal)) {
+                    regex = "([0-9.,$]+)";
+                } else if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(cellValue) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(cellValue)) {
+                    regex = "([0-9/-]+)";
+                } else if (/^\d+$/.test(cleanVal)) {
+                    regex = "(\\d+)";
+                }
+                
+                block.querySelector(".field-regex").value = regex;
+                
+                cellElement.classList.add("selected-cell");
+                setTimeout(() => cellElement.classList.remove("selected-cell"), 1500);
+                
+                const originalBorder = block.style.borderColor;
+                const originalShadow = block.style.boxShadow;
+                block.style.borderColor = "var(--accent-green)";
+                block.style.boxShadow = "0 0 15px rgba(16, 185, 129, 0.4)";
+                setTimeout(() => {
+                    block.style.borderColor = originalBorder;
+                    block.style.boxShadow = originalShadow;
+                }, 1200);
+                
+                testRules();
+            }
+            
             cancelAutoExtract();
-            
-            activeTargetField = fieldKey;
-            activeTargetButton = buttonElement;
-            
-            buttonElement.innerHTML = "🎯 Highlight Text in Left Pane...";
-            buttonElement.style.background = "rgba(16, 185, 129, 0.2)";
-            buttonElement.style.color = "var(--accent-green)";
-            buttonElement.style.borderColor = "var(--accent-green)";
-            buttonElement.classList.add("pulse-btn-anim");
-            
-            const textViewer = document.getElementById("ws-raw-text");
-            if (textViewer) {
-                textViewer.style.outline = "2px dashed var(--accent-green)";
-                textViewer.style.background = "rgba(16, 185, 129, 0.05)";
-                textViewer.style.borderRadius = "8px";
-            }
         }
 
-        function cancelAutoExtract() {
-            if (activeTargetButton) {
-                activeTargetButton.innerHTML = "🎯 Auto-Extract Selection";
-                activeTargetButton.style.background = "";
-                activeTargetButton.style.color = "";
-                activeTargetButton.style.borderColor = "";
-                activeTargetButton.classList.remove("pulse-btn-anim");
-            }
-            activeTargetField = null;
-            activeTargetButton = null;
+        // PDF iframe cross-boundary selection polling
+        let iframeSelectionInterval = null;
+
+        function setupIframeSelectionPolling() {
+            if (iframeSelectionInterval) clearInterval(iframeSelectionInterval);
             
-            const textViewer = document.getElementById("ws-raw-text");
-            if (textViewer) {
-                textViewer.style.outline = "";
-                textViewer.style.background = "";
-            }
+            iframeSelectionInterval = setInterval(() => {
+                if (!activeTargetField) return;
+                
+                const iframe = document.getElementById("pdf-iframe");
+                if (!iframe) return;
+                
+                try {
+                    const iframeWindow = iframe.contentWindow;
+                    const selection = iframeWindow.getSelection();
+                    const selectedText = selection.toString().trim();
+                    
+                    if (selectedText) {
+                        processSelectionText(selectedText);
+                        selection.removeAllRanges();
+                    }
+                } catch (e) {
+                    // Safe catch-all for CORS warning
+                }
+            }, 400);
         }
 
-        document.addEventListener("mouseup", () => {
-            if (!activeTargetField) return;
-            
-            const selection = window.getSelection();
-            const selectedText = selection.toString().trim();
-            if (!selectedText) return;
-            
+        function processSelectionText(selectedText) {
             const textViewer = document.getElementById("ws-raw-text");
-            if (!textViewer || !textViewer.contains(selection.anchorNode)) {
-                cancelAutoExtract();
-                return;
-            }
+            if (!textViewer) return;
             
             const fullText = textViewer.innerText;
-            let startIndex = -1;
-            try {
-                const range = selection.getRangeAt(0);
-                const preCaretRange = range.cloneRange();
-                preCaretRange.selectNodeContents(textViewer);
-                preCaretRange.setEnd(range.startContainer, range.startOffset);
-                startIndex = preCaretRange.toString().length;
-            } catch (e) {
-                startIndex = fullText.indexOf(selectedText);
-            }
+            let startIndex = fullText.indexOf(selectedText);
+            
+            const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
+            if (!block) return;
             
             if (startIndex === -1) {
+                block.querySelector(".field-anchor").value = "Invoice";
+                block.querySelector(".field-regex").value = `(${escapeRegExp(selectedText)})`;
+                testRules();
                 cancelAutoExtract();
                 return;
             }
@@ -993,26 +1219,102 @@
                 regex = "(\\d+)";
             }
             
-            const block = document.querySelector(`.field-block[data-field="${activeTargetField}"]`);
-            if (block) {
-                block.querySelector(".field-anchor").value = anchor || "Invoice";
-                block.querySelector(".field-direction").value = direction;
-                block.querySelector(".field-window").value = windowChars;
-                block.querySelector(".field-regex").value = regex;
-                
-                const originalBorder = block.style.borderColor;
-                const originalShadow = block.style.boxShadow;
-                block.style.borderColor = "var(--accent-green)";
-                block.style.boxShadow = "0 0 15px rgba(16, 185, 129, 0.4)";
-                setTimeout(() => {
-                    block.style.borderColor = originalBorder;
-                    block.style.boxShadow = originalShadow;
-                }, 1200);
-                
-                testRules();
+            block.querySelector(".field-anchor").value = anchor || "Invoice";
+            block.querySelector(".field-direction").value = direction;
+            block.querySelector(".field-window").value = windowChars;
+            block.querySelector(".field-regex").value = regex;
+            
+            const originalBorder = block.style.borderColor;
+            const originalShadow = block.style.boxShadow;
+            block.style.borderColor = "var(--accent-green)";
+            block.style.boxShadow = "0 0 15px rgba(16, 185, 129, 0.4)";
+            setTimeout(() => {
+                block.style.borderColor = originalBorder;
+                block.style.boxShadow = originalShadow;
+            }, 1200);
+            
+            testRules();
+            cancelAutoExtract();
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        // --- Visual Text Selection Auto-Extraction Mapping ---
+        let activeTargetField = null;
+        let activeTargetButton = null;
+
+        function activateAutoExtract(fieldKey, buttonElement) {
+            if (activeTargetField === fieldKey) {
+                cancelAutoExtract();
+                return;
+            }
+            cancelAutoExtract();
+            
+            activeTargetField = fieldKey;
+            activeTargetButton = buttonElement;
+            
+            buttonElement.innerHTML = "🎯 Click Grid Cell or Highlight Document...";
+            buttonElement.style.background = "rgba(16, 185, 129, 0.2)";
+            buttonElement.style.color = "var(--accent-green)";
+            buttonElement.style.borderColor = "var(--accent-green)";
+            buttonElement.classList.add("pulse-btn-anim");
+            
+            // Highlight text viewer if using plain text view
+            const textViewer = document.getElementById("ws-raw-text");
+            if (textViewer && textViewer.style.display !== "none") {
+                textViewer.style.outline = "2px dashed var(--accent-green)";
+                textViewer.style.background = "rgba(16, 185, 129, 0.05)";
+                textViewer.style.borderRadius = "8px";
             }
             
-            cancelAutoExtract();
+            // Pulsing highlight around interactive visual containers
+            const gridContainer = document.querySelector(".spreadsheet-table-container");
+            if (gridContainer) {
+                gridContainer.style.outline = "2px dashed var(--accent-green)";
+                gridContainer.style.background = "rgba(16, 185, 129, 0.03)";
+                gridContainer.style.borderRadius = "8px";
+            }
+        }
+
+        function cancelAutoExtract() {
+            if (activeTargetButton) {
+                activeTargetButton.innerHTML = "🎯 Auto-Extract Selection";
+                activeTargetButton.style.background = "";
+                activeTargetButton.style.color = "";
+                activeTargetButton.style.borderColor = "";
+                activeTargetButton.classList.remove("pulse-btn-anim");
+            }
+            activeTargetField = null;
+            activeTargetButton = null;
+            
+            const textViewer = document.getElementById("ws-raw-text");
+            if (textViewer) {
+                textViewer.style.outline = "";
+                textViewer.style.background = "";
+            }
+            const gridContainer = document.querySelector(".spreadsheet-table-container");
+            if (gridContainer) {
+                gridContainer.style.outline = "";
+                gridContainer.style.background = "";
+            }
+        }
+
+        document.addEventListener("mouseup", () => {
+            if (!activeTargetField) return;
+            
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+            
+            const textViewer = document.getElementById("ws-raw-text");
+            if (!textViewer || !textViewer.contains(selection.anchorNode)) {
+                // Click was outside raw text block, let spreadsheet or other handler deal with it
+                return;
+            }
+            
+            processSelectionText(selectedText);
             selection.removeAllRanges();
         });
 
