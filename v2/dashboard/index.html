@@ -1171,6 +1171,7 @@
             "customer_email": { color: "#38bdf8", bg: "rgba(56, 189, 248, 0.08)", text: "sky" },
             "customer_email_domain": { color: "#fb923c", bg: "rgba(251, 146, 60, 0.08)", text: "orange_light" },
             "customer_representative_name": { color: "#a3e635", bg: "rgba(163, 230, 53, 0.08)", text: "lime" },
+            "delivery_notes": { color: "#e879f9", bg: "rgba(232, 121, 249, 0.08)", text: "fuchsia" },
             "total_amount": { color: "#f59e0b", bg: "rgba(245, 158, 11, 0.08)", text: "orange" },
             "line_items": { color: "#f43f5e", bg: "rgba(244, 63, 94, 0.08)", text: "red" }
         };
@@ -1245,7 +1246,13 @@
                 }
                 const dateStr = new Date(item.processed_at).toLocaleString("en-AU", { timeZone: "Australia/Sydney" });
                 const cacheId = item.id || item.processed_at;
-                window.historyParsedDataCache[cacheId] = item.parsed_data;
+                window.historyParsedDataCache[cacheId] = {
+                    parsed_data: item.parsed_data,
+                    layout_hash: item.layout_hash,
+                    supplier_name: item.supplier_name,
+                    filename: item.filename,
+                    status: item.status
+                };
 
                 return `
                     <tr onclick="inspectHistoricalFile('${item.layout_hash}', '${item.filename}')" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='none'" style="cursor: pointer; transition: background 0.2s ease;" class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
@@ -1307,7 +1314,13 @@
             successfulIngestions.forEach(item => {
                 const parsed = item.parsed_data;
                 const cacheId = item.id || item.processed_at;
-                window.historyParsedDataCache[cacheId] = parsed;
+                window.historyParsedDataCache[cacheId] = {
+                    parsed_data: parsed,
+                    layout_hash: item.layout_hash,
+                    supplier_name: item.supplier_name,
+                    filename: item.filename,
+                    status: item.status
+                };
 
                 const filename = item.filename;
                 const customerName = parsed.customer_name || "-";
@@ -1409,8 +1422,8 @@
             el.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8), 0 0 15px rgba(6, 182, 212, 0.15)";
             el.style.zIndex = "10000";
             el.style.pointerEvents = "none";
-            el.style.maxWidth = "420px";
-            el.style.maxHeight = "300px";
+            el.style.maxWidth = "600px";
+            el.style.maxHeight = "500px";
             el.style.overflowY = "auto";
             el.style.fontFamily = "var(--font-mono)";
             el.style.fontSize = "11px";
@@ -1425,12 +1438,34 @@
             const tooltip = document.getElementById("json-hover-tooltip");
             if (!tooltip) return;
 
-            const data = window.historyParsedDataCache ? window.historyParsedDataCache[cacheId] : null;
-            if (!data) return;
+            const cached = window.historyParsedDataCache ? window.historyParsedDataCache[cacheId] : null;
+            if (!cached) return;
 
-            // Format JSON beautifully
-            const formattedJson = JSON.stringify(data, null, 2);
-            tooltip.innerHTML = `<div style="font-weight: 700; color: #fff; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; text-transform:uppercase; font-size:9px; letter-spacing:0.5px;">Parsed Ingested JSON</div><pre style="margin: 0; white-space: pre-wrap; word-break: break-all;">${escapeHtml(formattedJson)}</pre>`;
+            // Support both old format (raw parsed_data) and new format (object with metadata)
+            const parsedData = cached.parsed_data || cached;
+            const layoutHash = cached.layout_hash || "";
+            const supplierName = cached.supplier_name || "";
+            const filename = cached.filename || "";
+            const status = cached.status || "";
+
+            // Format parsed JSON beautifully
+            const formattedJson = JSON.stringify(parsedData, null, 2);
+
+            // Build template info section
+            let templateHtml = "";
+            if (layoutHash || supplierName) {
+                templateHtml = `
+                    <div style="font-weight: 700; color: #fff; margin-top: 12px; margin-bottom: 6px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; text-transform:uppercase; font-size:9px; letter-spacing:0.5px; color: var(--primary-pink);">Template Info</div>
+                    <div style="font-size: 10px; line-height: 1.6; color: var(--text-muted);">
+                        ${supplierName ? `<div><span style="color: var(--neon-cyan);">Supplier:</span> <span style="color: #fff;">${escapeHtml(supplierName)}</span></div>` : ''}
+                        ${filename ? `<div><span style="color: var(--neon-cyan);">File:</span> <span style="color: #fff;">${escapeHtml(filename)}</span></div>` : ''}
+                        ${layoutHash ? `<div><span style="color: var(--neon-cyan);">Layout Hash:</span> <span style="color: var(--text-muted);">${escapeHtml(layoutHash.substring(0, 16))}…</span></div>` : ''}
+                        ${status ? `<div><span style="color: var(--neon-cyan);">Status:</span> <span style="color: ${status === 'success' ? 'var(--neon-green)' : 'var(--neon-orange)'}; text-transform: uppercase; font-weight: 600;">${escapeHtml(status)}</span></div>` : ''}
+                    </div>
+                `;
+            }
+
+            tooltip.innerHTML = `<div style="font-weight: 700; color: #fff; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; text-transform:uppercase; font-size:9px; letter-spacing:0.5px;">Parsed Ingested JSON</div><pre style="margin: 0; white-space: pre-wrap; word-break: break-all;">${escapeHtml(formattedJson)}</pre>${templateHtml}`;
             
             tooltip.style.display = "block";
             moveJsonTooltip(event);
@@ -1678,6 +1713,7 @@
                     ${renderFieldBlock("customer_phone_number", "Customer Phone Number", fields.customer_phone_number)}
                     ${renderFieldBlock("customer_email", "Customer Email", fields.customer_email)}
                     ${renderFieldBlock("customer_representative_name", "Customer Representative Name", fields.customer_representative_name)}
+                    ${renderFieldBlock("delivery_notes", "Delivery Notes", fields.delivery_notes)}
                     ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
                 </div>
             `;
@@ -2138,6 +2174,10 @@
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Customer Rep</div>
                                 <div class="preview-card-val">${escapeHtml(ext.customer_representative_name || "NULL")}</div>
+                            </div>
+                            <div class="preview-card" style="grid-column: span 2;">
+                                <div class="preview-card-lbl">Delivery Notes</div>
+                                <div class="preview-card-val" style="font-size: 11px; color: #e879f9;">${escapeHtml(ext.delivery_notes || "NULL")}</div>
                             </div>
                         </div>
                         ${lineItemsTableHtml}

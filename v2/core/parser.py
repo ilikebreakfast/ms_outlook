@@ -32,7 +32,11 @@ FIELD_CONFIDENCE_WEIGHTS = {
     # Secondary optional fields
     "customer_address": 0.2,
     "customer_phone_number": 0.2,
-    "customer_representative_name": 0.2
+    "customer_representative_name": 0.2,
+    "delivery_notes": 0.2,
+    
+    # Auto-derived fields (zero weight — never penalise confidence for missing auto-derived values)
+    "customer_email_domain": 0.0
 }
 
 
@@ -145,7 +149,13 @@ class DeterministicParser:
         return extracted, round(confidence, 2)
 
     def _parse_coordinate_field(self, field_name: str, rule: Dict[str, Any]) -> Optional[Any]:
-        """Extract a single field utilizing visual drag-and-draw coordinate cropping bounding boxes."""
+        """
+        Extract a single field utilizing visual drag-and-draw coordinate cropping bounding boxes.
+        
+        IMPORTANT: The bounding box IS the selection — the user drew it precisely around the
+        target value. We return the FULL cropped text without applying regex filters, which
+        would truncate multi-word/multi-line values like addresses and full names.
+        """
         if not self.pdf_path or not self.pdf_path.exists():
             log.warning(f"No physical PDF file available for coordinate-based extraction of field '{field_name}'.")
             return None
@@ -175,15 +185,7 @@ class DeterministicParser:
                     text = cropped.extract_text()
                     if text:
                         text = text.strip()
-                        regex = rule.get("regex_pattern")
-                        if regex:
-                            try:
-                                compiled_re = re.compile(regex, re.IGNORECASE)
-                                match = compiled_re.search(text)
-                                if match:
-                                    text = match.group(1).strip() if match.groups() else match.group(0).strip()
-                            except Exception:
-                                pass
+                        # Coordinate strategy: return full cropped text — no regex truncation
                         return self._normalise_field_value(field_name, text)
         except Exception as e:
             log.error(f"pdfplumber coordinate field extraction failed for '{field_name}': {e}")
@@ -212,15 +214,7 @@ class DeterministicParser:
                 
                 text = pytesseract.image_to_string(img, lang="eng").strip()
                 if text:
-                    regex = rule.get("regex_pattern")
-                    if regex:
-                        try:
-                            compiled_re = re.compile(regex, re.IGNORECASE)
-                            match = compiled_re.search(text)
-                            if match:
-                                text = match.group(1).strip() if match.groups() else match.group(0).strip()
-                        except Exception:
-                            pass
+                    # Coordinate strategy: return full cropped text — no regex truncation
                     return self._normalise_field_value(field_name, text)
         except Exception as e:
             log.error(f"PyMuPDF OCR coordinate field extraction fallback failed for '{field_name}': {e}")

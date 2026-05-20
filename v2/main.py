@@ -226,6 +226,19 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                         )
                     else:
                         log.error("One-time bootstrapping failed for unrecognized layout.")
+                        # Create placeholder layout_rules entry so the dashboard shows a human-readable
+                        # name (filename stem) instead of the raw layout hash as the supplier
+                        placeholder_name = path.stem.replace("_", " ").replace("-", " ").title()
+                        db.save_layout_rule(
+                            layout_hash=layout_hash,
+                            supplier_name=placeholder_name,
+                            document_type=file_type,
+                            status="pending_approval",
+                            extraction_rules={
+                                "required_fields": ["invoice_number", "total_amount"],
+                                "fields": {}
+                            }
+                        )
                         hist_id = db.log_extraction(
                             message_id=msg_id,
                             filename=path.name,
@@ -233,7 +246,7 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                             parsed_data=None,
                             status="failed"
                         )
-                        db.add_to_review_queue(hist_id, "One-time template compilation failed.")
+                        db.add_to_review_queue(hist_id, "One-time template compilation failed. Placeholder created for manual configuration.")
 
         # 9. Mark email as processed in Graph folder (Optional webhook notifications can fire here)
         try:
