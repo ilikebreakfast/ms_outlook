@@ -1721,11 +1721,35 @@
                 const rules = data.extraction_rules;
                 document.getElementById("header-legend").style.display = "flex";
 
+                // Compute smart supplier display name using same priority as the dropdown filter:
+                // Customer Name (@domain) > Customer Name > supplier_name > filename
+                let wsDisplayName = data.supplier_name || '';
+                let wsFilename = filename || '';
+                
+                // Try to find the latest successful extraction for this layout hash to pull customer info
+                const historyCache = window.rawHistoryData || [];
+                const latestMatch = historyCache
+                    .filter(h => h.layout_hash === data.layout_hash && h.parsed_data)
+                    .sort((a, b) => (b.processed_at || '').localeCompare(a.processed_at || ''))[0];
+                
+                if (latestMatch) {
+                    wsDisplayName = getSupplierDisplayName(latestMatch);
+                    if (!wsFilename) wsFilename = latestMatch.filename || '';
+                }
+                
+                // Final fallback: if wsFilename is still empty, use the first matching history filename
+                if (!wsFilename) {
+                    const anyMatch = historyCache.find(h => h.layout_hash === data.layout_hash);
+                    if (anyMatch) wsFilename = anyMatch.filename || '';
+                }
+                if (!wsFilename) wsFilename = 'No file loaded';
+
                 container.innerHTML = `
                     <div class="workspace-header">
                         <div class="workspace-title-group">
-                            <input type="text" id="ws-supplier-name" value="${escapeHtml(data.supplier_name)}" style="font-size:14px; font-weight:700; background:none; border:none; border-bottom:1px dashed var(--primary-pink); padding: 2px 0; border-radius:0; width: 340px; color:#fff; font-family: var(--font-main);">
-                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                            <input type="text" id="ws-supplier-name" value="${escapeHtml(wsDisplayName)}" style="font-size:14px; font-weight:700; background:none; border:none; border-bottom:1px dashed var(--primary-pink); padding: 2px 0; border-radius:0; width: 340px; color:#fff; font-family: var(--font-main);">
+                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap: wrap;">
+                                <div class="fingerprint-tag" style="border-color: rgba(255,255,255,0.12); color: var(--text-muted); font-weight: 500; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(wsFilename)}">📄 ${escapeHtml(wsFilename)}</div>
                                 ${filename ? `<div class="fingerprint-tag" style="border-color: var(--neon-cyan); color: var(--neon-cyan); font-weight: 700;">HISTORIC FILE: ${escapeHtml(filename)}</div>` : ''}
                                 <div class="fingerprint-tag">SIGNATURE: ${data.layout_hash}</div>
                                 <select id="ws-doc-type" style="padding: 2px 6px; font-size:11px; border-radius:4px; background:#1c0e0e; border: 1px solid rgba(255,255,255,0.08); color: var(--primary-pink); font-family: var(--font-main); font-weight:600;">
