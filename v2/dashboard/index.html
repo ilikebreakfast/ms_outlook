@@ -1747,7 +1747,7 @@
                 container.innerHTML = `
                     <div class="workspace-header">
                         <div class="workspace-title-group">
-                            <input type="text" id="ws-supplier-name" value="${escapeHtml(wsDisplayName)}" style="font-size:14px; font-weight:700; background:none; border:none; border-bottom:1px dashed var(--primary-pink); padding: 2px 0; border-radius:0; width: 340px; color:#fff; font-family: var(--font-main);">
+                            <div id="ws-supplier-name" style="font-size:14px; font-weight:700; padding: 2px 0; color:#fff; font-family: var(--font-main);">${escapeHtml(wsDisplayName)}</div>
                             <div style="display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap: wrap;">
                                 <div class="fingerprint-tag" style="border-color: rgba(255,255,255,0.12); color: var(--text-muted); font-weight: 500; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(wsFilename)}">📄 ${escapeHtml(wsFilename)}</div>
                                 ${filename ? `<div class="fingerprint-tag" style="border-color: var(--neon-cyan); color: var(--neon-cyan); font-weight: 700;">HISTORIC FILE: ${escapeHtml(filename)}</div>` : ''}
@@ -2330,7 +2330,7 @@
 
         // 5. Approve template layout rules and activate in DB
         async function approveAndActivate() {
-            const supplierName = document.getElementById("ws-supplier-name").value;
+            const supplierName = document.getElementById("ws-supplier-name").textContent;
             const docType = document.getElementById("ws-doc-type").value;
             const rules = compileFormRules();
 
