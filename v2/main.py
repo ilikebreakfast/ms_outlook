@@ -41,6 +41,29 @@ def get_known_hashes() -> Set[str]:
     finally:
         conn.close()
 
+def enrich_with_email_metadata(extracted: dict, sender_email: str) -> dict:
+    """Enrich parsed data with Graph API email metadata as fallback values.
+    
+    If the deterministic parser didn't extract customer_email from the PDF,
+    fall back to the sender's email address from the Graph API. The email
+    domain is then auto-derived from whichever email source is available.
+    """
+    if not extracted:
+        return extracted
+    
+    # Inject sender email as fallback if parser didn't find one in the document
+    if not extracted.get("customer_email") and sender_email and sender_email != "unknown@domain.com":
+        extracted["customer_email"] = sender_email
+    
+    # Always re-derive email domain from the best available email
+    email = str(extracted.get("customer_email", "")).strip()
+    if email and "@" in email:
+        extracted["customer_email_domain"] = email[email.find("@"):].strip().lower()
+    elif not extracted.get("customer_email_domain"):
+        extracted["customer_email_domain"] = ""
+    
+    return extracted
+
 
 def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
     """Run one single complete pass of the invoice processing pipeline."""
@@ -133,6 +156,7 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                     parser = DeterministicParser(raw_text, rules, pdf_path=path)
                     
                     extracted, confidence = parser.extract_fields()
+                    extracted = enrich_with_email_metadata(extracted, sender_email)
                     log.info(f"Extraction completed. Confidence rating: {confidence * 100:.0f}%")
                     
                     # Log extraction as success regardless of confidence
@@ -206,6 +230,7 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                 if best_fuzzy_match and best_confidence >= 0.8:
                     # TIER 1 (≥80%): High confidence — auto-accept as success
                     log.info(f"Fuzzy template match succeeded: matched '{best_fuzzy_match['supplier_name']}' ({best_fuzzy_match['layout_hash']}) with confidence {best_confidence * 100:.0f}%")
+                    best_fuzzy_match["extracted"] = enrich_with_email_metadata(best_fuzzy_match["extracted"], sender_email)
                     db.log_extraction(
                         message_id=msg_id,
                         filename=path.name,
@@ -232,6 +257,7 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                     )
                     
                     # Log extraction with the partial data we managed to extract
+                    best_fuzzy_match["extracted"] = enrich_with_email_metadata(best_fuzzy_match["extracted"], sender_email)
                     hist_id = db.log_extraction(
                         message_id=msg_id,
                         filename=path.name,
