@@ -133,16 +133,24 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                     parser = DeterministicParser(raw_text, rules, pdf_path=path)
                     
                     extracted, confidence = parser.extract_fields()
-                    log.info(f"Extraction completed. Confidence rating: {confidence * 100}%")
+                    log.info(f"Extraction completed. Confidence rating: {confidence * 100:.0f}%")
                     
-                    # Normal active parsing success
-                    db.log_extraction(
+                    # Log extraction as success regardless of confidence
+                    hist_id = db.log_extraction(
                         message_id=msg_id,
                         filename=path.name,
                         layout_hash=layout_hash,
                         parsed_data=extracted,
                         status="success"
                     )
+                    
+                    # Confidence-based alert: flag for human review when confidence drops below threshold
+                    if confidence < 0.7:
+                        log.warning(f"Low confidence extraction ({confidence * 100:.0f}%) for '{path.name}'. Flagging for operator review.")
+                        db.add_to_review_queue(
+                            hist_id,
+                            f"Low confidence extraction ({confidence * 100:.0f}%). Some fields may be missing or incorrect — please verify."
+                        )
                     
                 elif status == "pending_approval":
                     log.warning(f"Document matches a template under 'pending_approval' review. Holding.")
@@ -193,8 +201,11 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                         except Exception as parse_err:
                             log.debug(f"Fuzzy matching evaluation failed for layout {r_row['layout_hash']}: {parse_err}")
 
+                # --- THREE-TIER FUZZY MATCHING ROUTING ---
+                
                 if best_fuzzy_match and best_confidence >= 0.8:
-                    log.info(f"Fuzzy template match succeeded: matched '{best_fuzzy_match['supplier_name']}' ({best_fuzzy_match['layout_hash']}) with confidence {best_confidence * 100}%")
+                    # TIER 1 (≥80%): High confidence — auto-accept as success
+                    log.info(f"Fuzzy template match succeeded: matched '{best_fuzzy_match['supplier_name']}' ({best_fuzzy_match['layout_hash']}) with confidence {best_confidence * 100:.0f}%")
                     db.log_extraction(
                         message_id=msg_id,
                         filename=path.name,
@@ -202,9 +213,42 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                         parsed_data=best_fuzzy_match["extracted"],
                         status="success"
                     )
+                    
+                elif best_fuzzy_match and best_confidence >= 0.5:
+                    # TIER 2 (50-79%): Layout drift detected — copy template to new hash, flag for review
+                    log.warning(
+                        f"Layout drift detected for '{best_fuzzy_match['supplier_name']}'. "
+                        f"Fuzzy confidence: {best_confidence * 100:.0f}%. "
+                        f"Forwarding template rules to new layout hash '{layout_hash[:16]}...' for operator review."
+                    )
+                    
+                    # Copy the existing active template rules to the new layout hash as pending_approval
+                    db.save_layout_rule(
+                        layout_hash=layout_hash,
+                        supplier_name=best_fuzzy_match["supplier_name"],
+                        document_type=file_type,
+                        status="pending_approval",
+                        extraction_rules=best_fuzzy_match["extraction_rules"]
+                    )
+                    
+                    # Log extraction with the partial data we managed to extract
+                    hist_id = db.log_extraction(
+                        message_id=msg_id,
+                        filename=path.name,
+                        layout_hash=layout_hash,
+                        parsed_data=best_fuzzy_match["extracted"],
+                        status="drifted"
+                    )
+                    db.add_to_review_queue(
+                        hist_id,
+                        f"Layout drift detected for '{best_fuzzy_match['supplier_name']}' "
+                        f"(confidence: {best_confidence * 100:.0f}%). "
+                        f"Previous template rules copied forward — please verify and re-approve."
+                    )
+                    
                 else:
-                    # --- NEW TEMPLATE ONE-TIME BOOTSTRAPPING ENGINE ---
-                    log.info("No high-confidence active template match found. Triggering one-time LLM bootstrapper.")
+                    # TIER 3 (<50%): No usable match — full LLM bootstrap
+                    log.info("No usable fuzzy template match found. Triggering one-time LLM bootstrapper.")
                     bootstrap_res = bootstrap_template(
                         raw_text=raw_text,
                         document_type=file_type,
