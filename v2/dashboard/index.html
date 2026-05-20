@@ -966,23 +966,22 @@
 </head>
 
 <body>
-
     <!-- Header Section -->
     <header>
         <div class="logo-group">
             <svg viewBox="0 0 16 16" width="36" height="36"
-                style="fill: var(--accent-red); filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.4));">
+                style="fill: var(--neon-cyan); filter: drop-shadow(0 2px 8px rgba(6, 182, 212, 0.4));">
                 <path d="M4,1 h8 v2 h2 v2 h1 v6 h-1 v2 h-2 v1 h-2 v1 h-4 v-1 h-1 v-1 h-1 v-8 h2 Z"
-                    fill="rgba(127, 29, 29, 0.5)" />
+                    fill="rgba(8, 47, 73, 0.5)" />
                 <path d="M5,2 h6 v1 h2 v2 h1 v4 h-1 v2 h-1 v1 h-1 v1 h-2 v-1 h-1 v-1 h-1 v-6 h1 Z"
-                    fill="var(--accent-red)" />
-                <path d="M8,2 v10 M5,7 h6" stroke="#fff" stroke-width="1.2" stroke-linecap="square" />
+                    fill="var(--neon-cyan)" />
+                <path d="M8,2 v10 M5,7 h6" stroke="#040b14" stroke-width="1.2" stroke-linecap="square" />
             </svg>
             <div>
-                <h1>THE MEAT EXTRACTOR</h1>
+                <h1>TCF INGESTION CONSOLE</h1>
                 <p
                     style="font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">
-                    Glassmorphism Command Center v2</p>
+                    Enterprise Cognitive Ingestion v2</p>
             </div>
         </div>
 
@@ -1013,25 +1012,25 @@
     <section class="stats-grid">
         <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <span class="stat-label">Total Meats Processed</span>
+                <span class="stat-label">Total Invoices Ingested</span>
             </div>
             <span class="stat-value" id="stat-total">0</span>
         </div>
         <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <span class="stat-label">Extraction Yield Quality</span>
+                <span class="stat-label">Extraction Accuracy</span>
             </div>
             <span class="stat-value highlight-green" id="stat-success">0.0%</span>
         </div>
         <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <span class="stat-label">Ledger Queue Ledger</span>
+                <span class="stat-label">Awaiting Operator Review</span>
             </div>
             <span class="stat-value highlight-orange" id="stat-pending">0</span>
         </div>
         <div class="stat-card glass-panel">
             <div class="stat-label-group">
-                <span class="stat-label">Active Carving Recipes</span>
+                <span class="stat-label">Active Layout Templates</span>
             </div>
             <span class="stat-value" id="stat-active">0</span>
         </div>
@@ -1040,12 +1039,15 @@
     <!-- Main Dashboard Body Grid -->
     <main class="main-container">
 
-        <!-- Left Sidebar: Pending reviews -->
+        <!-- Left Sidebar: Queue / Templates list -->
         <aside class="glass-panel queue-sidebar">
-            <div class="panel-header-tag">Ledger List</div>
-            <div class="queue-list" id="queue-list-container">
-                <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 20px;">LOADING
-                    LEDGERS...</p>
+            <div class="panel-header-tag" id="sidebar-header-title">Pending Review Queue</div>
+            <div style="display: flex; gap: 4px; padding: 4px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; margin: 32px 16px 8px 16px;">
+                <button id="sidebar-pending-tab" onclick="setSidebarMode('pending')" style="flex: 1; padding: 6px 12px; font-size: 10px; font-weight: 700; color: #070505; background: var(--primary-pink); border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">Pending</button>
+                <button id="sidebar-active-tab" onclick="setSidebarMode('active')" style="flex: 1; padding: 6px 12px; font-size: 10px; font-weight: 600; color: var(--text-muted); background: none; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">Active Rules</button>
+            </div>
+            <div class="queue-list" id="queue-list-container" style="height: calc(100% - 90px); overflow-y: auto;">
+                <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 20px;">LOADING INVOICES...</p>
             </div>
         </aside>
 
@@ -1053,14 +1055,52 @@
         <section class="glass-panel workspace-panel" id="workspace-panel-container">
             <div class="panel-header-tag">Workspace Canvas</div>
             <div class="placeholder-workspace">
-                <div class="placeholder-icon">🥩</div>
-                <h3 style="font-size: 15px; font-weight: 600; color: #fff;">Select an invoice layout</h3>
-                <p style="font-size: 13px; max-width: 320px; color: var(--text-muted); line-height: 1.5;">Choose a
-                    layout template from the left ledger list to define visual parsing coordinate rules.</p>
+                <div class="placeholder-icon" style="filter: drop-shadow(0 2px 8px rgba(14, 165, 233, 0.4));">📄</div>
+                <h3 style="font-size: 15px; font-weight: 600; color: #fff;">Select an Invoice Layout</h3>
+                <p style="font-size: 13px; max-width: 320px; color: var(--text-muted); line-height: 1.5;">Choose a document from the pending review queue to define visual parsing coordinate rules.</p>
             </div>
         </section>
 
     </main>
+
+    <!-- Real-Time Flattened Verified Data Streams -->
+    <section class="glass-panel"
+        style="margin: 24px 40px 24px 40px; padding: 24px; padding-top: 36px; border-color: rgba(14, 165, 233, 0.15);">
+        <div class="panel-header-tag" style="background: linear-gradient(135deg, var(--neon-cyan), #3b82f6);">
+            Live Verified Database Streams</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3
+                style="font-size: 14px; font-weight: 700; color: var(--neon-cyan); text-transform: uppercase; letter-spacing: 0.5px;">
+                Flattened Database Records (Live Export Preview)</h3>
+            <button class="pixel-btn-secondary" onclick="loadLiveFlattenedData()"
+                style="padding: 4px 10px; font-size: 9px; margin: 0; box-shadow: none; border-color: rgba(255,255,255,0.08);">
+                🔄 Refresh Stream
+            </button>
+        </div>
+        <div style="overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+            <table class="spreadsheet-table" id="live-flattened-table">
+                <thead>
+                    <tr>
+                        <th style="font-size: 8px;">File Name</th>
+                        <th style="font-size: 8px; text-align: left;">Customer Name</th>
+                        <th style="font-size: 8px; text-align: left;">Account No</th>
+                        <th style="font-size: 8px; text-align: left;">Inv Number</th>
+                        <th style="font-size: 8px; text-align: left;">Inv Date</th>
+                        <th style="font-size: 8px; text-align: left;">Item Code</th>
+                        <th style="font-size: 8px; text-align: left;">Description</th>
+                        <th style="font-size: 8px; text-align: right;">Qty</th>
+                        <th style="font-size: 8px; text-align: right;">Unit Price</th>
+                        <th style="font-size: 8px; text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="live-flattened-table-body">
+                    <tr>
+                        <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 20px;">No verified database records synced. Approve and lock a template to stream records automatically.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
     <!-- Dataset Historical Preview Section -->
     <section class="glass-panel"
@@ -1080,9 +1120,9 @@
             <table class="spreadsheet-table" id="history-table">
                 <thead>
                     <tr>
-                        <th style="font-size: 8px;">File Name</th>
-                        <th style="font-size: 8px;">Layout Hash</th>
-                        <th style="font-size: 8px;">Invoice Number</th>
+                        <th style="font-size: 8px; text-align: left;">File Name</th>
+                        <th style="font-size: 8px; text-align: left;">Layout Hash</th>
+                        <th style="font-size: 8px; text-align: left;">Invoice Number</th>
                         <th style="font-size: 8px; text-align: right;">Total Amount</th>
                         <th style="font-size: 8px; text-align: center;">Status</th>
                         <th style="font-size: 8px; text-align: right;">Processed At</th>
@@ -1109,6 +1149,13 @@
             "invoice_number": { color: "#ff7da0", bg: "rgba(255, 125, 160, 0.08)", text: "pink" },
             "invoice_date": { color: "#10b981", bg: "rgba(16, 185, 129, 0.08)", text: "green" },
             "abn": { color: "#06b6d4", bg: "rgba(6, 182, 212, 0.08)", text: "cyan" },
+            "customer_account_number": { color: "#818cf8", bg: "rgba(129, 140, 248, 0.08)", text: "indigo" },
+            "customer_name": { color: "#c084fc", bg: "rgba(192, 132, 252, 0.08)", text: "purple" },
+            "customer_address": { color: "#fb7185", bg: "rgba(251, 113, 133, 0.08)", text: "rose" },
+            "customer_phone_number": { color: "#2dd4bf", bg: "rgba(45, 212, 191, 0.08)", text: "teal" },
+            "customer_email": { color: "#38bdf8", bg: "rgba(56, 189, 248, 0.08)", text: "sky" },
+            "customer_email_domain": { color: "#fb923c", bg: "rgba(251, 146, 60, 0.08)", text: "orange_light" },
+            "customer_representative_name": { color: "#a3e635", bg: "rgba(163, 230, 53, 0.08)", text: "lime" },
             "total_amount": { color: "#f59e0b", bg: "rgba(245, 158, 11, 0.08)", text: "orange" },
             "line_items": { color: "#f43f5e", bg: "rgba(244, 63, 94, 0.08)", text: "red" }
         };
@@ -1117,6 +1164,7 @@
             loadMetrics();
             loadPendingList();
             loadHistoryData();
+            loadLiveFlattenedData();
         });
 
         // 1. Fetch system metrics
@@ -1150,6 +1198,7 @@
                     return;
                 }
 
+                window.historyParsedDataCache = window.historyParsedDataCache || {};
                 tbody.innerHTML = data.map(item => {
                     const statusColor = item.status === 'success' ? 'var(--neon-green)' : (item.status === 'drifted' ? 'var(--neon-orange)' : 'var(--accent-red)');
                     const invNo = item.parsed_data.invoice_number || item.parsed_data.invoice_no || "-";
@@ -1163,9 +1212,11 @@
                         }
                     }
                     const dateStr = new Date(item.processed_at).toLocaleString();
+                    const cacheId = item.id || item.processed_at;
+                    window.historyParsedDataCache[cacheId] = item.parsed_data;
 
                     return `
-                        <tr>
+                        <tr style="cursor: pointer;" class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
                             <td style="font-weight: 500; font-family: var(--font-main); color: #fff; text-align: left;">${escapeHtml(item.filename)}</td>
                             <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-align: left;">${escapeHtml(item.layout_hash.substring(0, 12))}</td>
                             <td style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; text-align: left;">${escapeHtml(invNo)}</td>
@@ -1184,10 +1235,233 @@
             }
         }
 
-        // 2. Fetch pending template approvals list
+        // 1.2 Fetch and render live flattened spreadsheet stream of successful database ingestion records
+        async function loadLiveFlattenedData() {
+            try {
+                const res = await fetch("/api/history");
+                const data = await res.json();
+                const tbody = document.getElementById("live-flattened-table-body");
+                if (!tbody) return;
+
+                // Filter for successfully parsed invoices
+                const successfulIngestions = data.filter(item => item.status === 'success');
+
+                if (successfulIngestions.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 20px;">No verified database records synced. Approve and lock a template to stream records automatically.</td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                // Generate flattened dataset rows
+                let rowsHtml = "";
+                window.historyParsedDataCache = window.historyParsedDataCache || {};
+
+                successfulIngestions.forEach(item => {
+                    const parsed = item.parsed_data;
+                    const cacheId = item.id || item.processed_at;
+                    window.historyParsedDataCache[cacheId] = parsed;
+
+                    const filename = item.filename;
+                    const customerName = parsed.customer_name || "-";
+                    const accountNo = parsed.customer_account_number || "-";
+                    const invNo = parsed.invoice_number || "-";
+                    const invDate = parsed.invoice_date || "-";
+
+                    const lineItems = parsed.line_items || [];
+
+                    if (lineItems.length > 0) {
+                        lineItems.forEach((line, idx) => {
+                            const bgStyle = `style="background: rgba(6, 182, 212, ${idx % 2 === 0 ? '0.02' : '0.05'}); cursor: pointer;"`;
+                            
+                            let qty = line.quantity !== null && line.quantity !== undefined ? line.quantity : "-";
+                            let price = line.unit_price !== null && line.unit_price !== undefined ? parseFloat(line.unit_price) : null;
+                            let total = line.total !== null && line.total !== undefined ? parseFloat(line.total) : null;
+
+                            const formattedPrice = price !== null ? `$${price.toFixed(2)}` : "-";
+                            const formattedTotal = total !== null ? `$${total.toFixed(2)}` : "-";
+
+                            rowsHtml += `
+                                <tr ${bgStyle} class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
+                                    <td style="font-weight: 500; text-align: left; color:#fff;">${escapeHtml(filename)}</td>
+                                    <td style="text-align: left; color:var(--text-main);">${escapeHtml(customerName)}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--neon-green);">${escapeHtml(accountNo)}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; font-weight:700; text-align: left; color:var(--neon-cyan);">${escapeHtml(invNo)}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; text-align: left;">${escapeHtml(invDate)}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--primary-pink);">${escapeHtml(line.product_code || line.code || "-")}</td>
+                                    <td style="text-align: left;">${escapeHtml(line.product_name || line.description || "-")}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; text-align: right;">${qty}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; text-align: right; color:var(--neon-cyan);">${formattedPrice}</td>
+                                    <td style="font-family: var(--font-mono); font-size:11px; text-align: right; color:var(--neon-orange); font-weight:700;">${formattedTotal}</td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        // Display headers only
+                        let totalVal = "-";
+                        if (parsed.total_amount !== undefined && parsed.total_amount !== null) {
+                            const val = parseFloat(parsed.total_amount);
+                            totalVal = isNaN(val) ? parsed.total_amount : `$${val.toFixed(2)}`;
+                        }
+
+                        rowsHtml += `
+                            <tr style="background: rgba(245, 158, 11, 0.02); cursor: pointer;" class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
+                                <td style="font-weight: 500; text-align: left; color:#fff;">${escapeHtml(filename)}</td>
+                                <td style="text-align: left; color:var(--text-main);">${escapeHtml(customerName)}</td>
+                                <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--neon-green);">${escapeHtml(accountNo)}</td>
+                                <td style="font-family: var(--font-mono); font-size:11px; font-weight:700; text-align: left; color:var(--neon-cyan);">${escapeHtml(invNo)}</td>
+                                <td style="font-family: var(--font-mono); font-size:11px; text-align: left;">${escapeHtml(invDate)}</td>
+                                <td colspan="4" style="text-align: center; color: var(--text-muted); font-size:11px; font-style: italic;">No line items extracted (Header values only)</td>
+                                <td style="font-family: var(--font-mono); font-size:11px; text-align: right; color:var(--neon-orange); font-weight:700;">${totalVal}</td>
+                            </tr>
+                        `;
+                    }
+                });
+
+                tbody.innerHTML = rowsHtml;
+            } catch (err) {
+                console.error("Failed to load live flattened data streams:", err);
+            }
+        }
+
+        async function fetchRawTableRows(pageNum, boxPct) {
+            if (!currentLayoutHash) return;
+            try {
+                const res = await fetch("/api/extract-raw-table-rows", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        layout_hash: currentLayoutHash,
+                        page: pageNum,
+                        box: boxPct
+                    })
+                });
+                const data = await res.json();
+                if (data.success && data.rows && data.rows.length > 0) {
+                    // Find first row containing numbers (digit)
+                    const firstRow = data.rows.find(row => row.some(cell => /\d/.test(cell))) || data.rows[0] || [];
+                    if (selectedLayoutData) {
+                        selectedLayoutData.first_row_cells = firstRow;
+                    }
+                    // Re-render UI to show sample cell values inside mappings dropdowns!
+                    refreshFormUI();
+                }
+            } catch (err) {
+                console.error("Failed to extract raw table columns:", err);
+            }
+        }
+
+        // Floating JSON Tooltip functions
+        function initJsonTooltip() {
+            if (document.getElementById("json-hover-tooltip")) return;
+            const el = document.createElement("div");
+            el.id = "json-hover-tooltip";
+            el.style.position = "absolute";
+            el.style.display = "none";
+            el.style.background = "rgba(10, 15, 20, 0.96)";
+            el.style.border = "1px solid var(--neon-cyan)";
+            el.style.borderRadius = "8px";
+            el.style.padding = "14px";
+            el.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8), 0 0 15px rgba(6, 182, 212, 0.15)";
+            el.style.zIndex = "10000";
+            el.style.pointerEvents = "none";
+            el.style.maxWidth = "420px";
+            el.style.maxHeight = "300px";
+            el.style.overflowY = "auto";
+            el.style.fontFamily = "var(--font-mono)";
+            el.style.fontSize = "11px";
+            el.style.lineHeight = "1.5";
+            el.style.color = "var(--neon-cyan)";
+            el.style.backdropFilter = "blur(12px)";
+            document.body.appendChild(el);
+        }
+
+        function showJsonTooltip(event, cacheId) {
+            initJsonTooltip();
+            const tooltip = document.getElementById("json-hover-tooltip");
+            if (!tooltip) return;
+
+            const data = window.historyParsedDataCache ? window.historyParsedDataCache[cacheId] : null;
+            if (!data) return;
+
+            // Format JSON beautifully
+            const formattedJson = JSON.stringify(data, null, 2);
+            tooltip.innerHTML = `<div style="font-weight: 700; color: #fff; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; text-transform:uppercase; font-size:9px; letter-spacing:0.5px;">Parsed Ingested JSON</div><pre style="margin: 0; white-space: pre-wrap; word-break: break-all;">${escapeHtml(formattedJson)}</pre>`;
+            
+            tooltip.style.display = "block";
+            moveJsonTooltip(event);
+        }
+
+        function moveJsonTooltip(event) {
+            const tooltip = document.getElementById("json-hover-tooltip");
+            if (!tooltip || tooltip.style.display === "none") return;
+
+            // Offset cursor slightly to prevent flickering
+            const offsetX = 18;
+            const offsetY = 18;
+
+            let x = event.pageX + offsetX;
+            let y = event.pageY + offsetY;
+
+            // Prevent overflowing window boundaries
+            if (x + tooltip.clientWidth > window.scrollX + window.innerWidth) {
+                x = event.pageX - tooltip.clientWidth - 10;
+            }
+            if (y + tooltip.clientHeight > window.scrollY + window.innerHeight) {
+                y = event.pageY - tooltip.clientHeight - 10;
+            }
+
+            tooltip.style.left = x + "px";
+            tooltip.style.top = y + "px";
+        }
+
+        function hideJsonTooltip() {
+            const tooltip = document.getElementById("json-hover-tooltip");
+            if (tooltip) {
+                tooltip.style.display = "none";
+            }
+        }
+
+        let currentSidebarMode = 'pending';
+
+        function setSidebarMode(mode) {
+            currentSidebarMode = mode;
+            const pendingTab = document.getElementById("sidebar-pending-tab");
+            const activeTab = document.getElementById("sidebar-active-tab");
+            const titleEl = document.getElementById("sidebar-header-title");
+            
+            if (mode === 'pending') {
+                pendingTab.style.background = "var(--primary-pink)";
+                pendingTab.style.color = "#070505";
+                pendingTab.style.fontWeight = "700";
+                
+                activeTab.style.background = "none";
+                activeTab.style.color = "var(--text-muted)";
+                activeTab.style.fontWeight = "600";
+                
+                titleEl.textContent = "Pending Review Queue";
+            } else {
+                activeTab.style.background = "var(--primary-pink)";
+                activeTab.style.color = "#070505";
+                activeTab.style.fontWeight = "700";
+                
+                pendingTab.style.background = "none";
+                pendingTab.style.color = "var(--text-muted)";
+                pendingTab.style.fontWeight = "600";
+                
+                titleEl.textContent = "Active Layout Rules";
+            }
+            
+            loadPendingList();
+        }
+
+        // 2. Fetch pending or active template approvals list
         async function loadPendingList() {
             try {
-                const res = await fetch("/api/pending");
+                const endpoint = currentSidebarMode === 'pending' ? "/api/pending" : "/api/active";
+                const res = await fetch(endpoint);
                 const list = await res.json();
                 const container = document.getElementById("queue-list-container");
                 container.innerHTML = "";
@@ -1196,7 +1470,7 @@
                     container.innerHTML = `
                         <div style="text-align: center; margin-top: 40px; color: var(--text-muted)">
                             <div style="font-size: 36px; margin-bottom: 10px;">🏆</div>
-                            <p style="font-size: 11px; font-weight:600;">LEDGER COMPLETELY CLEAR!</p>
+                            <p style="font-size: 11px; font-weight:600;">${currentSidebarMode === 'pending' ? 'LEDGER COMPLETELY CLEAR!' : 'NO ACTIVE TEMPLATES'}</p>
                         </div>
                     `;
                     return;
@@ -1217,7 +1491,7 @@
                     container.appendChild(el);
                 });
             } catch (err) {
-                console.error("Failed to load pending queue list:", err);
+                console.error("Failed to load queue list:", err);
             }
         }
 
@@ -1258,8 +1532,8 @@
                                 </select>
                             </div>
                         </div>
-                        <div style="font-size:11px; font-weight: 700; color:var(--neon-orange); text-transform:uppercase; letter-spacing: 0.5px;">
-                            STATUS: REVIEW
+                        <div style="font-size:11px; font-weight: 700; color: ${data.status === 'active' ? 'var(--neon-green)' : 'var(--neon-orange)'}; text-transform:uppercase; letter-spacing: 0.5px;">
+                            STATUS: ${data.status === 'active' ? 'ACTIVE' : 'REVIEW'}
                         </div>
                     </div>
 
@@ -1310,6 +1584,11 @@
                 // Render Form Sidebar fields and triggers dynamically inside ws-rules-form
                 activeTab = 'headers';
                 refreshFormUI();
+
+                // Pre-fetch raw table columns if already configured
+                if (rules.line_items && rules.line_items.box && rules.line_items.strategy === "coordinate_table") {
+                    fetchRawTableRows(rules.line_items.page, rules.line_items.box);
+                }
             } catch (err) {
                 console.error("Failed to load workspace layout details:", err);
                 container.innerHTML = `
@@ -1340,6 +1619,12 @@
                     ${renderFieldBlock("invoice_number", "Invoice Number", fields.invoice_number)}
                     ${renderFieldBlock("invoice_date", "Invoice Date", fields.invoice_date)}
                     ${renderFieldBlock("abn", "Supplier ABN", fields.abn)}
+                    ${renderFieldBlock("customer_account_number", "Customer Account Number", fields.customer_account_number)}
+                    ${renderFieldBlock("customer_name", "Customer Name", fields.customer_name)}
+                    ${renderFieldBlock("customer_address", "Customer Address", fields.customer_address)}
+                    ${renderFieldBlock("customer_phone_number", "Customer Phone Number", fields.customer_phone_number)}
+                    ${renderFieldBlock("customer_email", "Customer Email", fields.customer_email)}
+                    ${renderFieldBlock("customer_representative_name", "Customer Representative Name", fields.customer_representative_name)}
                     ${renderFieldBlock("total_amount", "Total Amount Due", fields.total_amount)}
                 </div>
             `;
@@ -1455,7 +1740,7 @@
                         <div class="form-row-group">
                             <div class="form-field">
                                 <label>Anchor Keyword</label>
-                                <input type="text" class="field-anchor" value="${escapeHtml(rule.anchor_keyword)}" ${isDisabled}>
+                                <input type="text" class="field-anchor" value="${escapeHtml(rule.anchor_keyword !== undefined ? rule.anchor_keyword : '')}" ${isDisabled}>
                             </div>
                             <div class="form-field small">
                                 <label>Direction</label>
@@ -1466,13 +1751,19 @@
                             </div>
                             <div class="form-field small">
                                 <label>Range</label>
-                                <input type="number" class="field-window" value="${rule.window_characters}" ${isDisabled}>
+                                <input type="number" class="field-window" value="${rule.window_characters !== undefined ? rule.window_characters : 80}" ${isDisabled}>
                             </div>
                         </div>
                     </div>
                     <div class="form-field" style="margin-top: 10px;">
                         <label>Regex Value Filter Pattern</label>
-                        <input type="text" class="field-regex" value="${escapeHtml(rule.regex_pattern)}" style="font-family: var(--font-mono); font-size:12px;">
+                        <input type="text" class="field-regex" value="${escapeHtml(rule.regex_pattern !== undefined ? rule.regex_pattern : '')}" style="font-family: var(--font-mono); font-size:12px;">
+                    </div>
+                    
+                    <!-- Confidence Weight Slider Setting -->
+                    <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px;">
+                        <span style="font-size: 9px; color: var(--text-muted);">Confidence Weight: <strong class="weight-display" style="color: var(--neon-cyan);">${parseFloat(rule.confidence_weight !== undefined ? rule.confidence_weight : 1.0).toFixed(1)}</strong></span>
+                        <input type="range" class="field-weight" min="0" max="1" step="0.1" value="${parseFloat(rule.confidence_weight !== undefined ? rule.confidence_weight : 1.0)}" oninput="this.previousElementSibling.querySelector('.weight-display').innerText = parseFloat(this.value).toFixed(1); testRules();" style="width: 100px; height: 4px; cursor: pointer; accent-color: var(--neon-cyan); background: rgba(255,255,255,0.1); border-radius: 2px; border:none; outline:none;">
                     </div>
                 </div>
             `;
@@ -1486,9 +1777,17 @@
             }
             if (colIndex === undefined || colIndex === null) colIndex = -1;
 
+            const firstRow = selectedLayoutData && selectedLayoutData.first_row_cells ? selectedLayoutData.first_row_cells : [];
+
             let optionsHtml = `<option value="-1" ${colIndex === -1 ? 'selected' : ''}>Not Mapped</option>`;
             for (let i = 0; i <= 10; i++) {
-                optionsHtml += `<option value="${i}" ${colIndex === i ? 'selected' : ''}>Column ${i + 1}</option>`;
+                const cellVal = firstRow[i] !== undefined ? firstRow[i] : "";
+                let displayLabel = `Column ${i + 1}`;
+                if (cellVal) {
+                    const cleanVal = cellVal.length > 20 ? cellVal.substring(0, 18) + "..." : cellVal;
+                    displayLabel += ` ("${cleanVal}")`;
+                }
+                optionsHtml += `<option value="${i}" ${colIndex === i ? 'selected' : ''}>${displayLabel}</option>`;
             }
 
             return `
@@ -1561,6 +1860,7 @@
                     delete rules.line_items.page;
                 }
                 selectedLayoutData.extracted_table_text = "";
+                selectedLayoutData.first_row_cells = []; // Reset raw table row cache!
             } else {
                 if (rules.fields && rules.fields[fieldKey]) {
                     delete rules.fields[fieldKey].box;
@@ -1568,6 +1868,9 @@
                     rules.fields[fieldKey].strategy = "proximity"; // fallback
                 }
             }
+
+            // Clean up any active draw boxes!
+            document.querySelectorAll(".active-draw-box").forEach(b => b.remove());
 
             // Re-render sidebar elements locally
             refreshFormUI();
@@ -1666,6 +1969,8 @@
                 const invNo = ext.invoice_number || "NULL";
                 const invDate = ext.invoice_date || "NULL";
                 const abn = ext.abn || "NULL";
+                const custName = ext.customer_name || "NULL";
+                const custAcct = ext.customer_account_number || "NULL";
 
                 let totalAmtVal = "NULL";
                 if (ext.total_amount !== undefined && ext.total_amount !== null) {
@@ -1676,10 +1981,12 @@
                 if (ext.line_items && ext.line_items.length > 0) {
                     flattenedRowsHtml = ext.line_items.map((item, idx) => `
                         <tr style="background: rgba(16, 185, 129, ${idx % 2 === 0 ? '0.02' : '0.05'});">
-                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 700; color: var(--neon-green); text-align: left;">${escapeHtml(invNo)}</td>
+                            <td style="font-size:11px; text-align: left; color:#fff;">${escapeHtml(custName)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color: var(--neon-green);">${escapeHtml(custAcct)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 700; color: var(--neon-cyan); text-align: left;">${escapeHtml(invNo)}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(invDate)}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(abn)}</td>
-                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 600; text-align: left;">${escapeHtml(item.product_code || item.code || "-")}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; font-weight: 600; text-align: left; color: var(--primary-pink);">${escapeHtml(item.product_code || item.code || "-")}</td>
                             <td style="font-size:11px; text-align: left;">${escapeHtml(item.product_name || item.description || "-")}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; text-align:right;">${item.quantity !== null && item.quantity !== undefined ? item.quantity : "-"}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; text-align:right; color: var(--neon-cyan);">$${item.unit_price !== null && item.unit_price !== undefined ? parseFloat(item.unit_price).toFixed(2) : "-"}</td>
@@ -1690,6 +1997,8 @@
                 } else {
                     flattenedRowsHtml = `
                         <tr style="background: rgba(6, 182, 212, 0.03);">
+                            <td style="font-size:11px; text-align: left; color:#fff;">${escapeHtml(custName)}</td>
+                            <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color: var(--neon-green);">${escapeHtml(custAcct)}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; font-weight: 700; color: var(--neon-cyan); text-align: left;">${escapeHtml(invNo)}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(invDate)}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; color: var(--text-muted); text-align: left;">${escapeHtml(abn)}</td>
@@ -1712,7 +2021,9 @@
                             <table class="spreadsheet-table" style="margin: 0; border: none; width: 100%;">
                                 <thead>
                                     <tr>
-                                        <th style="font-size: 8px; color: var(--neon-green); text-align: left;">Inv Num</th>
+                                        <th style="font-size: 8px; color: var(--neon-cyan); text-align: left;">Customer Name</th>
+                                        <th style="font-size: 8px; color: var(--neon-green); text-align: left;">Account</th>
+                                        <th style="font-size: 8px; color: var(--neon-cyan); text-align: left;">Inv Num</th>
                                         <th style="font-size: 8px; color: var(--text-muted); text-align: left;">Inv Date</th>
                                         <th style="font-size: 8px; color: var(--text-muted); text-align: left;">Supplier ABN</th>
                                         <th style="font-size: 8px; color: var(--text-main); text-align: left;">Item Code</th>
@@ -1733,23 +2044,51 @@
 
                 previewPanel.innerHTML = `
                     <div class="preview-output-section">
-                        <div class="preview-title">Meat Extraction Result (Confidence: ${Math.round(result.confidence * 100)}%)</div>
+                        <div class="preview-title">TCF Invoice Extraction Result (Confidence: ${Math.round(result.confidence * 100)}%)</div>
                         <div class="preview-grid">
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Invoice Number</div>
-                                <div class="preview-card-val">${escapeHtml(ext.invoice_number || "NULL")}</div>
+                                <div class="preview-card-val" style="color: var(--primary-pink);">${escapeHtml(ext.invoice_number || "NULL")}</div>
                             </div>
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Invoice Date</div>
-                                <div class="preview-card-val">${escapeHtml(ext.invoice_date || "NULL")}</div>
+                                <div class="preview-card-val" style="color: var(--neon-green);">${escapeHtml(ext.invoice_date || "NULL")}</div>
                             </div>
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Supplier ABN</div>
-                                <div class="preview-card-val">${escapeHtml(ext.abn || "NULL")}</div>
+                                <div class="preview-card-val" style="color: var(--neon-cyan);">${escapeHtml(ext.abn || "NULL")}</div>
                             </div>
                             <div class="preview-card">
                                 <div class="preview-card-lbl">Total Amount</div>
-                                <div class="preview-card-val" style="color: var(--neon-orange)">${escapeHtml(totalAmtVal)}</div>
+                                <div class="preview-card-val" style="color: var(--neon-orange); font-weight: 700;">${escapeHtml(totalAmtVal)}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Customer Name</div>
+                                <div class="preview-card-val" style="color: var(--neon-cyan);">${escapeHtml(ext.customer_name || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Customer Account</div>
+                                <div class="preview-card-val" style="color: var(--neon-green);">${escapeHtml(ext.customer_account_number || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Customer Email</div>
+                                <div class="preview-card-val">${escapeHtml(ext.customer_email || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Customer Domain</div>
+                                <div class="preview-card-val" style="color: var(--neon-orange);">${escapeHtml(ext.customer_email_domain || "NULL")}</div>
+                            </div>
+                            <div class="preview-card" style="grid-column: span 2;">
+                                <div class="preview-card-lbl">Customer Address</div>
+                                <div class="preview-card-val" style="font-size: 11px;">${escapeHtml(ext.customer_address || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Customer Phone</div>
+                                <div class="preview-card-val">${escapeHtml(ext.customer_phone_number || "NULL")}</div>
+                            </div>
+                            <div class="preview-card">
+                                <div class="preview-card-lbl">Customer Rep</div>
+                                <div class="preview-card-val">${escapeHtml(ext.customer_representative_name || "NULL")}</div>
                             </div>
                         </div>
                         ${lineItemsTableHtml}
@@ -1829,6 +2168,12 @@
                 }
                 r.regex_pattern = block.querySelector(".field-regex").value;
                 r.use_filename = useFilename;
+
+                // Sync confidence weight slider value
+                const weightSlider = block.querySelector(".field-weight");
+                if (weightSlider) {
+                    r.confidence_weight = parseFloat(weightSlider.value);
+                }
             });
 
             // 2. Sync Order Line items column selectors
@@ -2072,6 +2417,116 @@
             el.style.height = (h_pct * height) + "px";
             el.style.setProperty("--box-color", colorMeta.color);
             el.style.setProperty("--box-bg", colorMeta.bg);
+            el.style.position = "absolute";
+
+            // Add visual circular resize handle
+            const handle = document.createElement("div");
+            handle.className = "resize-handle";
+            handle.style.position = "absolute";
+            handle.style.right = "-4px";
+            handle.style.bottom = "-4px";
+            handle.style.width = "8px";
+            handle.style.height = "8px";
+            handle.style.backgroundColor = colorMeta.color;
+            handle.style.borderRadius = "50%";
+            handle.style.cursor = "se-resize";
+            handle.style.zIndex = "35";
+            handle.style.border = "1px solid #fff";
+            el.appendChild(handle);
+
+            let isDragging = false;
+            let isResizing = false;
+
+            // 1. Visual resizing handle code
+            handle.addEventListener("mousedown", (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                isResizing = true;
+                el.style.transition = "none";
+                
+                const startWidth = el.clientWidth;
+                const startHeight = el.clientHeight;
+                const startMouseX = e.clientX;
+                const startMouseY = e.clientY;
+                
+                function onMouseMove(moveEvent) {
+                    if (!isResizing) return;
+                    const deltaX = moveEvent.clientX - startMouseX;
+                    const deltaY = moveEvent.clientY - startMouseY;
+                    
+                    const newW = Math.max(10, startWidth + deltaX);
+                    const newH = Math.max(10, startHeight + deltaY);
+                    
+                    el.style.width = newW + "px";
+                    el.style.height = newH + "px";
+                }
+                
+                function onMouseUp() {
+                    isResizing = false;
+                    el.style.transition = "";
+                    window.removeEventListener("mousemove", onMouseMove);
+                    window.removeEventListener("mouseup", onMouseUp);
+                    
+                    // Convert pixels back to normalized percentage coordinates
+                    const x_pct = el.offsetLeft / pageWrapper.clientWidth;
+                    const y_pct = el.offsetTop / pageWrapper.clientHeight;
+                    const w_pct = el.clientWidth / pageWrapper.clientWidth;
+                    const h_pct = el.clientHeight / pageWrapper.clientHeight;
+                    
+                    // Re-extract underlying text matching bounds
+                    const newText = sweepIntersectingSpans(pageWrapper, el);
+                    saveCoordinatesToSchema(fieldKey, pageNum, [x_pct, y_pct, w_pct, h_pct], newText);
+                }
+                
+                window.addEventListener("mousemove", onMouseMove);
+                window.addEventListener("mouseup", onMouseUp);
+            });
+
+            // 2. Dragging visual coordinate card bounding box code
+            el.addEventListener("mousedown", (e) => {
+                if (e.target === handle) return; // ignore if resizing
+                e.stopPropagation();
+                e.preventDefault();
+                isDragging = true;
+                el.style.transition = "none";
+                
+                const startLeft = el.offsetLeft;
+                const startTop = el.offsetTop;
+                const startMouseX = e.clientX;
+                const startMouseY = e.clientY;
+                
+                function onMouseMove(moveEvent) {
+                    if (!isDragging) return;
+                    const deltaX = moveEvent.clientX - startMouseX;
+                    const deltaY = moveEvent.clientY - startMouseY;
+                    
+                    const newLeft = Math.max(0, Math.min(pageWrapper.clientWidth - el.clientWidth, startLeft + deltaX));
+                    const startYPos = Math.max(0, Math.min(pageWrapper.clientHeight - el.clientHeight, startTop + deltaY));
+                    
+                    el.style.left = newLeft + "px";
+                    el.style.top = startYPos + "px";
+                }
+                
+                function onMouseUp() {
+                    isDragging = false;
+                    el.style.transition = "";
+                    window.removeEventListener("mousemove", onMouseMove);
+                    window.removeEventListener("mouseup", onMouseUp);
+                    
+                    // Convert pixels back to normalized percentage coordinates
+                    const x_pct = el.offsetLeft / pageWrapper.clientWidth;
+                    const y_pct = el.offsetTop / pageWrapper.clientHeight;
+                    const w_pct = el.clientWidth / pageWrapper.clientWidth;
+                    const h_pct = el.clientHeight / pageWrapper.clientHeight;
+                    
+                    // Re-extract underlying text matching bounds
+                    const newText = sweepIntersectingSpans(pageWrapper, el);
+                    saveCoordinatesToSchema(fieldKey, pageNum, [x_pct, y_pct, w_pct, h_pct], newText);
+                }
+                
+                window.addEventListener("mousemove", onMouseMove);
+                window.addEventListener("mouseup", onMouseUp);
+            });
 
             // Set sync hover triggers
             el.onmouseenter = () => {
@@ -2130,6 +2585,9 @@
             overlays.forEach(overlay => {
                 overlay.addEventListener("mousedown", (e) => {
                     if (!activeTargetField) return; // Only draw when a field Draw Box button is clicked
+
+                    // Clean up any stale active draw boxes!
+                    document.querySelectorAll(".active-draw-box").forEach(b => b.remove());
 
                     isDrawing = true;
                     drawOverlayPageNum = parseInt(overlay.closest(".pdf-page-wrapper").dataset.page);
@@ -2263,6 +2721,9 @@
                     columns: rules.line_items ? rules.line_items.columns : {}
                 };
                 selectedLayoutData.extracted_table_text = extractedValue;
+                
+                // Fetch raw columns for dropdown labels example values!
+                fetchRawTableRows(pageNum, boxPct);
             } else {
                 if (!rules.fields) rules.fields = {};
 
@@ -2488,6 +2949,9 @@
             }
 
             document.querySelectorAll(".pdf-draw-overlay").forEach(o => o.classList.remove("drawing-active"));
+
+            // Clean up any stale active draw boxes!
+            document.querySelectorAll(".active-draw-box").forEach(b => b.remove());
         }
 
         document.addEventListener("mouseup", () => {

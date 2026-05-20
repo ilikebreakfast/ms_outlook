@@ -84,21 +84,39 @@ class DeterministicParser:
             (extracted_fields, confidence_score)
         """
         extracted = {}
-        required_fields = self.rules.get("required_fields", [])
-        matched_required = 0
-        total_required = len(required_fields)
-
         field_rules = self.rules.get("fields", {})
+        
+        total_weight = 0.0
+        weighted_score = 0.0
+
         for field_name, rule in field_rules.items():
+            # Skip email domain rule processing if present to avoid manual config conflict
+            if field_name == "customer_email_domain":
+                continue
+                
             value = self._parse_field(field_name, rule)
             extracted[field_name] = value
             
-            if field_name in required_fields:
-                if value is not None:
-                    matched_required += 1
+            # Confidence weighting calculation
+            # Standard weight is 1.0 if not specified
+            weight = float(rule.get("confidence_weight", 1.0))
+            if weight > 0:
+                total_weight += weight
+                if value is not None and str(value).strip() != "":
+                    weighted_score += weight
 
-        # Calculate rule matching confidence
-        confidence = (matched_required / total_required) if total_required > 0 else 1.0
+        # Always automatically derive customer_email_domain from customer_email (no manual selection required)
+        if extracted.get("customer_email"):
+            email = str(extracted["customer_email"]).strip()
+            if "@" in email:
+                extracted["customer_email_domain"] = email[email.find("@"):].strip().lower()
+            else:
+                extracted["customer_email_domain"] = ""
+        else:
+            extracted["customer_email_domain"] = ""
+
+        # Calculate weighted confidence
+        confidence = (weighted_score / total_weight) if total_weight > 0.0 else 1.0
         
         # Handle line items if tabular configuration is active
         line_rules = self.rules.get("line_items")
@@ -367,14 +385,20 @@ class DeterministicParser:
                                         cells = [str(c).strip() if c is not None else "" for c in r]
                                         rows.append(cells)
                                         
-                        # 1b. Fallback to whitespace splits
-                        if not rows:
-                            text_lines = cropped.extract_text(layout=True)
-                            if text_lines:
-                                for line in text_lines.splitlines():
-                                    if line.strip():
-                                        cells = re.split(r'\t|\s{2,}', line.strip())
-                                        rows.append(cells)
+                        # 1b. Fallback to coordinate horizontal gap-spacing words clustering (great for vertical lines absence)
+                        if not rows or all(len(r) <= 1 for r in rows):
+                            # Clear single-column/failed table parses first
+                            rows = []
+                            words = cropped.extract_words()
+                            if words:
+                                rows = self._extract_rows_from_words(words)
+                            else:
+                                text_lines = cropped.extract_text(layout=True)
+                                if text_lines:
+                                    for line in text_lines.splitlines():
+                                        if line.strip():
+                                            cells = re.split(r'\t|\s{2,}', line.strip())
+                                            rows.append(cells)
             except Exception as e:
                 log.error(f"pdfplumber table extraction failed: {e}")
                 
@@ -455,6 +479,63 @@ class DeterministicParser:
                     
         return items
 
+    def _extract_rows_from_words(self, words: List[Dict[str, Any]], gap_threshold: float = 10.0) -> List[List[str]]:
+        """
+        Group words into visual rows and columns by physical spatial alignment coordinates.
+        This provides perfect column parsing when vertical separator lines are absent.
+        """
+        if not words:
+            return []
+            
+        # Group words vertically if their top coordinates are close (within 4 points threshold)
+        lines = []
+        sorted_words = sorted(words, key=lambda w: (w["top"], w["x0"]))
+        
+        for w in sorted_words:
+            added = False
+            for line in lines:
+                line_avg_top = sum(item["top"] for item in line) / len(line)
+                if abs(w["top"] - line_avg_top) < 4.0:
+                    line.append(w)
+                    added = True
+                    break
+            if not added:
+                lines.append([w])
+                
+        # Sort lines top-to-bottom
+        lines = sorted(lines, key=lambda line: sum(item["top"] for item in line) / len(line))
+        
+        table_rows = []
+        for line in lines:
+            # Sort words horizontally left-to-right
+            line_words = sorted(line, key=lambda w: w["x0"])
+            if not line_words:
+                continue
+                
+            cells = []
+            current_cell_words = [line_words[0]]
+            
+            for next_word in line_words[1:]:
+                prev_word = current_cell_words[-1]
+                # If horizontal gap is larger than threshold, split column!
+                if next_word["x0"] - prev_word["x1"] >= gap_threshold:
+                    cell_text = " ".join(w["text"] for w in current_cell_words).strip()
+                    cells.append(cell_text)
+                    current_cell_words = [next_word]
+                else:
+                    current_cell_words.append(next_word)
+                    
+            if current_cell_words:
+                cell_text = " ".join(w["text"] for w in current_cell_words).strip()
+                cells.append(cell_text)
+                
+            if any(cells):
+                table_rows.append(cells)
+                
+        return table_rows
+
+        return items
+
     def _normalise_date(self, val: str) -> str:
         """Strip trailing timezone AEDT/UTC and timestamps, normalize to YYYY-MM-DD."""
         cleaned = re.sub(r'\b(UTC|GMT|AEST|AEDT|EST|EDT|PST|PDT)\b', '', val, flags=re.IGNORECASE)
@@ -499,6 +580,12 @@ class DeterministicParser:
             if len(abn_digits) == 11:
                 return abn_digits
             return cleaned
+            
+        # Email domain normalization (starting from @ inclusive)
+        if field_name == "customer_email_domain":
+            if "@" in cleaned:
+                cleaned = cleaned[cleaned.find("@"):].strip()
+            return cleaned.lower()
             
         # Amount/Total normalization to float
         if any(w in field_name.lower() for w in ("amount", "total", "subtotal", "tax", "gst")):

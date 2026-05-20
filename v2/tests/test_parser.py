@@ -202,6 +202,28 @@ class TestParserModule(unittest.TestCase):
         extracted, _ = p.extract_fields()
         self.assertEqual(extracted["invoice_number"], "7760180")
 
+    def test_customer_email_domain_parsing(self):
+        """Verify that customer_email_domain is normalized and falls back to customer_email domain if empty."""
+        raw_text = "Customer Email: joel@tcfmeat.com.au"
+        rules = {
+            "fields": {
+                "customer_email": {
+                    "anchor_keyword": "customer email:",
+                    "search_direction": "relative_right",
+                    "window_characters": 80,
+                    "regex_pattern": r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+                },
+                "customer_email_domain": {
+                    "anchor_keyword": "",
+                    "regex_pattern": ""
+                }
+            }
+        }
+        p = parser.DeterministicParser(raw_text, rules)
+        extracted, _ = p.extract_fields()
+        self.assertEqual(extracted["customer_email"], "joel@tcfmeat.com.au")
+        self.assertEqual(extracted["customer_email_domain"], "@tcfmeat.com.au")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,6 +34,12 @@ class ApproveRequest(BaseModel):
     rules: Dict[str, Any]
 
 
+class ExtractTableRequest(BaseModel):
+    layout_hash: str
+    page: int
+    box: list
+
+
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard():
     """Render the master visual dashboard."""
@@ -152,6 +158,47 @@ async def get_pending_templates():
         conn.close()
 
 
+@app.get("/api/active")
+async def get_active_templates():
+    """List all approved active templates."""
+    conn = db.get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT layout_hash, supplier_name, document_type, created_at, extraction_rules
+            FROM layout_rules
+            WHERE status = 'active'
+            ORDER BY created_at DESC;
+        """).fetchall()
+        
+        active_list = []
+        for r in rows:
+            sample_text = ""
+            hist_row = conn.execute(
+                "SELECT parsed_data FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
+                (r["layout_hash"],)
+            ).fetchone()
+            
+            if hist_row and hist_row["parsed_data"]:
+                try:
+                    sample_text = json.dumps(json.loads(hist_row["parsed_data"]), indent=2)
+                except Exception:
+                    pass
+            if not sample_text:
+                sample_text = "Sample raw document data has been cached. Click inspect to load."
+
+            active_list.append({
+                "layout_hash": r["layout_hash"],
+                "supplier_name": r["supplier_name"],
+                "document_type": r["document_type"],
+                "created_at": r["created_at"],
+                "extraction_rules": json.loads(r["extraction_rules"]),
+                "sample_text": sample_text
+            })
+        return active_list
+    finally:
+        conn.close()
+
+
 @app.get("/api/layout/{layout_hash}")
 async def get_layout(layout_hash: str):
     """Retrieve full details and cached text sample of a single layout template."""
@@ -232,6 +279,123 @@ async def test_extraction(req: TestParseRequest):
             status_code=400,
             content={"success": False, "error": f"Rule execution failed: {e}"}
         )
+
+
+def extract_rows_from_words(words: list, gap_threshold: float = 10.0) -> list:
+    if not words:
+        return []
+        
+    lines = []
+    sorted_words = sorted(words, key=lambda w: (w["top"], w["x0"]))
+    
+    for w in sorted_words:
+        added = False
+        for line in lines:
+            line_avg_top = sum(item["top"] for item in line) / len(line)
+            if abs(w["top"] - line_avg_top) < 4.0:
+                line.append(w)
+                added = True
+                break
+        if not added:
+            lines.append([w])
+            
+    lines = sorted(lines, key=lambda line: sum(item["top"] for item in line) / len(line))
+    
+    table_rows = []
+    for line in lines:
+        line_words = sorted(line, key=lambda w: w["x0"])
+        if not line_words:
+            continue
+            
+        cells = []
+        current_cell_words = [line_words[0]]
+        
+        for next_word in line_words[1:]:
+            prev_word = current_cell_words[-1]
+            if next_word["x0"] - prev_word["x1"] >= gap_threshold:
+                cell_text = " ".join(w["text"] for w in current_cell_words).strip()
+                cells.append(cell_text)
+                current_cell_words = [next_word]
+            else:
+                current_cell_words.append(next_word)
+                
+        if current_cell_words:
+            cell_text = " ".join(w["text"] for w in current_cell_words).strip()
+            cells.append(cell_text)
+            
+        if any(cells):
+            table_rows.append(cells)
+            
+    return table_rows
+
+
+@app.post("/api/extract-raw-table-rows")
+async def extract_raw_table_rows(req: ExtractTableRequest):
+    """Crop and extract raw grid cells/rows from PDF coordinates without requiring column mappings."""
+    try:
+        pdf_path = None
+        if req.layout_hash:
+            conn = db.get_db_connection()
+            try:
+                hist_row = conn.execute(
+                    "SELECT filename FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
+                    (req.layout_hash,)
+                ).fetchone()
+                if hist_row:
+                    filename = hist_row["filename"]
+                    attachments_dir = Path(__file__).parent.parent / "data" / "attachments"
+                    for f in attachments_dir.glob("**/*"):
+                        if f.name.lower() == filename.lower() and f.is_file():
+                            pdf_path = f
+                            break
+            finally:
+                conn.close()
+
+        if not pdf_path or not pdf_path.exists():
+            return {"success": False, "error": "Physical document not found on server"}
+
+        import re
+        x_pct, y_pct, w_pct, h_pct = req.box
+        page_num = req.page
+        rows = []
+        
+        # Crop PDF table via pdfplumber
+        import pdfplumber
+        with pdfplumber.open(pdf_path) as pdf:
+            if page_num <= len(pdf.pages):
+                page = pdf.pages[page_num - 1]
+                width = page.width
+                height = page.height
+                
+                x0 = x_pct * width
+                y0 = y_pct * height
+                x1 = (x_pct + w_pct) * width
+                y1 = (y_pct + h_pct) * height
+                
+                cropped = page.crop((x0, y0, x1, y1))
+                tbls = cropped.extract_tables()
+                if tbls:
+                    for tbl in tbls:
+                        for r in tbl:
+                            if any(r):
+                                rows.append([str(c).strip() if c is not None else "" for c in r])
+                
+                # Visual word horizontal gap splitting fallback if structured table parse failed or only yielded 1 column
+                if not rows or all(len(r) <= 1 for r in rows):
+                    rows = []
+                    words = cropped.extract_words()
+                    if words:
+                        rows = extract_rows_from_words(words)
+                    else:
+                        text_lines = cropped.extract_text(layout=True)
+                        if text_lines:
+                            for line in text_lines.splitlines():
+                                if line.strip():
+                                    rows.append(re.split(r'\t|\s{2,}', line.strip()))
+                                
+        return {"success": True, "rows": rows}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/approve/{layout_hash}")
