@@ -547,8 +547,6 @@ class DeterministicParser:
                 
         return table_rows
 
-        return items
-
     def _normalise_date(self, val: str) -> str:
         """Strip trailing timezone AEDT/UTC and timestamps, normalize to YYYY-MM-DD."""
         cleaned = re.sub(r'\b(UTC|GMT|AEST|AEDT|EST|EDT|PST|PDT)\b', '', val, flags=re.IGNORECASE)
