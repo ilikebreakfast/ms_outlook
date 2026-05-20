@@ -16,6 +16,25 @@ LAYOUT_VOCABULARY = {
     "charge", "fee", "rate", "hours", "days", "balance", "ordered", "delivered"
 }
 
+# Static column/field weights for parsing confidence levels
+FIELD_CONFIDENCE_WEIGHTS = {
+    # Structural critical fields
+    "invoice_number": 1.0,
+    "invoice_date": 1.0,
+    "abn": 1.0,
+    "total_amount": 1.0,
+    
+    # Customer identifying fields
+    "customer_name": 0.8,
+    "customer_account_number": 0.8,
+    "customer_email": 0.8,
+    
+    # Secondary optional fields
+    "customer_address": 0.2,
+    "customer_phone_number": 0.2,
+    "customer_representative_name": 0.2
+}
+
 
 def generate_layout_hash(raw_text: str, file_type: str) -> str:
     """
@@ -98,8 +117,8 @@ class DeterministicParser:
             extracted[field_name] = value
             
             # Confidence weighting calculation
-            # Standard weight is 1.0 if not specified
-            weight = float(rule.get("confidence_weight", 1.0))
+            # Read from static backend weights mapping
+            weight = float(FIELD_CONFIDENCE_WEIGHTS.get(field_name, 1.0))
             if weight > 0:
                 total_weight += weight
                 if value is not None and str(value).strip() != "":

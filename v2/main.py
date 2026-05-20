@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 import time
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Set
@@ -158,37 +159,81 @@ def process_mailbox_run(interactive: bool = True, days: int = 1) -> None:
                         db.add_to_review_queue(hist_id, "Matches layout awaiting operator dashboard approval.")
             
             else:
-                # --- NEW TEMPLATE ONE-TIME BOOTSTRAPPING ENGINE ---
-                log.info(f"Unrecognized layout fingerprint. Triggering one-time LLM bootstrapper.")
-                bootstrap_res = bootstrap_template(
-                    raw_text=raw_text,
-                    document_type=file_type,
-                    layout_hash=layout_hash
-                )
-                
-                if bootstrap_res:
-                    supplier_name, rules = bootstrap_res
-                    hist_id = db.log_extraction(
+                # --- FUZZY MULTI-RULE TEMPLATE FALLBACK ---
+                log.info("Unrecognized layout fingerprint. Evaluating fuzzy template fallback among active templates.")
+                conn = db.get_db_connection()
+                active_rules_rows = []
+                try:
+                    active_rules_rows = conn.execute(
+                        "SELECT layout_hash, supplier_name, extraction_rules, document_type FROM layout_rules WHERE status = 'active';"
+                    ).fetchall()
+                except Exception as db_err:
+                    log.error(f"Failed to fetch active templates for fuzzy matching: {db_err}")
+                finally:
+                    conn.close()
+
+                best_fuzzy_match = None
+                best_confidence = 0.0
+
+                for r_row in active_rules_rows:
+                    # Only fuzzy match templates of the same document format
+                    if r_row["document_type"] == file_type:
+                        try:
+                            rules_dict = json.loads(r_row["extraction_rules"])
+                            parser = DeterministicParser(raw_text, rules_dict, pdf_path=path)
+                            extracted, confidence = parser.extract_fields()
+                            if confidence > best_confidence:
+                                best_confidence = confidence
+                                best_fuzzy_match = {
+                                    "layout_hash": r_row["layout_hash"],
+                                    "supplier_name": r_row["supplier_name"],
+                                    "extraction_rules": rules_dict,
+                                    "extracted": extracted
+                                }
+                        except Exception as parse_err:
+                            log.debug(f"Fuzzy matching evaluation failed for layout {r_row['layout_hash']}: {parse_err}")
+
+                if best_fuzzy_match and best_confidence >= 0.8:
+                    log.info(f"Fuzzy template match succeeded: matched '{best_fuzzy_match['supplier_name']}' ({best_fuzzy_match['layout_hash']}) with confidence {best_confidence * 100}%")
+                    db.log_extraction(
                         message_id=msg_id,
                         filename=path.name,
-                        layout_hash=layout_hash,
-                        parsed_data=None,
-                        status="drifted"
-                    )
-                    db.add_to_review_queue(
-                        hist_id,
-                        f"New layout compiled for '{supplier_name}'. Awaiting visual review."
+                        layout_hash=best_fuzzy_match["layout_hash"],
+                        parsed_data=best_fuzzy_match["extracted"],
+                        status="success"
                     )
                 else:
-                    log.error(f"One-time bootstrapping failed for unrecognized layout.")
-                    hist_id = db.log_extraction(
-                        message_id=msg_id,
-                        filename=path.name,
-                        layout_hash=layout_hash,
-                        parsed_data=None,
-                        status="failed"
+                    # --- NEW TEMPLATE ONE-TIME BOOTSTRAPPING ENGINE ---
+                    log.info("No high-confidence active template match found. Triggering one-time LLM bootstrapper.")
+                    bootstrap_res = bootstrap_template(
+                        raw_text=raw_text,
+                        document_type=file_type,
+                        layout_hash=layout_hash
                     )
-                    db.add_to_review_queue(hist_id, "One-time template compilation failed.")
+                    
+                    if bootstrap_res:
+                        supplier_name, rules = bootstrap_res
+                        hist_id = db.log_extraction(
+                            message_id=msg_id,
+                            filename=path.name,
+                            layout_hash=layout_hash,
+                            parsed_data=None,
+                            status="drifted"
+                        )
+                        db.add_to_review_queue(
+                            hist_id,
+                            f"New layout compiled for '{supplier_name}'. Awaiting visual review."
+                        )
+                    else:
+                        log.error("One-time bootstrapping failed for unrecognized layout.")
+                        hist_id = db.log_extraction(
+                            message_id=msg_id,
+                            filename=path.name,
+                            layout_hash=layout_hash,
+                            parsed_data=None,
+                            status="failed"
+                        )
+                        db.add_to_review_queue(hist_id, "One-time template compilation failed.")
 
         # 9. Mark email as processed in Graph folder (Optional webhook notifications can fire here)
         try:

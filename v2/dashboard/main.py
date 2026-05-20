@@ -87,9 +87,10 @@ async def get_extraction_history():
     conn = db.get_db_connection()
     try:
         rows = conn.execute("""
-            SELECT id, message_id, filename, layout_hash, parsed_data, status, processed_at
-            FROM extraction_history
-            ORDER BY processed_at DESC
+            SELECT h.id, h.message_id, h.filename, h.layout_hash, h.parsed_data, h.status, h.processed_at, r.supplier_name
+            FROM extraction_history h
+            LEFT JOIN layout_rules r ON h.layout_hash = r.layout_hash
+            ORDER BY h.processed_at DESC
             LIMIT 50;
         """).fetchall()
         
@@ -108,7 +109,8 @@ async def get_extraction_history():
                 "layout_hash": r["layout_hash"],
                 "parsed_data": parsed,
                 "status": r["status"],
-                "processed_at": r["processed_at"]
+                "processed_at": r["processed_at"],
+                "supplier_name": r["supplier_name"] or parsed.get("customer_name") or "Unknown"
             })
         return history_list
     finally:
@@ -200,37 +202,48 @@ async def get_active_templates():
 
 
 @app.get("/api/layout/{layout_hash}")
-async def get_layout(layout_hash: str):
-    """Retrieve full details and cached text sample of a single layout template."""
+async def get_layout(layout_hash: str, filename: Optional[str] = None):
+    """Retrieve full details and cached text sample of a single layout template, optionally for a specific filename."""
     details = db.get_rule_details(layout_hash)
     if not details:
         raise HTTPException(status_code=404, detail="Layout rule not found")
         
-    # Get a sample text from history matching this layout hash
     conn = db.get_db_connection()
     sample_text = ""
+    target_filename = filename
     try:
-        hist_row = conn.execute(
-            "SELECT filename, parsed_data FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
-            (layout_hash,)
-        ).fetchone()
+        if not target_filename:
+            hist_row = conn.execute(
+                "SELECT filename, parsed_data FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
+                (layout_hash,)
+            ).fetchone()
+            if hist_row:
+                target_filename = hist_row["filename"]
         
-        # If no history logs yet, provide clean placeholder text
-        if hist_row:
-            sample_text = ""
-            # Try getting cached raw file if we can read it, or default
+        if target_filename:
+            # Try getting cached raw file first
             raw_cache = Path(__file__).parent.parent / "data" / "raw_text"
-            # Scan matching text file
             for txt_file in raw_cache.glob("**/*.txt"):
-                if txt_file.name.lower().startswith(Path(hist_row['filename']).stem.lower()):
+                if txt_file.name.lower().startswith(Path(target_filename).stem.lower()):
                     try:
                         sample_text = txt_file.read_text(encoding="utf-8")
                         break
                     except Exception:
                         pass
+            
+            # If not found in raw_text cache, try to read and extract it from the original attachment file
             if not sample_text:
-                sample_text = "TAX INVOICE\nAcme Energy\nABN: 11222333444\nInvoice No: INV-1002\nTotal Amount Paid: $550.00"
-        else:
+                attachments_dir = Path(__file__).parent.parent / "data" / "attachments"
+                for f in attachments_dir.glob("**/*"):
+                    if f.name.lower() == target_filename.lower() and f.is_file():
+                        try:
+                            from core.extractor import extract_text
+                            sample_text, _ = extract_text(f)
+                        except Exception as e:
+                            log.error(f"Failed to extract specific text: {e}")
+                        break
+
+        if not sample_text:
             sample_text = "TAX INVOICE\nAcme Energy\nABN: 11222333444\nInvoice No: INV-1002\nTotal Amount Paid: $550.00"
     finally:
         conn.close()
@@ -415,7 +428,7 @@ async def approve_layout(layout_hash: str, req: ApproveRequest):
 
 
 @app.get("/api/document/file/{layout_hash}")
-async def get_raw_document_file(layout_hash: str):
+async def get_raw_document_file(layout_hash: str, filename: Optional[str] = None):
     """Retrieve the actual binary PDF, Excel, or CSV file for interactive embedding."""
     
     # 1. Fallback for our seeded demo layout (Acme Energy)
@@ -510,12 +523,15 @@ async def get_raw_document_file(layout_hash: str):
 
     conn = db.get_db_connection()
     try:
-        hist_row = conn.execute(
-            "SELECT filename FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
-            (layout_hash,)
-        ).fetchone()
-        
-        filename = hist_row["filename"] if hist_row else None
+        target_filename = filename
+        if not target_filename:
+            hist_row = conn.execute(
+                "SELECT filename FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
+                (layout_hash,)
+            ).fetchone()
+            target_filename = hist_row["filename"] if hist_row else None
+            
+        filename = target_filename
         
         if not filename:
             missing_html = """<!DOCTYPE html>
@@ -581,16 +597,19 @@ async def get_raw_document_file(layout_hash: str):
 
 
 @app.get("/api/document/grid/{layout_hash}")
-async def get_document_grid(layout_hash: str):
+async def get_document_grid(layout_hash: str, filename: Optional[str] = None):
     """Parse Excel or CSV into structured JSON grid data for responsive table rendering."""
     conn = db.get_db_connection()
     try:
-        hist_row = conn.execute(
-            "SELECT filename FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
-            (layout_hash,)
-        ).fetchone()
-        
-        filename = hist_row["filename"] if hist_row else None
+        target_filename = filename
+        if not target_filename:
+            hist_row = conn.execute(
+                "SELECT filename FROM extraction_history WHERE layout_hash = ? ORDER BY processed_at DESC LIMIT 1;",
+                (layout_hash,)
+            ).fetchone()
+            target_filename = hist_row["filename"] if hist_row else None
+            
+        filename = target_filename
         
         # Seeded demo mock data if file not found or if it's our default signature
         if (not filename and layout_hash == "a1f998485a91d5") or layout_hash == "seeded_demo":
@@ -641,6 +660,19 @@ async def get_document_grid(layout_hash: str):
         }
     finally:
         conn.close()
+
+
+@app.post("/api/run-pipeline")
+async def trigger_run_pipeline():
+    """Trigger the unread email attachment ingestion pipeline in a background thread."""
+    try:
+        import threading
+        from main import process_mailbox_run
+        thread = threading.Thread(target=process_mailbox_run, kwargs={"interactive": False, "days": 3}, daemon=True)
+        thread.start()
+        return {"success": True, "message": "Pipeline scan initiated successfully in the background."}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":
