@@ -1277,7 +1277,7 @@
                 };
 
                 return `
-                    <tr onclick="inspectHistoricalFile('${item.layout_hash}', '${item.filename}')" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='none'" style="cursor: pointer; transition: background 0.2s ease;" class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
+                    <tr onclick="pinJsonTooltip(event, '${cacheId}')" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='none'" style="cursor: pointer; transition: background 0.2s ease;" class="history-log-row" data-layout-hash="${item.layout_hash}" data-filename="${item.filename}" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
                         <td style="font-weight: 500; font-family: var(--font-main); color: #fff; text-align: left;">${escapeHtml(item.filename)}</td>
                         <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-align: left;">${escapeHtml(item.layout_hash.substring(0, 12))}</td>
                         <td style="font-family: var(--font-mono); font-size: 11px; font-weight: 700; text-align: left;">${escapeHtml(invNo)}</td>
@@ -1366,7 +1366,7 @@
                         const formattedTotal = total !== null ? `$${total.toFixed(2)}` : "-";
 
                         rowsHtml += `
-                            <tr ${bgStyle} onclick="inspectHistoricalFile('${item.layout_hash}', '${item.filename}')" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(6, 182, 212, ${idx % 2 === 0 ? '0.02' : '0.05'})'" class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
+                            <tr ${bgStyle} onclick="pinJsonTooltip(event, '${cacheId}')" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(6, 182, 212, ${idx % 2 === 0 ? '0.02' : '0.05'})'" class="history-log-row" data-layout-hash="${item.layout_hash}" data-filename="${item.filename}" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
                                 <td style="font-weight: 500; text-align: left; color:#fff;">${escapeHtml(filename)}</td>
                                 <td style="text-align: left; color:var(--text-main);">${escapeHtml(customerName)}</td>
                                 <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--neon-green);">${escapeHtml(accountNo)}</td>
@@ -1389,7 +1389,7 @@
                     }
 
                     rowsHtml += `
-                        <tr onclick="inspectHistoricalFile('${item.layout_hash}', '${item.filename}')" style="background: rgba(245, 158, 11, 0.02); cursor: pointer; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(245, 158, 11, 0.02)'" class="history-log-row" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
+                        <tr onclick="pinJsonTooltip(event, '${cacheId}')" style="background: rgba(245, 158, 11, 0.02); cursor: pointer; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(245, 158, 11, 0.02)'" class="history-log-row" data-layout-hash="${item.layout_hash}" data-filename="${item.filename}" onmouseenter="showJsonTooltip(event, '${cacheId}')" onmousemove="moveJsonTooltip(event)" onmouseleave="hideJsonTooltip()">
                             <td style="font-weight: 500; text-align: left; color:#fff;">${escapeHtml(filename)}</td>
                             <td style="text-align: left; color:var(--text-main);">${escapeHtml(customerName)}</td>
                             <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--neon-green);">${escapeHtml(accountNo)}</td>
@@ -1503,9 +1503,15 @@
             moveJsonTooltip(event);
         }
 
+        // Tooltip pinning state
+        let tooltipPinned = false;
+        let tooltipLastCacheId = null;
+
         function moveJsonTooltip(event) {
             const tooltip = document.getElementById("json-hover-tooltip");
             if (!tooltip || tooltip.style.display === "none") return;
+            // Don't move if pinned
+            if (tooltipPinned) return;
 
             // Offset cursor slightly to prevent flickering
             const offsetX = 18;
@@ -1527,11 +1533,88 @@
         }
 
         function hideJsonTooltip() {
+            // Don't hide if pinned
+            if (tooltipPinned) return;
             const tooltip = document.getElementById("json-hover-tooltip");
             if (tooltip) {
                 tooltip.style.display = "none";
             }
         }
+
+        function pinJsonTooltip(event, cacheId) {
+            // If already pinned to this item, unpin
+            if (tooltipPinned && tooltipLastCacheId === cacheId) {
+                unpinJsonTooltip();
+                return;
+            }
+
+            // Show the tooltip content first (reuse showJsonTooltip)
+            showJsonTooltip(event, cacheId);
+
+            const tooltip = document.getElementById("json-hover-tooltip");
+            if (!tooltip || tooltip.style.display === "none") return;
+
+            tooltipPinned = true;
+            tooltipLastCacheId = cacheId;
+
+            // Enable interaction (scrolling, text selection)
+            tooltip.style.pointerEvents = "auto";
+            tooltip.style.border = "1px solid var(--primary-pink)";
+            tooltip.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(244, 63, 94, 0.2)";
+
+            // Pull layout_hash and filename from cached metadata for inspect button
+            const cached = window.historyParsedDataCache ? window.historyParsedDataCache[cacheId] : null;
+            const lHash = cached ? (cached.layout_hash || "") : "";
+            const fName = cached ? (cached.filename || "") : "";
+
+            // Add header bar with inspect + close buttons if not already present
+            if (!tooltip.querySelector(".tooltip-pin-header")) {
+                const header = document.createElement("div");
+                header.className = "tooltip-pin-header";
+                header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(244, 63, 94, 0.2);";
+                header.innerHTML = `
+                    <span style="font-size: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">📌 Pinned — Scroll enabled</span>
+                    <div style="display: flex; gap: 6px;">
+                        ${lHash && fName ? `<button onclick="unpinJsonTooltip(); inspectHistoricalFile('${lHash}', '${fName}')" style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--neon-cyan); font-size: 9px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono);">🔍 Open in Workspace</button>` : ''}
+                        <button onclick="unpinJsonTooltip()" style="background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--primary-pink); font-size: 9px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono);">✕ Close</button>
+                    </div>
+                `;
+                tooltip.insertBefore(header, tooltip.firstChild);
+            }
+        }
+
+        function unpinJsonTooltip() {
+            tooltipPinned = false;
+            tooltipLastCacheId = null;
+            const tooltip = document.getElementById("json-hover-tooltip");
+            if (tooltip) {
+                tooltip.style.display = "none";
+                tooltip.style.pointerEvents = "none";
+                tooltip.style.border = "1px solid var(--neon-cyan)";
+                tooltip.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8), 0 0 15px rgba(6, 182, 212, 0.15)";
+                // Remove pin header if present
+                const header = tooltip.querySelector(".tooltip-pin-header");
+                if (header) header.remove();
+            }
+        }
+
+        // Global click handler: dismiss pinned tooltip when clicking outside it
+        document.addEventListener("click", function(e) {
+            if (!tooltipPinned) return;
+            const tooltip = document.getElementById("json-hover-tooltip");
+            if (tooltip && !tooltip.contains(e.target)) {
+                // Check if click was on a history row (which would re-pin)
+                if (e.target.closest && e.target.closest(".history-log-row")) return;
+                unpinJsonTooltip();
+            }
+        });
+
+        // Escape key dismisses pinned tooltip
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape" && tooltipPinned) {
+                unpinJsonTooltip();
+            }
+        });
 
         let currentSidebarMode = 'pending';
 
