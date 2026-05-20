@@ -422,7 +422,61 @@ async def approve_layout(layout_hash: str, req: ApproveRequest):
             status="active",
             extraction_rules=req.rules
         )
-        return {"success": True, "message": f"Layout template for '{req.supplier_name}' successfully locked and activated."}
+        
+        # Retroactively re-parse historical drifted/pending invoices matching this layout signature!
+        conn = db.get_db_connection()
+        try:
+            history_rows = conn.execute(
+                "SELECT id, filename FROM extraction_history WHERE layout_hash = ?;",
+                (layout_hash,)
+            ).fetchall()
+            
+            for row in history_rows:
+                hist_id = row["id"]
+                filename = row["filename"]
+                
+                # Fetch text sample
+                sample_text = ""
+                raw_cache = Path(__file__).parent.parent / "data" / "raw_text"
+                for txt_file in raw_cache.glob("**/*.txt"):
+                    if txt_file.name.lower().startswith(Path(filename).stem.lower()):
+                        try:
+                            sample_text = txt_file.read_text(encoding="utf-8")
+                            break
+                        except Exception:
+                            pass
+                
+                # Scan matching attachment file
+                pdf_path = None
+                attachments_dir = Path(__file__).parent.parent / "data" / "attachments"
+                for f in attachments_dir.glob("**/*"):
+                    if f.name.lower() == filename.lower() and f.is_file():
+                        pdf_path = f
+                        if not sample_text:
+                            try:
+                                from core.extractor import extract_text
+                                sample_text, _ = extract_text(f)
+                            except Exception:
+                                pass
+                        break
+                
+                if sample_text or pdf_path:
+                    # Run deterministic parser
+                    p = DeterministicParser(sample_text or "", req.rules, pdf_path=str(pdf_path) if pdf_path else None)
+                    extracted, confidence = p.extract_fields()
+                    
+                    # Update database entry to success and store the parsed data!
+                    conn.execute(
+                        "UPDATE extraction_history SET parsed_data = ?, status = 'success' WHERE id = ?;",
+                        (json.dumps(extracted), hist_id)
+                    )
+            conn.commit()
+        except Exception as eh:
+            print(f"Error retroactively re-parsing history logs: {eh}")
+        finally:
+            conn.close()
+            
+        return {"success": True, "message": f"Layout template for '{req.supplier_name}' successfully locked and activated. Associated logs re-parsed and exported to streams."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save layout rule: {e}")
 

@@ -1243,7 +1243,7 @@
                         totalAmt = item.parsed_data.total_amount;
                     }
                 }
-                const dateStr = new Date(item.processed_at).toLocaleString();
+                const dateStr = new Date(item.processed_at).toLocaleString("en-AU", { timeZone: "Australia/Sydney" });
                 const cacheId = item.id || item.processed_at;
                 window.historyParsedDataCache[cacheId] = item.parsed_data;
 
@@ -1333,7 +1333,7 @@
                                 <td style="font-weight: 500; text-align: left; color:#fff;">${escapeHtml(filename)}</td>
                                 <td style="text-align: left; color:var(--text-main);">${escapeHtml(customerName)}</td>
                                 <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--neon-green);">${escapeHtml(accountNo)}</td>
-                                <td style="font-family: var(--font-mono); font-size:11px; font-weight:700; text-align: left; color:var(--neon-cyan);">${escapeHtml(accountNo)}</td>
+                                <td style="font-family: var(--font-mono); font-size:11px; font-weight:700; text-align: left; color:var(--neon-cyan);">${escapeHtml(invNo)}</td>
                                 <td style="font-family: var(--font-mono); font-size:11px; text-align: left;">${escapeHtml(invDate)}</td>
                                 <td style="font-family: var(--font-mono); font-size:11px; text-align: left; color:var(--primary-pink);">${escapeHtml(line.product_code || line.code || "-")}</td>
                                 <td style="text-align: left;">${escapeHtml(line.product_name || line.description || "-")}</td>
@@ -1627,7 +1627,7 @@
                     <!-- Action controls -->
                     <div class="workspace-footer">
                         <button class="pixel-btn-secondary" onclick="testRules()">Test the Slice</button>
-                        ${filename ? '' : `<button class="pixel-btn-success" onclick="approveAndActivate()">Lock in the Cut</button>`}
+                        <button class="pixel-btn-success" onclick="approveAndActivate()">Lock in the Cut</button>
                     </div>
                 `;
 
@@ -1729,12 +1729,14 @@
                 </div>
             `;
 
-            // Re-render form container in-place
+            // Re-render form container in-place (caching scroll to prevent jumping)
+            const cachedScrollTop = formContainer.scrollTop;
             formContainer.innerHTML = `
                 ${fieldsHtml}
                 ${lineItemsHtml}
                 <div id="live-preview-panel"></div>
             `;
+            formContainer.scrollTop = cachedScrollTop;
 
             // Re-assert active tab layouts
             switchSidebarTab(activeTab);
