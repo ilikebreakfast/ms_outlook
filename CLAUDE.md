@@ -3,7 +3,7 @@
 This file provides guidance and command references to Claude Code (`claude.ai/code`) when working with code in this repository.
 
 > [!IMPORTANT]
-> **AI Developer Guidelines:** For detailed instructions on the dual-version architecture (`v1`/`v2`), independent `.gitignore` rules, batch script safety, and virtual environment setup, refer to the global **[AGENTS.md](file:///c:/git/ms_outlook/AGENTS.md)** developer guide first.
+> **AI Developer Guidelines:** For detailed instructions on the multi-version architecture (`v1`/`v2`/`v3`), independent `.gitignore` rules, batch script safety, and virtual environment setup, refer to the global **[AGENTS.md](file:///c:/git/ms_outlook/AGENTS.md)** developer guide first.
 
 ---
 
@@ -17,40 +17,22 @@ run.bat
 ```
 *(Or manually create it at `v2\venv` and install `v2/requirements.txt`)*
 
-### Starting the FastAPI Operator Dashboard
+### Running v3 Pipeline Tasks (Active)
 ```bash
-# Via launcher (Option 1)
-run.bat
+# Executing active Python scripts in v3 (use the v2 shared venv)
+"v2\venv\Scripts\python.exe" v3/some_script.py
+```
 
-# Or direct invocation
+### Running the Legacy Web Operator Dashboard (v2)
+```bash
+# Direct invocation
 "v2\venv\Scripts\python.exe" v2/dashboard/main.py
-```
-
-### Running the Email processing pipeline
-```bash
-# Via launcher (Option 2)
-run.bat
-
-# Or direct invocation
-"v2\venv\Scripts\python.exe" v2/main.py
-```
-
-### Running the Unit Test Suite
-To run the full test suite sequentially:
-```bash
-# Via launcher (Option 3)
-run.bat
-
-# Or direct invocation
-"v2\venv\Scripts\python.exe" v2/tests/test_parser.py
-"v2\venv\Scripts\python.exe" v2/tests/test_db.py
-"v2\venv\Scripts\python.exe" v2/tests/test_bootstrap.py
 ```
 
 ---
 
 ## Development Code Style & Guidelines
 
-* **Version Independence:** Work inside `v2/` for all modern feature enhancements. Leave `v1/` unchanged as it is legacy.
-* **Imports:** Ensure any new `v2` modules maintain import-safety relative to the `v2` root.
+* **Version Independence:** Work inside `v3/` for all modern active feature enhancements. Leave `v1/` and `v2/` unchanged unless requested.
+* **Imports:** Ensure any new `v3` modules maintain import-safety relative to the `v3` root.
 * **Comments:** Maintain docstrings and inline code comments as specified in the [AGENTS.md](file:///c:/git/ms_outlook/AGENTS.md) guide.
