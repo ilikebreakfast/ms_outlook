@@ -19,6 +19,7 @@ from core.invoices.extractor import (
     PageData, RasterisedPDF,
     get_known_customers, get_item_codes,
 )
+from core.invoices.knowledge_base import load_customer_prompt
 
 # v3/ root (this file lives at v3/core/invoices/)
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -296,8 +297,13 @@ _LINE_ITEMS_JSON_SCHEMA = (
     "}"
 )
 
-def extract_line_items(pages: list[PageData]) -> dict:
-    """Extract line items and totals from all (non-boilerplate) document pages."""
+def extract_line_items(pages: list[PageData], customer_prompt: str | None = None) -> dict:
+    """Extract line items and totals from all (non-boilerplate) document pages.
+
+    customer_prompt: optional per-customer markdown loaded from v3/knowledge/customers/.
+    When provided it is appended to the instructions so customer-specific format
+    quirks override the general rules.
+    """
     messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
 
     active_pages = [p for p in pages if not is_boilerplate_page(p.text_content or p.paddle_text)]
@@ -307,6 +313,13 @@ def extract_line_items(pages: list[PageData]) -> dict:
     use_vision = any(p.page_type == "image" for p in active_pages) and (VISION_MODEL in available_models)
     item_context = _build_item_context()
     instructions = _LINE_ITEMS_INSTRUCTIONS_TEMPLATE.format(known_items=item_context)
+
+    if customer_prompt:
+        instructions += (
+            "\nCUSTOMER-SPECIFIC RULES (override general rules above if they conflict):\n"
+            + customer_prompt
+            + "\n"
+        )
 
     if not use_vision:
         concat_text = ""
@@ -412,6 +425,22 @@ def extract_from_pdf(rasterised: RasterisedPDF, email_context: str | None = None
     """Orchestrate customer + line-item extraction for a rasterised PDF."""
     if not rasterised.pages:
         raise ValueError("No pages rasterised")
+
+    # Stage A: identify the customer from page 1
     customer_dict = extract_customer(rasterised.pages[0], email_context)
-    items_dict = extract_line_items(rasterised.pages)
+
+    # Stage B: load per-customer prompt if one exists for this customer
+    # Prefer email over name for the lookup key (matches the template store logic)
+    customer_lookup = (
+        (customer_dict.get("email") or {}).get("value")
+        or (customer_dict.get("name") or {}).get("value")
+        or ""
+    )
+    customer_prompt = load_customer_prompt(customer_lookup) if customer_lookup else None
+    if customer_prompt:
+        print(f"[knowledge_base] Loaded per-customer prompt for '{customer_lookup}'")
+
+    # Stage C: extract line items, injecting per-customer rules if available
+    items_dict = extract_line_items(rasterised.pages, customer_prompt=customer_prompt)
+
     return map_to_payload(customer_dict, items_dict)

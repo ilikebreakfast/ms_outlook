@@ -3,11 +3,13 @@ Knowledge base utilities.
 
 Covers:
   - ERP product CSV loader (maps columns via v3/knowledge/product_mapping.json)
+  - Per-customer prompt loader (v3/knowledge/customers/<slug>.md)
   - PROMPT.md generator (merges live DB knowledge + PROMPT_BASE.md guidelines)
 """
 
 import csv
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -15,12 +17,37 @@ from core.invoices.extractor import (
     upsert_item_code, get_known_customers, get_item_codes,
 )
 
-_V3_ROOT     = Path(__file__).resolve().parent.parent.parent
-_KB_DIR      = _V3_ROOT / "knowledge"
-_PRODUCTS_DIR = _KB_DIR / "products"
-_MAPPING_PATH = _KB_DIR / "product_mapping.json"
-_BASE_MD      = _KB_DIR / "PROMPT_BASE.md"
-_PROMPT_MD    = _KB_DIR / "PROMPT.md"
+_V3_ROOT       = Path(__file__).resolve().parent.parent.parent
+_KB_DIR        = _V3_ROOT / "knowledge"
+_PRODUCTS_DIR  = _KB_DIR / "products"
+_CUSTOMERS_DIR = _KB_DIR / "customers"
+_MAPPING_PATH  = _KB_DIR / "product_mapping.json"
+_BASE_MD       = _KB_DIR / "PROMPT_BASE.md"
+_PROMPT_MD     = _KB_DIR / "PROMPT.md"
+
+
+# ==============================================================================
+# PER-CUSTOMER PROMPT LOADER
+# ==============================================================================
+
+def _customer_slug(lookup_key: str) -> str:
+    """Convert a customer lookup key (email or name) to a filename-safe slug."""
+    return re.sub(r"[^\w]+", "_", lookup_key.strip().lower()).strip("_")
+
+
+def load_customer_prompt(lookup_key: str) -> str | None:
+    """Return the content of v3/knowledge/customers/<slug>.md, or None if absent."""
+    if not lookup_key:
+        return None
+    slug = _customer_slug(lookup_key)
+    path = _CUSTOMERS_DIR / f"{slug}.md"
+    if path.exists():
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+            return content if content else None
+        except Exception as e:
+            print(f"[knowledge_base] Warning: could not read customer prompt {path.name}: {e}")
+    return None
 
 # ==============================================================================
 # ERP PRODUCT CSV LOADER

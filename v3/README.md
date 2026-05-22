@@ -1,38 +1,57 @@
-# v3 — Invoice Processing Pipeline
+# v3 — Invoice / Purchase Order Processing Pipeline
 
-A local-LLM-powered invoice parser that reads PDF attachments, extracts
-customer and line-item data via [Ollama](https://ollama.com/), stores
-learned customer templates and item codes in SQLite, and routes low-confidence
-results to an interactive operator review CLI.
+A local-LLM-powered document parser designed for a **supplier (vendor) receiving
+Purchase Orders from customers**. It extracts customer and line-item data via
+[Ollama](https://ollama.com/), stores learned templates and product codes in SQLite,
+routes low-confidence results to an interactive operator review CLI, and maintains a
+self-improving knowledge base that gets smarter with every confirmed document.
 
 ---
 
-## Folder structure
+## Business Context
+
+This system is used **as the supplier**:
+
+| Role | Who | Details on document |
+|---|---|---|
+| **Us** (Supplier / Vendor) | Your company | `Vendor:`, `Supplier:`, `To:` fields → **excluded** from extraction |
+| **Them** (Customer / Buyer) | Companies that order from you | `From:`, `Buyer:`, `Ordered By:` fields → **extracted** |
+
+Documents processed are typically **Purchase Orders sent TO us** by customers, though
+it also handles picking slips, delivery dockets, and any other order-related PDFs.
+
+---
+
+## Folder Structure
 
 ```
 v3/
 ├── core/
 │   └── invoices/
-│       ├── extractor.py       # data contracts, SQLite store, PDF rasterizer,
-│       │                      # math inference, validator/stager
-│       ├── llm_extractor.py   # Ollama client, dynamic context injection,
-│       │                      # extraction prompts, payload mapping
-│       ├── manual_review.py   # operator CLI (display, correct, accept/reject)
-│       └── knowledge_base.py  # ERP CSV loader, PROMPT.md generator
+│       ├── extractor.py        # data contracts, SQLite store, PDF rasterizer,
+│       │                       # math inference, validator/stager
+│       ├── llm_extractor.py    # Ollama client, dynamic context injection,
+│       │                       # extraction prompts, payload mapping
+│       ├── manual_review.py    # operator CLI (display, correct, accept/reject)
+│       └── knowledge_base.py   # ERP CSV loader, per-customer prompts,
+│                               # PROMPT.md generator
 ├── knowledge/
-│   ├── PROMPT_BASE.md         # static extraction guidelines (edit this)
-│   ├── PROMPT.md              # auto-generated knowledge summary (gitignored)
-│   ├── product_mapping.json.example
-│   ├── product_mapping.json   # your column mapping (gitignored — copy from .example)
-│   └── products/              # drop ERP CSV exports here (gitignored)
+│   ├── PROMPT_BASE.md                      # static extraction guidelines (edit this)
+│   ├── PROMPT.md                           # auto-generated knowledge summary (gitignored)
+│   ├── product_mapping.json.example        # CSV column mapping template
+│   ├── product_mapping.json                # your column mapping (gitignored — copy from .example)
+│   ├── products/                           # ERP CSV exports (gitignored — drop files here)
+│   └── customers/
+│       ├── example_customer.md.example     # per-customer prompt template
+│       └── <slug>.md                       # per-customer rules (gitignored — see below)
 ├── tests/
 │   └── invoices/
-│       ├── view_templates.bat / .py   # inspect customer_templates DB table
-│       ├── view_pending.bat  / .py    # list pending staged invoices
-│       ├── view_approved.bat / .py    # list approved staged invoices
-│       └── run_on_attachment.bat      # run the full pipeline on a PDF
-├── invoice_parser.py          # main entry point (run this)
-├── vendor_config.json         # private vendor exclusions (gitignored — copy from .example)
+│       ├── view_templates.py / .bat        # inspect customer_templates DB
+│       ├── view_pending.py / .bat          # list pending staged invoices
+│       ├── view_approved.py / .bat         # list approved staged invoices
+│       └── run_on_attachment.bat           # interactive PDF pipeline launcher
+├── invoice_parser.py           # main entry point
+├── vendor_config.json          # OUR company exclusions (gitignored — copy from .example)
 ├── vendor_config.json.example
 └── README.md
 ```
@@ -40,11 +59,11 @@ v3/
 Runtime output (all gitignored):
 ```
 v3/
-├── invoice_memory.db          # SQLite store: customer_templates + item_codes
+├── invoice_memory.db           # SQLite: customer_templates + item_codes
 └── invoice_staging/
-    ├── pending/               # invoices awaiting operator review
-    ├── approved/              # operator-confirmed invoices
-    └── rejected/              # operator-rejected invoices
+    ├── pending/                # awaiting operator review
+    ├── approved/               # operator-confirmed
+    └── rejected/               # operator-rejected
 ```
 
 ---
@@ -55,12 +74,12 @@ v3/
 |---|---|
 | Python 3.11+ | Runtime |
 | [Ollama](https://ollama.com/) | Local LLM server |
-| `qwen2.5:3b` | Text invoice extraction model |
+| `qwen2.5:3b` | Text extraction model |
 | `qwen2-vl:2b` | Vision model for scanned pages (optional) |
 | `pdfplumber` | PDF text extraction and page classification |
 | `PyMuPDF` (`fitz`) | PDF rasterization (no Poppler required) |
 | `PaddleOCR` | OCR fallback for scanned/image pages |
-| `Pillow`, `numpy` | Image processing for rasterized pages |
+| `Pillow`, `numpy` | Image processing |
 | `requests` | Ollama API client |
 
 Install Python deps (using the shared v2 venv):
@@ -78,152 +97,240 @@ ollama pull qwen2-vl:2b   # optional — only needed for scanned PDFs
 
 ## Setup
 
-### 1. Vendor exclusion config
-Copy the vendor config and fill in your own company's details so the LLM
-never mistakes them for a customer:
+### 1. Our company exclusions
+Copy and fill in your own company's details so the LLM never mistakes them for a customer:
 ```bat
 copy v3\vendor_config.json.example v3\vendor_config.json
 ```
+Edit `vendor_config.json` with your company name(s), ABN, email, and phone.
 
-### 2. (Optional) ERP product codes
-Copy the product mapping template and fill in your CSV column names:
+### 2. Static extraction guidelines (optional but recommended)
+Edit `v3/knowledge/PROMPT_BASE.md` to add any rules that always apply
+(e.g. "our supplier codes are always 5-digit numeric"). This file is tracked in git.
+It is merged into the auto-generated `PROMPT.md` after each confirmed document.
+
+### 3. ERP product codes (optional)
+If you have a product list exported from your ERP:
 ```bat
 copy v3\knowledge\product_mapping.json.example v3\knowledge\product_mapping.json
 ```
-Edit `product_mapping.json` to match your ERP export headers, then drop your
-`.csv` files into `v3/knowledge/products/`. The pipeline loads them automatically
-on each run (idempotent upsert).
+Edit `product_mapping.json` to match your CSV's column headers, then drop your
+`.csv` files into `v3/knowledge/products/`. The pipeline loads them on each run
+(idempotent upsert). This enables SKU verification — extracted codes are checked
+against the ERP list and flagged if they don't match.
 
-### 3. (Optional) Static extraction guidelines
-Edit `v3/knowledge/PROMPT_BASE.md` to add any persistent rules you want the
-LLM to follow. This file is tracked in git; it is merged into the
-auto-generated `PROMPT.md` after each confirmed invoice.
+### 4. Per-customer prompts (optional, for tricky customers)
+Create a `.md` file in `v3/knowledge/customers/` named after the customer's
+lookup key (email or name), lowercased with spaces/symbols replaced by underscores:
+```
+Bavarian Bier Cafe  →  v3/knowledge/customers/bavarian_bier_cafe.md
+info@bier.com.au    →  v3/knowledge/customers/info_bier_com_au.md
+```
+See `v3/knowledge/customers/example_customer.md.example` for the template.
+Only create one when the general rules produce consistent errors for that customer.
+These files are gitignored (may contain customer-specific details).
 
-### 4. Start Ollama
+### 5. Start Ollama
 ```bash
 ollama serve
 ```
 
 ---
 
-## How to run
+## How to Run
 
-All commands are run from the **repository root**.
+All commands from the **repository root**.
 
-### Parse a single invoice
+### Parse a single document
 ```bat
-"v2\venv\Scripts\python.exe" v3\invoice_parser.py path\to\invoice.pdf
+"v2\venv\Scripts\python.exe" v3\invoice_parser.py path\to\order.pdf
 ```
 
 ### Parse with email body for context
 ```bat
-"v2\venv\Scripts\python.exe" v3\invoice_parser.py path\to\invoice.pdf --email path\to\email_body.txt
+"v2\venv\Scripts\python.exe" v3\invoice_parser.py path\to\order.pdf --email path\to\email_body.txt
 ```
 
 ### Batch / automated mode (skip operator prompts)
 ```bat
-"v2\venv\Scripts\python.exe" v3\invoice_parser.py path\to\invoice.pdf --auto
+"v2\venv\Scripts\python.exe" v3\invoice_parser.py path\to\order.pdf --auto
 ```
 
-### Review all pending invoices interactively
+### Review all pending documents interactively
 ```bat
 "v2\venv\Scripts\python.exe" v3\invoice_parser.py --review-pending
 ```
 
 ---
 
-## Test scripts
-
-Open any bat file directly from Explorer or run from the command line.
+## Test Scripts
 
 | Script | What it does |
 |---|---|
 | `tests\invoices\view_templates.bat` | Show all saved customer templates in the DB |
-| `tests\invoices\view_pending.bat` | List all invoices waiting for review |
-| `tests\invoices\view_approved.bat` | List all operator-approved invoices |
-| `tests\invoices\run_on_attachment.bat` | Interactive menu: browse new/processed attachments by date + domain, run pipeline, auto-move to processed/ on success |
+| `tests\invoices\view_pending.bat` | List invoices waiting for review |
+| `tests\invoices\view_approved.bat` | List approved invoices |
+| `tests\invoices\run_on_attachment.bat` | Interactive menu: select PDF → run pipeline → auto-move on success |
 
-`run_on_attachment.bat` menu options:
-
+`run_on_attachment.bat` menu:
 ```
-[N]  New attachments        — lists v3/data/attachments/ (newest first, with sender domain)
-[P]  Processed attachments  — browse already-parsed PDFs
-[R]  Review all pending     — launches the operator review CLI for all staged pending invoices
+[N]  New attachments       — v3/data/attachments/ (newest first, with sender domain)
+[P]  Processed attachments — browse already-parsed PDFs
+[R]  Review all pending    — operator review CLI for all staged pending documents
 [Q]  Quit
 ```
 
-After selecting a file from **N**, the pipeline runs interactively. On success the PDF is
-moved automatically from `data/attachments/` → `data/processed/`.
-
 ---
 
-## Pipeline stages
+## Pipeline Stages
 
 ```
 PDF file
   │
   ▼
-[1] Rasterizer (extractor.py)
+[1] Rasterizer  (extractor.py)
     pdfplumber classifies each page as "text" or "image"
     PyMuPDF rasterizes to JPEG at 150/300 DPI
     PaddleOCR pre-scans image pages
   │
   ▼
-[2] LLM Extractor (llm_extractor.py)
-    Loads known customers + item codes from DB (dynamic context injection)
-    Ollama qwen2.5:3b extracts customer + line items from text pages
-    Ollama qwen2-vl:2b handles scanned/image pages (if available)
-    Vendor exclusion rules prevent own-company details being mis-classified
+[2] Customer Extraction  (llm_extractor.py → extract_customer)
+    Injects dynamic context: known customers from DB + our company exclusions
+    LLM identifies the customer (buyer) from page 1
+    Looks for: From, Buyer, Ordered By, Company, Bill To, Ship To
+    Excludes our own company's name/ABN/email/phone
   │
   ▼
-[3] Math Inference (extractor.py → infer_line_item_math)
-    Derives missing qty / unit_price / line_total from the other two
-    Flags math mismatches as warnings (does NOT overwrite extracted values)
-    Sets inferred_* fields on each LineItem for display
+[3] Per-Customer Prompt Load  (knowledge_base.py → load_customer_prompt)
+    Slugifies the identified customer name/email
+    Loads v3/knowledge/customers/<slug>.md if it exists
+    Customer-specific rules override general rules for step [4]
   │
   ▼
-[4] Validator & Stager (extractor.py → validate_and_stage)
-    Cross-checks against saved customer templates (SQLite)
+[4] Line-Item Extraction  (llm_extractor.py → extract_line_items)
+    Injects dynamic context: known ERP product codes + confirmed item codes
+    Injects per-customer rules from step [3] if available
+    Separates our supplier SKU (sku) from customer reference codes (customer_ref)
+    On POs: "Supplier Code"/"Your Code" → sku; "Our Code"/"Buyer Code" → customer_ref
+  │
+  ▼
+[5] Math Inference  (extractor.py → infer_line_item_math)
+    Derives any missing value from the other two (qty, unit_price, line_total)
+    Flags math mismatches (qty × price ≠ total by > $0.02) as warnings
+    Adds inferred_* fields — never overwrites extracted values
+  │
+  ▼
+[6] Validator & Stager  (extractor.py → validate_and_stage)
+    Enriches from saved customer templates (SQLite)
+    SKU cross-check: if ERP codes are loaded, flags SKUs not in the ERP list
     Scores parse confidence: high / medium / low
     Writes JSON to invoice_staging/pending/ or approved/
   │
   ▼
-[5] Operator Review CLI (manual_review.py)  ← skipped with --auto
-    Shows formatted ASCII summary
-    ~ prefix = inferred value   ! suffix = math mismatch
-    Prompts for field corrections
-    Accept → moves to approved/ + saves customer template + item codes
-             + regenerates v3/knowledge/PROMPT.md
-    Reject → moves to rejected/
+[7] Operator Review CLI  (manual_review.py)    ← skipped with --auto
+    Formatted ASCII panel with confidence, warnings, and inferred values
+    SKU column shows ✓ (ERP-verified) or ? (not in ERP list)
+    ~ prefix = inferred value,  ! suffix = math mismatch
+    Customer ref shown indented below each line item if present
+    Accept  → approved/ + save customer template + save item codes
+             + regenerate v3/knowledge/PROMPT.md
+    Reject  → rejected/
 ```
 
 ---
 
-## Self-improving knowledge base
+## Data Contract: LineItem Fields
 
-Every confirmed invoice teaches the system:
-
-| What is learned | Where stored | Used for |
+| Field | Type | Description |
 |---|---|---|
-| Customer name, email, ABN, address | `customer_templates` DB table | Template enrichment + LLM context |
-| Line item SKUs, descriptions, prices | `item_codes` DB table | LLM item-matching hints |
-| ERP product codes (from CSV) | `item_codes` (source=erp) | LLM item-matching hints |
-
-After each confirmed invoice `v3/knowledge/PROMPT.md` is regenerated with the
-latest known customers, item codes, and the static guidelines from `PROMPT_BASE.md`.
-Use this file as context when prompting an external AI to review or improve extraction quality.
+| `sku` | str \| null | **Our** supplier product code (what we want) |
+| `customer_ref` | str \| null | Customer's own reference code for this product |
+| `description` | str | Product description |
+| `quantity` | float \| null | Order quantity |
+| `uom` | str \| null | Unit of measure (Kg, EA, ctn, …) |
+| `unit_price` | float \| null | Price per unit (extracted) |
+| `line_total` | float \| null | Line total (extracted) |
+| `confidence` | str | `high` / `medium` / `low` |
+| `sku_verified` | bool | True if `sku` matched a known ERP product code |
+| `inferred_unit_price` | float \| null | Derived: line_total ÷ quantity |
+| `inferred_quantity` | float \| null | Derived: line_total ÷ unit_price |
+| `inferred_line_total` | float \| null | Derived: quantity × unit_price |
+| `math_ok` | bool | False if all three fields present but don't agree |
 
 ---
 
-## Line-item math inference
+## Self-Improving Knowledge Base
 
-The validator computes missing numeric fields without touching extracted values:
+Every confirmed document teaches the system:
+
+| What is learned | Where stored | Used for |
+|---|---|---|
+| Customer name, email, ABN, address | `customer_templates` DB | Template enrichment + LLM customer context |
+| Line item SKUs, descriptions, prices | `item_codes` DB (`source='llm'`) | LLM item-matching hints |
+| ERP product codes (CSV import) | `item_codes` DB (`source='erp'`) | LLM hints + SKU verification |
+
+After each confirmed document `v3/knowledge/PROMPT.md` is regenerated. It combines:
+- **Known customers** table (from `customer_templates`, confirmed ≥ 2 times)
+- **ERP product codes** table (from CSV imports)
+- **Learned item codes** table (LLM-extracted, confirmed ≥ 2 times)
+- **Static guidelines** from `PROMPT_BASE.md`
+
+Use `PROMPT.md` as context when prompting an external AI to review or improve extraction quality.
+
+---
+
+## Per-Customer Prompts
+
+**When to create one:** only when a customer's documents consistently produce extraction
+errors that the general rules don't fix. Good candidates:
+- Unusual column header names for the supplier code column
+- A customer who always puts both their own and our product codes on the same row
+- Documents with recurring boilerplate pages that the boilerplate filter misses
+- Non-standard field labels for the buyer name/address
+
+**When not to create one:** if the general rules work fine, adding a file adds
+maintenance overhead with no benefit.
+
+**File location:** `v3/knowledge/customers/<slug>.md` (gitignored)
+**Slug:** customer's lookup key (email or name), lowercased, non-alphanumeric → `_`
+
+```
+Bavarian Bier Cafe        →  bavarian_bier_cafe.md
+info@bavarianbier.com.au  →  info_bavarianbier_com_au.md
+```
+
+The per-customer prompt is loaded after customer identification on page 1 and
+injected into the line-item extraction prompt as **override rules** (they take
+precedence over the general instructions if there is a conflict).
+
+See `v3/knowledge/customers/example_customer.md.example` for the full template.
+
+---
+
+## Math Inference
+
+The validator derives any missing numeric field from the other two:
 
 | Known | Missing | Action |
 |---|---|---|
 | qty + unit_price | line_total | `inferred_line_total = qty × unit_price` |
 | qty + line_total | unit_price | `inferred_unit_price = line_total ÷ qty` |
 | unit_price + line_total | qty | `inferred_quantity = line_total ÷ unit_price` |
-| all three present | — | checks `qty × price ≈ total`; flags mismatch if off by > $0.02 |
+| all three | — | checks `qty × price ≈ total`; flags mismatch if off > $0.02 |
 
-Inferred values appear in the review CLI with a `~` prefix. Mismatched rows are marked with `!`.
+Inferred values appear in the review CLI with `~` prefix. Mismatched rows marked with `!`.
+More than one inferred value per document lowers parse confidence to ≤ medium.
+
+---
+
+## SKU / Product Code Rules
+
+| Label on document | Document issuer | Maps to |
+|---|---|---|
+| `Supplier Code`, `Vendor Code`, `Your Code`, `Your Item` | Customer PO | `sku` (our code) |
+| `Product Code`, `Code`, `Item No`, `Stock Code` | Our own documents | `sku` (our code) |
+| `Our Code`, `Our Item`, `Buyer Code`, `Cust Code` | Customer PO | `customer_ref` (their code) |
+| `Customer Ref`, `Cust Ref`, `Your Code` | Our own documents | `customer_ref` (their code) |
+
+If ERP codes are loaded, every extracted `sku` is cross-checked. Codes not found in
+the ERP list are flagged with `?` in the review CLI and added to `review_fields`.

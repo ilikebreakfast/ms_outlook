@@ -1,0 +1,53 @@
+# Customer Prompt: Example Customer Name
+#
+# HOW TO USE:
+#   1. Copy this file to v3/knowledge/customers/<slug>.md
+#   2. The slug is the customer's lookup key (email or name), lowercased,
+#      with non-alphanumeric characters replaced by underscores.
+#      Examples:
+#        "Bavarian Bier Cafe"        → bavarian_bier_cafe.md
+#        "info@bavarianbier.com.au"  → info_bavarianbier_com_au.md
+#   3. Fill in only the sections relevant to this customer.
+#      Delete sections that don't apply — empty sections add noise.
+#   4. This file is gitignored (may contain customer-specific details).
+#      The .example version is tracked as a template.
+#
+# WHEN TO CREATE ONE:
+#   - This customer's PO format confuses the general rules
+#   - Their column headers are unusual or ambiguous
+#   - They use a non-standard SKU labelling convention
+#   - Their documents include their own internal product codes that look like ours
+
+## Document Format Notes
+
+Describe the layout of this customer's typical Purchase Order or document:
+
+- Their POs are generated from [ERP system name, e.g. MYOB / SAP / Xero]
+- Supplier code appears in the column labeled "[exact column header]"
+- Customer's own item code appears in "[exact column header]"
+- Quantity is in "[exact column header]", UOM in "[exact column header]"
+- Their delivery date field is labeled "[exact label]"
+
+## SKU / Product Code Rules
+
+Notes about which column holds our supplier code vs their internal reference:
+
+- Column "Supplier Code" / "Vendor Code" = our product code (put in `sku`)
+- Column "Our Ref" / "Stock Code" = their internal code (put in `customer_ref`)
+- Their codes always start with [prefix, e.g. "BBC-"] — if you see that prefix, it is their code
+
+## Customer Identification Notes
+
+Notes to help identify this customer's name/entity correctly on their documents:
+
+- The company name appears as "[exact text on document]" in the [From/Buyer/etc] field
+- Their ABN is [ABN] — use this to confirm identity if name is ambiguous
+- Their billing email is [email]
+
+## Known Edge Cases
+
+Any recurring extraction problems and how to handle them:
+
+- Page 2 is always a Terms & Conditions page — ignore it for line items
+- They sometimes include a "freight line" at the bottom — exclude it (description contains "Freight" or "Delivery")
+- Their document header repeats on each page — only extract line items, not the header rows
