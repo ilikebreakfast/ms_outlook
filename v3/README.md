@@ -31,6 +31,10 @@ v3/
 Runtime output (all gitignored):
 ```
 v3/
+├── data/
+│   ├── attachments/          # drop new invoice PDFs here
+│   ├── processed/            # PDFs moved here automatically after a successful parse
+│   └── mock_senders.json     # maps filenames to simulated sender emails
 ├── invoice_memory.db         # SQLite customer template store
 └── invoice_staging/
     ├── pending/              # invoices awaiting operator review
@@ -118,8 +122,19 @@ Open any bat file directly from Explorer or run from the command line.
 | `tests\invoices\view_templates.bat` | Show all saved customer templates in the DB |
 | `tests\invoices\view_pending.bat` | List all invoices waiting for review |
 | `tests\invoices\view_approved.bat` | List all operator-approved invoices |
-| `tests\invoices\run_on_attachment.bat invoice.pdf` | Run the full pipeline on a specific PDF |
-| `tests\invoices\run_on_attachment.bat --review-pending` | Launch batch pending review |
+| `tests\invoices\run_on_attachment.bat` | Interactive menu: browse new/processed attachments by date + domain, run pipeline, auto-move to processed/ on success |
+
+`run_on_attachment.bat` menu options:
+
+```
+[N]  New attachments        — lists v3/data/attachments/ (newest first, with sender domain)
+[P]  Processed attachments  — browse already-parsed PDFs
+[R]  Review all pending     — launches the operator review CLI for all staged pending invoices
+[Q]  Quit
+```
+
+After selecting a file from **N**, the pipeline runs interactively. On success the PDF is
+moved automatically from `data/attachments/` → `data/processed/`.
 
 ---
 
