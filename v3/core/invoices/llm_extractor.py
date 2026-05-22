@@ -17,6 +17,7 @@ from pathlib import Path
 from core.invoices.extractor import (
     FieldValue, CustomerInfo, LineItem, InvoiceTotals, InvoicePayload,
     PageData, RasterisedPDF,
+    get_known_customers, get_item_codes,
 )
 
 # v3/ root (this file lives at v3/core/invoices/)
@@ -135,7 +136,7 @@ _CUSTOMER_JSON_SCHEMA = (
     "}"
 )
 
-_CUSTOMER_INSTRUCTIONS = (
+_CUSTOMER_INSTRUCTIONS_TEMPLATE = (
     "Extract customer (buyer) details from this invoice.\n"
     "IMPORTANT:\n"
     "1. Differentiate between the Supplier/Vendor and the Buyer/Customer:\n"
@@ -147,15 +148,34 @@ _CUSTOMER_INSTRUCTIONS = (
     "   - If any names, ABNs, emails, or phones above appear, they belong to the Vendor — ignore them for customer details.\n"
     "3. Look for Customer/Buyer details labeled as 'Ship To', 'Deliver To', 'Bill To', or listed next to 'Supplier'.\n"
     "   - e.g. 'Supplier: Vendor  Ship To: Customer' → Customer Name is the second party.\n"
-    "   - In Bavarian Bier Cafe documents, Bavarian Bier Cafe is the customer; Top Cut is the vendor.\n"
-    "   - In The Star Gold Coast documents, The Star Gold Coast is the customer; Top Cut is the vendor.\n\n"
+    "{known_customers}"
+    "\n"
 )
+
+def _build_customer_context() -> str:
+    """Build a dynamic customer hint block from confirmed DB templates."""
+    customers = get_known_customers(min_confirmed=2)
+    if not customers:
+        return ""
+    lines = ["4. Previously confirmed customers (use to boost confidence when matched):"]
+    for c in customers[:20]:
+        parts = [f"   - Name: {c['customer_name']}"]
+        if c.get("customer_email"):
+            parts.append(f"email: {c['customer_email']}")
+        if c.get("customer_abn"):
+            parts.append(f"ABN: {c['customer_abn']}")
+        lines.append("  ".join(parts))
+    return "\n".join(lines) + "\n"
 
 def extract_customer(page: PageData, email_context: str | None = None) -> dict:
     """Extract billing/customer details from invoice page 1 using Ollama."""
     messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
     exclusions_str = _build_exclusions_str()
-    instructions = _CUSTOMER_INSTRUCTIONS.format(exclusions=exclusions_str)
+    known_customers_str = _build_customer_context()
+    instructions = _CUSTOMER_INSTRUCTIONS_TEMPLATE.format(
+        exclusions=exclusions_str,
+        known_customers=known_customers_str,
+    )
 
     use_vision = (page.page_type == "image") and (VISION_MODEL in available_models)
 
@@ -198,7 +218,7 @@ def is_boilerplate_page(text: str) -> bool:
             return True
     return False
 
-_LINE_ITEMS_INSTRUCTIONS = (
+_LINE_ITEMS_INSTRUCTIONS_TEMPLATE = (
     "Extract ALL line items and totals from this document.\n"
     "INSTRUCTIONS:\n"
     "1. Extract the product code/SKU in `sku` (e.g. '15335', '15329', '85255', '48245', 'JGKITHB 1007001414', '15196').\n"
@@ -212,8 +232,32 @@ _LINE_ITEMS_INSTRUCTIONS = (
     "   - The smaller number is usually unit_price and the larger is line_total.\n"
     "6. IMPORTANT FOR PICKING SLIPS / NON-PRICED DOCUMENTS:\n"
     "   - If there are NO prices on the document, set `unit_price` and `line_total` to null.\n"
-    "   - Do NOT put product numbers in `unit_price` or calculate fake totals!\n\n"
+    "   - Do NOT put product numbers in `unit_price` or calculate fake totals!\n"
+    "{known_items}"
+    "\n"
 )
+
+def _build_item_context() -> str:
+    """Inject known item codes (from DB and ERP) as hints for the LLM."""
+    erp_items  = get_item_codes(source_filter="erp")
+    conf_items = get_item_codes(min_confirmed=2)
+    # Merge, deduplicate by SKU (ERP takes precedence)
+    seen_skus: set[str] = set()
+    merged: list[dict] = []
+    for item in erp_items + conf_items:
+        key = (item.get("sku") or "").strip().lower() or item["description"].lower()
+        if key not in seen_skus:
+            seen_skus.add(key)
+            merged.append(item)
+    if not merged:
+        return ""
+    lines = ["7. Known product codes for this vendor (use to help identify SKUs and descriptions):"]
+    for item in merged[:40]:
+        sku_str = f"SKU={item['sku']}" if item.get("sku") else "no-SKU"
+        price_str = f"${item['unit_price']:.2f}" if item.get("unit_price") else "?"
+        uom_str = item.get("uom") or ""
+        lines.append(f"   - {sku_str}: {item['description']}  [{price_str}/{uom_str}]")
+    return "\n".join(lines) + "\n"
 
 _LINE_ITEMS_JSON_SCHEMA = (
     "Return this exact JSON format:\n"
@@ -247,13 +291,15 @@ def extract_line_items(pages: list[PageData]) -> dict:
         active_pages = pages  # fallback if all pages were filtered
 
     use_vision = any(p.page_type == "image" for p in active_pages) and (VISION_MODEL in available_models)
+    item_context = _build_item_context()
+    instructions = _LINE_ITEMS_INSTRUCTIONS_TEMPLATE.format(known_items=item_context)
 
     if not use_vision:
         concat_text = ""
         for p in active_pages:
             text_source = p.text_content if p.page_type == "text" else p.paddle_text
             concat_text += f"--- PAGE {p.page_number} ---\n{text_source}\n\n"
-        prompt = _LINE_ITEMS_INSTRUCTIONS + f"INVOICE TEXT:\n{concat_text}\n\n" + _LINE_ITEMS_JSON_SCHEMA
+        prompt = instructions + f"INVOICE TEXT:\n{concat_text}\n\n" + _LINE_ITEMS_JSON_SCHEMA
         messages.append({"role": "user", "content": prompt})
         model, timeout = TEXT_MODEL, 180
     else:
@@ -262,7 +308,7 @@ def extract_line_items(pages: list[PageData]) -> dict:
             for p in active_pages
         )
         prompt = (
-            _LINE_ITEMS_INSTRUCTIONS.replace("this document", "this document image")
+            instructions.replace("this document", "this document image")
             + f"OCR pre-scan hints:\n{ocr_hint[:2000]}\n\n"
             + _LINE_ITEMS_JSON_SCHEMA
         )
@@ -318,6 +364,7 @@ def map_to_payload(customer_dict: dict, items_dict: dict) -> InvoicePayload:
                 unit_price=safe_float(item.get("unit_price")),
                 line_total=safe_float(item.get("line_total")),
                 confidence=item.get("confidence", "high"),
+                # inferred_* and math_ok are left at defaults; infer_line_item_math fills them in validate_and_stage
             ))
         except Exception:
             line_items.append(LineItem(

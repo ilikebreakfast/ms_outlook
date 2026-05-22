@@ -14,10 +14,19 @@ from pathlib import Path
 
 from core.invoices.extractor import (
     InvoicePayload, CustomerInfo, FieldValue, LineItem, InvoiceTotals,
-    save_template,
+    save_template, save_item_codes,
 )
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _update_prompt_md() -> None:
+    """Regenerate PROMPT.md after a confirmed invoice (best-effort, silent on error)."""
+    try:
+        from core.invoices.knowledge_base import generate_prompt_md
+        generate_prompt_md()
+    except Exception as e:
+        print(f"[knowledge_base] PROMPT.md update skipped: {e}")
 
 # ==============================================================================
 # DISPLAY
@@ -43,12 +52,45 @@ def print_payload_summary(payload: InvoicePayload):
         line_num  = str(item.line_number).ljust(3)
         sku       = (item.sku or "N/A")[:12].ljust(12)
         desc      = (item.description or "")[:30].ljust(30)
-        qty       = (f"{item.quantity:.2f}" if item.quantity is not None else "N/A").rjust(6)
-        uom       = (item.uom or "")[:4].ljust(4)
-        price     = (f"${item.unit_price:.2f}" if item.unit_price is not None else "N/A").rjust(10)
-        total     = (f"${item.line_total:.2f}" if item.line_total is not None else "N/A").rjust(10)
+
+        if item.quantity is not None:
+            qty = f"{item.quantity:.2f}".rjust(6)
+        elif item.inferred_quantity is not None:
+            qty = f"~{item.inferred_quantity:.2f}".rjust(6)
+        else:
+            qty = "N/A".rjust(6)
+
+        uom = (item.uom or "")[:4].ljust(4)
+
+        if item.unit_price is not None:
+            price_tag = "" if item.math_ok else "!"
+            price = f"${item.unit_price:.2f}{price_tag}".rjust(10)
+        elif item.inferred_unit_price is not None:
+            price = f"~${item.inferred_unit_price:.2f}".rjust(10)
+        else:
+            price = "N/A".rjust(10)
+
+        if item.line_total is not None:
+            total_tag = "" if item.math_ok else "!"
+            total = f"${item.line_total:.2f}{total_tag}".rjust(10)
+        elif item.inferred_line_total is not None:
+            total = f"~${item.inferred_line_total:.2f}".rjust(10)
+        else:
+            total = "N/A".rjust(10)
+
         print(f"{line_num} {sku} {desc} {qty} {uom} {price} {total}")
     print("-" * 78)
+
+    has_inferred = any(
+        item.inferred_unit_price is not None or item.inferred_quantity is not None
+        or item.inferred_line_total is not None
+        for item in payload.line_items
+    )
+    has_mismatch = any(not item.math_ok for item in payload.line_items)
+    if has_inferred:
+        print("  ~ = inferred value (not on source document)")
+    if has_mismatch:
+        print("  ! = math mismatch (qty × price ≠ total)")
 
     sub = f"${payload.totals.subtotal:.2f}" if payload.totals.subtotal is not None else "N/A"
     tax = f"${payload.totals.tax:.2f}" if payload.totals.tax is not None else "N/A"
@@ -122,6 +164,9 @@ def review_payload(payload: InvoicePayload) -> InvoicePayload:
             key = (payload.customer.email.value or payload.customer.name.value or "").lower().strip()
             if key:
                 save_template(key, payload.customer)
+            if payload.line_items:
+                save_item_codes(payload.line_items, source="llm")
+            _update_prompt_md()
             return payload
 
         elif decision == 'reject':
@@ -172,6 +217,10 @@ def dict_to_payload(d: dict) -> InvoicePayload:
             unit_price=item.get("unit_price"),
             line_total=item.get("line_total"),
             confidence=item.get("confidence", "high"),
+            inferred_unit_price=item.get("inferred_unit_price"),
+            inferred_quantity=item.get("inferred_quantity"),
+            inferred_line_total=item.get("inferred_line_total"),
+            math_ok=item.get("math_ok", True),
         ))
 
     totals_d = d.get("totals", {}) or {}

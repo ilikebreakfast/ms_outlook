@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy this file to product_mapping.json and fill in your ERP CSV column names.",
+  "_instructions": [
+    "Drop your ERP product CSV exports into v3/knowledge/products/",
+    "Set each '_col' key to the exact column header name in your CSV.",
+    "Set any column to null if it does not exist in your ERP export."
+  ],
+  "sku_col":         "Product Code",
+  "description_col": "Description",
+  "unit_price_col":  "Unit Price",
+  "uom_col":         "UOM"
+}

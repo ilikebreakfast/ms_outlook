@@ -3,8 +3,9 @@ Shared invoice extraction layer.
 
 Covers:
   - Data contracts (dataclasses)
-  - SQLite template memory store
+  - SQLite memory store (customer_templates, item_codes)
   - PDF rasterizer (pdfplumber + PyMuPDF + PaddleOCR fallback)
+  - Line-item math inference (infer_line_item_math)
   - Merge / validator / staging (validate_and_stage)
 """
 
@@ -44,14 +45,19 @@ class CustomerInfo:
 
 @dataclass
 class LineItem:
-    line_number: int             = 0
-    sku:         Optional[str]   = None
-    description: str             = ""
-    quantity:    Optional[float] = None
-    uom:         Optional[str]   = None
-    unit_price:  Optional[float] = None
-    line_total:  Optional[float] = None
-    confidence:  str             = "high"
+    line_number:         int             = 0
+    sku:                 Optional[str]   = None
+    description:         str             = ""
+    quantity:            Optional[float] = None
+    uom:                 Optional[str]   = None
+    unit_price:          Optional[float] = None
+    line_total:          Optional[float] = None
+    confidence:          str             = "high"
+    # Math-inference fields (never overwrite extracted values; added alongside)
+    inferred_unit_price: Optional[float] = None
+    inferred_quantity:   Optional[float] = None
+    inferred_line_total: Optional[float] = None
+    math_ok:             bool            = True
 
 @dataclass
 class InvoiceTotals:
@@ -100,7 +106,7 @@ def get_db_connection():
     return conn
 
 def init_db():
-    """Create the customer_templates table if it does not already exist."""
+    """Create all required tables if they do not already exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -115,6 +121,19 @@ def init_db():
             confirmed_count  INTEGER DEFAULT 0,
             created_at       TEXT DEFAULT (datetime('now')),
             updated_at       TEXT DEFAULT (datetime('now'))
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS item_codes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku             TEXT,
+            description     TEXT NOT NULL,
+            unit_price      REAL,
+            uom             TEXT,
+            source          TEXT DEFAULT 'llm',
+            confirmed_count INTEGER DEFAULT 0,
+            created_at      TEXT DEFAULT (datetime('now')),
+            updated_at      TEXT DEFAULT (datetime('now'))
         );
     """)
     conn.commit()
@@ -195,6 +214,113 @@ def list_templates() -> list[dict]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM customer_templates")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_known_customers(min_confirmed: int = 2) -> list[dict]:
+    """Return customer templates with confirmed_count >= min_confirmed."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM customer_templates WHERE confirmed_count >= ? ORDER BY confirmed_count DESC",
+        (min_confirmed,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def save_item_codes(line_items: list, source: str = "llm") -> None:
+    """Upsert item codes from a confirmed invoice's line items."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    for item in line_items:
+        if not item.description or not item.description.strip():
+            continue
+        sku = item.sku.strip() if item.sku else None
+        desc = item.description.strip()
+        try:
+            if sku:
+                cursor.execute("SELECT id FROM item_codes WHERE sku = ?", (sku,))
+            else:
+                cursor.execute(
+                    "SELECT id FROM item_codes WHERE description = ? AND sku IS NULL", (desc,)
+                )
+            row = cursor.fetchone()
+            if row:
+                updates = ["confirmed_count = confirmed_count + 1", "updated_at = datetime('now')"]
+                params = []
+                if item.unit_price is not None:
+                    updates.append("unit_price = ?")
+                    params.append(item.unit_price)
+                if item.uom is not None:
+                    updates.append("uom = ?")
+                    params.append(item.uom)
+                params.append(row["id"])
+                cursor.execute(
+                    f"UPDATE item_codes SET {', '.join(updates)} WHERE id = ?", params
+                )
+            else:
+                cursor.execute(
+                    """INSERT INTO item_codes (sku, description, unit_price, uom, source, confirmed_count)
+                       VALUES (?, ?, ?, ?, ?, 1)""",
+                    (sku, desc, item.unit_price, item.uom, source)
+                )
+        except Exception as e:
+            print(f"Warning: Failed to save item code for '{desc}': {e}")
+    conn.commit()
+    conn.close()
+
+def upsert_item_code(sku: str | None, description: str, unit_price: float | None,
+                     uom: str | None, source: str = "erp") -> None:
+    """Insert or update a single item code (used by CSV/ERP loader)."""
+    if not description or not description.strip():
+        return
+    desc = description.strip()
+    sku = sku.strip() if sku else None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if sku:
+            cursor.execute("SELECT id FROM item_codes WHERE sku = ?", (sku,))
+        else:
+            cursor.execute(
+                "SELECT id FROM item_codes WHERE description = ? AND sku IS NULL", (desc,)
+            )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                """UPDATE item_codes SET description=?, unit_price=?, uom=?, source=?,
+                   updated_at=datetime('now') WHERE id=?""",
+                (desc, unit_price, uom, source, row["id"])
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO item_codes (sku, description, unit_price, uom, source, confirmed_count)
+                   VALUES (?, ?, ?, ?, ?, 0)""",
+                (sku, desc, unit_price, uom, source)
+            )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Warning: Failed to upsert item code '{sku or desc}': {e}")
+    finally:
+        conn.close()
+
+def get_item_codes(source_filter: str | None = None, min_confirmed: int = 0) -> list[dict]:
+    """Return item codes, optionally filtered by source and minimum confirmed count."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if source_filter:
+        cursor.execute(
+            "SELECT * FROM item_codes WHERE source = ? AND confirmed_count >= ? ORDER BY confirmed_count DESC",
+            (source_filter, min_confirmed)
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM item_codes WHERE confirmed_count >= ? ORDER BY confirmed_count DESC",
+            (min_confirmed,)
+        )
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -299,7 +425,46 @@ def rasterise(filepath: str) -> RasterisedPDF:
     )
 
 # ==============================================================================
-# SECTION 5: MERGER & VALIDATOR
+# SECTION 5: MATH INFERENCE
+# ==============================================================================
+
+_MATH_TOLERANCE = 0.02  # cents tolerance for unit_price * qty == line_total
+
+def infer_line_item_math(item: LineItem) -> LineItem:
+    """Derive missing numeric fields from the other two without overwriting extracted values.
+    Sets math_ok=False and populates the inferred_* fields if the extracted triple is inconsistent.
+    """
+    qty   = item.quantity
+    price = item.unit_price
+    total = item.line_total
+
+    known = sum(v is not None for v in (qty, price, total))
+
+    if known == 2:
+        # Derive the missing third value
+        if qty is not None and price is not None and total is None:
+            item.inferred_line_total = round(qty * price, 4)
+        elif qty is not None and total is not None and price is None:
+            if qty != 0:
+                item.inferred_unit_price = round(total / qty, 4)
+        elif price is not None and total is not None and qty is None:
+            if price != 0:
+                item.inferred_quantity = round(total / price, 4)
+
+    elif known == 3:
+        # All three present — check consistency
+        expected = round(qty * price, 2)
+        if abs(expected - round(total, 2)) > _MATH_TOLERANCE:
+            item.math_ok = False
+            # Offer all three inferred values so the reviewer can see the discrepancy
+            item.inferred_line_total  = round(qty * price, 4)
+            item.inferred_unit_price  = round(total / qty, 4) if qty != 0 else None
+            item.inferred_quantity    = round(total / price, 4) if price != 0 else None
+
+    return item
+
+# ==============================================================================
+# SECTION 6: MERGER & VALIDATOR
 # ==============================================================================
 
 FIELD_MAP = {
@@ -311,7 +476,7 @@ FIELD_MAP = {
 }
 
 def validate_and_stage(payload: InvoicePayload) -> InvoicePayload:
-    """Enrich from template memory, compute confidence, run math checks,
+    """Enrich from template memory, run math inference, compute confidence,
     and write a JSON staging file to v3/invoice_staging/pending or approved/.
     """
     if payload.review_fields is None:
@@ -357,6 +522,21 @@ def validate_and_stage(payload: InvoicePayload) -> InvoicePayload:
                         if payload_field not in payload.review_fields:
                             payload.review_fields.append(payload_field)
 
+    # Math inference — derive missing qty/price/total fields without touching extracted values
+    inferred_count = 0
+    for item in payload.line_items:
+        item = infer_line_item_math(item)
+        if not item.math_ok:
+            payload.warnings.append(
+                f"Line {item.line_number}: math mismatch "
+                f"qty={item.quantity} × price={item.unit_price} ≠ total={item.line_total} "
+                f"(expected {item.inferred_line_total})"
+            )
+            if "line_items" not in payload.review_fields:
+                payload.review_fields.append("line_items")
+        if item.inferred_unit_price is not None or item.inferred_quantity is not None or item.inferred_line_total is not None:
+            inferred_count += 1
+
     # Confidence scoring
     confidence = "high"
     for f_name in FIELD_MAP.keys():
@@ -365,6 +545,10 @@ def validate_and_stage(payload: InvoicePayload) -> InvoicePayload:
             confidence = "medium"
     for item in payload.line_items:
         if item.confidence == "low":
+            confidence = "medium"
+    if inferred_count > 1:
+        # Multiple inferred values indicate incomplete source data
+        if confidence == "high":
             confidence = "medium"
     if payload.source_type == "pdf_scanned" and not template:
         if confidence == "high":
