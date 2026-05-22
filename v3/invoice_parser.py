@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from core.invoices.extractor import rasterise, validate_and_stage, save_template
 from core.invoices.llm_extractor import extract_from_pdf
 from core.invoices.manual_review import review_payload, review_all_pending
+from core.invoices.knowledge_base import load_product_csvs
 
 _V3_ROOT = Path(__file__).parent
 
@@ -33,6 +34,11 @@ def run_pipeline(
     base_staging = _V3_ROOT / "invoice_staging"
     for subdir in ("pending", "approved", "rejected", "dummy"):
         (base_staging / subdir).mkdir(parents=True, exist_ok=True)
+
+    # Load ERP product CSVs into DB (idempotent — upserts only)
+    n = load_product_csvs()
+    if n > 0:
+        print(f"[knowledge_base] Loaded {n} ERP product rows.")
 
     # Stage 1: PDF classification and rasterization
     rasterised = rasterise(pdf_path)

@@ -17,7 +17,9 @@ from pathlib import Path
 from core.invoices.extractor import (
     FieldValue, CustomerInfo, LineItem, InvoiceTotals, InvoicePayload,
     PageData, RasterisedPDF,
+    get_known_customers, get_item_codes,
 )
+from core.invoices.knowledge_base import load_customer_prompt
 
 # v3/ root (this file lives at v3/core/invoices/)
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -112,16 +114,16 @@ _SYSTEM_PROMPT = (
 # ==============================================================================
 
 def _build_exclusions_str() -> str:
-    """Build vendor exclusion instructions string for injection into prompts."""
+    """Build our-company exclusion instructions for injection into prompts."""
     s = ""
     if VENDOR_EXCLUSIONS:
-        s += f"- Vendor Name Exclusions: {', '.join(repr(x) for x in VENDOR_EXCLUSIONS)}\n"
+        s += f"- Our Company Names: {', '.join(repr(x) for x in VENDOR_EXCLUSIONS)}\n"
     if VENDOR_ABNS:
-        s += f"- Vendor ABN Exclusions: {', '.join(repr(x) for x in VENDOR_ABNS)}\n"
+        s += f"- Our ABN(s): {', '.join(repr(x) for x in VENDOR_ABNS)}\n"
     if VENDOR_EMAILS:
-        s += f"- Vendor Email Exclusions: {', '.join(repr(x) for x in VENDOR_EMAILS)}\n"
+        s += f"- Our Email(s): {', '.join(repr(x) for x in VENDOR_EMAILS)}\n"
     if VENDOR_PHONES:
-        s += f"- Vendor Phone Exclusions: {', '.join(repr(x) for x in VENDOR_PHONES)}\n"
+        s += f"- Our Phone(s): {', '.join(repr(x) for x in VENDOR_PHONES)}\n"
     return s
 
 _CUSTOMER_JSON_SCHEMA = (
@@ -135,27 +137,47 @@ _CUSTOMER_JSON_SCHEMA = (
     "}"
 )
 
-_CUSTOMER_INSTRUCTIONS = (
-    "Extract customer (buyer) details from this invoice.\n"
+_CUSTOMER_INSTRUCTIONS_TEMPLATE = (
+    "Extract customer (buyer) details from this order document.\n"
     "IMPORTANT:\n"
-    "1. Differentiate between the Supplier/Vendor and the Buyer/Customer:\n"
-    "   - The Supplier/Vendor issues the invoice (provides goods/services).\n"
-    "   - The Customer/Buyer receives and is billed for the invoice.\n"
-    "   - Do NOT extract the Supplier/Vendor's details as the customer!\n"
-    "2. We have configured the following Supplier exclusions:\n"
+    "1. These documents are typically Purchase Orders (POs) or order confirmations sent TO us by our customers:\n"
+    "   - WE are the Supplier/Vendor — our details appear in 'Vendor', 'Supplier', 'To', or 'Sold To' fields.\n"
+    "   - The CUSTOMER is the company that placed the order — the document SENDER.\n"
+    "   - Do NOT extract our own Supplier/Vendor details as the customer!\n"
+    "2. Our company exclusions (if any of these appear, they belong to US — ignore for customer extraction):\n"
     "{exclusions}"
-    "   - If any names, ABNs, emails, or phones above appear, they belong to the Vendor — ignore them for customer details.\n"
-    "3. Look for Customer/Buyer details labeled as 'Ship To', 'Deliver To', 'Bill To', or listed next to 'Supplier'.\n"
-    "   - e.g. 'Supplier: Vendor  Ship To: Customer' → Customer Name is the second party.\n"
-    "   - In Bavarian Bier Cafe documents, Bavarian Bier Cafe is the customer; Top Cut is the vendor.\n"
-    "   - In The Star Gold Coast documents, The Star Gold Coast is the customer; Top Cut is the vendor.\n\n"
+    "3. Look for Customer/Buyer details in these field labels:\n"
+    "   - On Purchase Orders (most common): 'From', 'Buyer', 'Ordered By', 'Customer', 'Order From', 'Company', 'Purchasing Company'\n"
+    "   - On standard invoices: 'Bill To', 'Ship To', 'Deliver To', 'Sold To'\n"
+    "   - General rule: the party listed in or near a 'Vendor:' or 'Supplier:' field is usually US, not the customer.\n"
+    "{known_customers}"
+    "\n"
 )
+
+def _build_customer_context() -> str:
+    """Build a dynamic customer hint block from confirmed DB templates."""
+    customers = get_known_customers(min_confirmed=2)
+    if not customers:
+        return ""
+    lines = ["4. Previously confirmed customers (use to boost confidence when matched):"]
+    for c in customers[:20]:
+        parts = [f"   - Name: {c['customer_name']}"]
+        if c.get("customer_email"):
+            parts.append(f"email: {c['customer_email']}")
+        if c.get("customer_abn"):
+            parts.append(f"ABN: {c['customer_abn']}")
+        lines.append("  ".join(parts))
+    return "\n".join(lines) + "\n"
 
 def extract_customer(page: PageData, email_context: str | None = None) -> dict:
     """Extract billing/customer details from invoice page 1 using Ollama."""
     messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
     exclusions_str = _build_exclusions_str()
-    instructions = _CUSTOMER_INSTRUCTIONS.format(exclusions=exclusions_str)
+    known_customers_str = _build_customer_context()
+    instructions = _CUSTOMER_INSTRUCTIONS_TEMPLATE.format(
+        exclusions=exclusions_str,
+        known_customers=known_customers_str,
+    )
 
     use_vision = (page.page_type == "image") and (VISION_MODEL in available_models)
 
@@ -198,36 +220,73 @@ def is_boilerplate_page(text: str) -> bool:
             return True
     return False
 
-_LINE_ITEMS_INSTRUCTIONS = (
-    "Extract ALL line items and totals from this document.\n"
+_LINE_ITEMS_INSTRUCTIONS_TEMPLATE = (
+    "Extract ALL line items and totals from this order document.\n"
     "INSTRUCTIONS:\n"
-    "1. Extract the product code/SKU in `sku` (e.g. '15335', '15329', '85255', '48245', 'JGKITHB 1007001414', '15196').\n"
-    "   - In Picking Slips, look for 5-digit product codes under 'Code' or 'Product' column.\n"
-    "   - In Purchase Orders, extract the code under 'Item' or 'Supplier Item' as the SKU.\n"
-    "2. Extract the item text description in `description`. Remove leading/trailing product codes.\n"
-    "3. Extract numerical quantity in `quantity`.\n"
-    "4. Extract the Unit of Measure in `uom` (e.g. 'Kg', 'EA', 'ctn', 'box', 'bag').\n"
-    "5. Extract unit price in `unit_price` and total row cost in `line_total`.\n"
+    "1. `sku` = OUR (the supplier's) internal product code — NOT the customer's.\n"
+    "   KEY RULE: the perspective of 'Our' and 'Your' on the document depends on who issued it:\n"
+    "   - On a CUSTOMER-ISSUED Purchase Order: 'Your Code', 'Your Item', 'Supplier Code', 'Vendor Code',\n"
+    "     'Supplier Item', 'Vendor Item' → these are OUR codes (put in `sku`).\n"
+    "     'Our Code', 'Our Item', 'Buyer Code', 'Cust Code' → these are THEIRS (put in `customer_ref`).\n"
+    "   - On OUR OWN documents (picking slips, our invoices): 'Product Code', 'Code', 'Item No',\n"
+    "     'Item #', 'Stock Code' → OUR codes (put in `sku`).\n"
+    "   - Example supplier codes: '15335', '15329', '85255', '48245', '15196' (4–6 digit numeric).\n"
+    "   - If you cannot find our supplier product code, set `sku` to null.\n"
+    "2. `customer_ref` = the customer's own reference code for this product (if shown).\n"
+    "   - On customer-issued POs: 'Our Code', 'Our Item', 'Our Ref', 'Buyer Code', 'Cust Code',\n"
+    "     'Customer Code', 'PO Item' → these are the customer's codes.\n"
+    "   - On our own documents: 'Customer Ref', 'Cust Ref', 'Buyer Ref', 'Your Code' → customer's codes.\n"
+    "   - If no customer reference is shown, set `customer_ref` to null.\n"
+    "   - NEVER put a customer reference code in `sku`.\n"
+    "3. Extract the item text description in `description`. Remove leading/trailing product codes.\n"
+    "4. Extract numerical quantity in `quantity`.\n"
+    "5. Extract the Unit of Measure in `uom` (e.g. 'Kg', 'EA', 'ctn', 'box', 'bag').\n"
+    "6. Extract unit price in `unit_price` and total row cost in `line_total`.\n"
     "   - ALWAYS validate: quantity * unit_price = line_total.\n"
     "   - The smaller number is usually unit_price and the larger is line_total.\n"
-    "6. IMPORTANT FOR PICKING SLIPS / NON-PRICED DOCUMENTS:\n"
+    "7. IMPORTANT FOR PICKING SLIPS / NON-PRICED DOCUMENTS:\n"
     "   - If there are NO prices on the document, set `unit_price` and `line_total` to null.\n"
-    "   - Do NOT put product numbers in `unit_price` or calculate fake totals!\n\n"
+    "   - Do NOT put product numbers in `unit_price` or calculate fake totals!\n"
+    "{known_items}"
+    "\n"
 )
+
+def _build_item_context() -> str:
+    """Inject known item codes (from DB and ERP) as hints for the LLM."""
+    erp_items  = get_item_codes(source_filter="erp")
+    conf_items = get_item_codes(min_confirmed=2)
+    # Merge, deduplicate by SKU (ERP takes precedence)
+    seen_skus: set[str] = set()
+    merged: list[dict] = []
+    for item in erp_items + conf_items:
+        key = (item.get("sku") or "").strip().lower() or item["description"].lower()
+        if key not in seen_skus:
+            seen_skus.add(key)
+            merged.append(item)
+    if not merged:
+        return ""
+    lines = ["8. Known vendor product codes (use to identify which code on the document is OUR vendor SKU):"]
+    for item in merged[:40]:
+        sku_str = f"SKU={item['sku']}" if item.get("sku") else "no-SKU"
+        price_str = f"${item['unit_price']:.2f}" if item.get("unit_price") else "?"
+        uom_str = item.get("uom") or ""
+        lines.append(f"   - {sku_str}: {item['description']}  [{price_str}/{uom_str}]")
+    return "\n".join(lines) + "\n"
 
 _LINE_ITEMS_JSON_SCHEMA = (
     "Return this exact JSON format:\n"
     "{\n"
     "  \"line_items\": [\n"
     "    {\n"
-    "      \"line_number\":  1,\n"
-    "      \"sku\":          null,\n"
-    "      \"description\":  \"\",\n"
-    "      \"quantity\":     null,\n"
-    "      \"uom\":          null,\n"
-    "      \"unit_price\":   null,\n"
-    "      \"line_total\":   null,\n"
-    "      \"confidence\":   \"high\"\n"
+    "      \"line_number\":   1,\n"
+    "      \"sku\":           null,\n"
+    "      \"customer_ref\":  null,\n"
+    "      \"description\":   \"\",\n"
+    "      \"quantity\":      null,\n"
+    "      \"uom\":           null,\n"
+    "      \"unit_price\":    null,\n"
+    "      \"line_total\":    null,\n"
+    "      \"confidence\":    \"high\"\n"
     "    }\n"
     "  ],\n"
     "  \"totals\": {\n"
@@ -238,8 +297,13 @@ _LINE_ITEMS_JSON_SCHEMA = (
     "}"
 )
 
-def extract_line_items(pages: list[PageData]) -> dict:
-    """Extract line items and totals from all (non-boilerplate) document pages."""
+def extract_line_items(pages: list[PageData], customer_prompt: str | None = None) -> dict:
+    """Extract line items and totals from all (non-boilerplate) document pages.
+
+    customer_prompt: optional per-customer markdown loaded from v3/knowledge/customers/.
+    When provided it is appended to the instructions so customer-specific format
+    quirks override the general rules.
+    """
     messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
 
     active_pages = [p for p in pages if not is_boilerplate_page(p.text_content or p.paddle_text)]
@@ -247,13 +311,22 @@ def extract_line_items(pages: list[PageData]) -> dict:
         active_pages = pages  # fallback if all pages were filtered
 
     use_vision = any(p.page_type == "image" for p in active_pages) and (VISION_MODEL in available_models)
+    item_context = _build_item_context()
+    instructions = _LINE_ITEMS_INSTRUCTIONS_TEMPLATE.format(known_items=item_context)
+
+    if customer_prompt:
+        instructions += (
+            "\nCUSTOMER-SPECIFIC RULES (override general rules above if they conflict):\n"
+            + customer_prompt
+            + "\n"
+        )
 
     if not use_vision:
         concat_text = ""
         for p in active_pages:
             text_source = p.text_content if p.page_type == "text" else p.paddle_text
             concat_text += f"--- PAGE {p.page_number} ---\n{text_source}\n\n"
-        prompt = _LINE_ITEMS_INSTRUCTIONS + f"INVOICE TEXT:\n{concat_text}\n\n" + _LINE_ITEMS_JSON_SCHEMA
+        prompt = instructions + f"INVOICE TEXT:\n{concat_text}\n\n" + _LINE_ITEMS_JSON_SCHEMA
         messages.append({"role": "user", "content": prompt})
         model, timeout = TEXT_MODEL, 180
     else:
@@ -262,7 +335,7 @@ def extract_line_items(pages: list[PageData]) -> dict:
             for p in active_pages
         )
         prompt = (
-            _LINE_ITEMS_INSTRUCTIONS.replace("this document", "this document image")
+            instructions.replace("this document", "this document image")
             + f"OCR pre-scan hints:\n{ocr_hint[:2000]}\n\n"
             + _LINE_ITEMS_JSON_SCHEMA
         )
@@ -312,12 +385,14 @@ def map_to_payload(customer_dict: dict, items_dict: dict) -> InvoicePayload:
             line_items.append(LineItem(
                 line_number=int(item.get("line_number") or (i + 1)),
                 sku=str(item.get("sku")).strip() if item.get("sku") is not None else None,
+                customer_ref=str(item.get("customer_ref")).strip() if item.get("customer_ref") is not None else None,
                 description=str(item.get("description", "") or "").strip(),
                 quantity=safe_float(item.get("quantity")),
                 uom=str(item.get("uom")).strip() if item.get("uom") is not None else None,
                 unit_price=safe_float(item.get("unit_price")),
                 line_total=safe_float(item.get("line_total")),
                 confidence=item.get("confidence", "high"),
+                # inferred_* and math_ok are left at defaults; infer_line_item_math fills them in validate_and_stage
             ))
         except Exception:
             line_items.append(LineItem(
@@ -350,6 +425,22 @@ def extract_from_pdf(rasterised: RasterisedPDF, email_context: str | None = None
     """Orchestrate customer + line-item extraction for a rasterised PDF."""
     if not rasterised.pages:
         raise ValueError("No pages rasterised")
+
+    # Stage A: identify the customer from page 1
     customer_dict = extract_customer(rasterised.pages[0], email_context)
-    items_dict = extract_line_items(rasterised.pages)
+
+    # Stage B: load per-customer prompt if one exists for this customer
+    # Prefer email over name for the lookup key (matches the template store logic)
+    customer_lookup = (
+        (customer_dict.get("email") or {}).get("value")
+        or (customer_dict.get("name") or {}).get("value")
+        or ""
+    )
+    customer_prompt = load_customer_prompt(customer_lookup) if customer_lookup else None
+    if customer_prompt:
+        print(f"[knowledge_base] Loaded per-customer prompt for '{customer_lookup}'")
+
+    # Stage C: extract line items, injecting per-customer rules if available
+    items_dict = extract_line_items(rasterised.pages, customer_prompt=customer_prompt)
+
     return map_to_payload(customer_dict, items_dict)

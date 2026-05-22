@@ -1,4 +1,5 @@
 {
+  "_comment": "Copy to vendor_config.json (gitignored) and fill in YOUR OWN company details. These are used to exclude our supplier identity from customer extraction.",
   "vendor_exclusions": [
     "MyCompany Foods",
     "MyCompany",
