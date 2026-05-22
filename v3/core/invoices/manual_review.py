@@ -46,12 +46,14 @@ def print_payload_summary(payload: InvoicePayload):
 
     print(" LINE ITEMS".center(78))
     print("-" * 78)
-    print(f"{'#'.ljust(3)} {'SKU'.ljust(12)} {'Description'.ljust(30)} {'Qty'.rjust(6)} {'UOM'.ljust(4)} {'Price'.rjust(10)} {'Total'.rjust(10)}")
+    print(f"{'#'.ljust(3)} {'SKU'.ljust(12)} {'Description'.ljust(25)} {'Qty'.rjust(6)} {'UOM'.ljust(4)} {'Price'.rjust(10)} {'Total'.rjust(10)}")
     print("-" * 78)
     for item in payload.line_items:
         line_num  = str(item.line_number).ljust(3)
-        sku       = (item.sku or "N/A")[:12].ljust(12)
-        desc      = (item.description or "")[:30].ljust(30)
+        verified_mark = "✓" if item.sku_verified else ("?" if item.sku else " ")
+        sku_raw   = (item.sku or "N/A")
+        sku       = (f"{sku_raw}{verified_mark}")[:12].ljust(12)
+        desc      = (item.description or "")[:25].ljust(25)
 
         if item.quantity is not None:
             qty = f"{item.quantity:.2f}".rjust(6)
@@ -79,6 +81,8 @@ def print_payload_summary(payload: InvoicePayload):
             total = "N/A".rjust(10)
 
         print(f"{line_num} {sku} {desc} {qty} {uom} {price} {total}")
+        if item.customer_ref:
+            print(f"    {'':12} Cust ref: {item.customer_ref}")
     print("-" * 78)
 
     has_inferred = any(
@@ -86,7 +90,11 @@ def print_payload_summary(payload: InvoicePayload):
         or item.inferred_line_total is not None
         for item in payload.line_items
     )
-    has_mismatch = any(not item.math_ok for item in payload.line_items)
+    has_mismatch  = any(not item.math_ok for item in payload.line_items)
+    has_verified  = any(item.sku_verified for item in payload.line_items)
+    has_unverified = any(item.sku and not item.sku_verified for item in payload.line_items)
+    if has_verified or has_unverified:
+        print("  SKU legend: ✓ = matched ERP code   ? = not in ERP list (check if customer ref)")
     if has_inferred:
         print("  ~ = inferred value (not on source document)")
     if has_mismatch:
@@ -211,12 +219,14 @@ def dict_to_payload(d: dict) -> InvoicePayload:
         line_items.append(LineItem(
             line_number=item.get("line_number", 0),
             sku=item.get("sku"),
+            customer_ref=item.get("customer_ref"),
             description=item.get("description", ""),
             quantity=item.get("quantity"),
             uom=item.get("uom"),
             unit_price=item.get("unit_price"),
             line_total=item.get("line_total"),
             confidence=item.get("confidence", "high"),
+            sku_verified=item.get("sku_verified", False),
             inferred_unit_price=item.get("inferred_unit_price"),
             inferred_quantity=item.get("inferred_quantity"),
             inferred_line_total=item.get("inferred_line_total"),

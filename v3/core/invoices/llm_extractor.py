@@ -221,16 +221,25 @@ def is_boilerplate_page(text: str) -> bool:
 _LINE_ITEMS_INSTRUCTIONS_TEMPLATE = (
     "Extract ALL line items and totals from this document.\n"
     "INSTRUCTIONS:\n"
-    "1. Extract the product code/SKU in `sku` (e.g. '15335', '15329', '85255', '48245', 'JGKITHB 1007001414', '15196').\n"
-    "   - In Picking Slips, look for 5-digit product codes under 'Code' or 'Product' column.\n"
-    "   - In Purchase Orders, extract the code under 'Item' or 'Supplier Item' as the SKU.\n"
-    "2. Extract the item text description in `description`. Remove leading/trailing product codes.\n"
-    "3. Extract numerical quantity in `quantity`.\n"
-    "4. Extract the Unit of Measure in `uom` (e.g. 'Kg', 'EA', 'ctn', 'box', 'bag').\n"
-    "5. Extract unit price in `unit_price` and total row cost in `line_total`.\n"
+    "1. `sku` = THE VENDOR'S OWN product code (OUR internal code, NOT the customer's).\n"
+    "   - Labels that mean it is OUR code: 'Product Code', 'Code', 'Item No', 'Item #',\n"
+    "     'Supplier Item', 'Supplier Code', 'Our Code', 'Stock Code'.\n"
+    "   - Example vendor codes: '15335', '15329', '85255', '48245', '15196' (typically 4-6 digit numeric).\n"
+    "   - In Picking Slips: look under 'Code' or 'Product' column.\n"
+    "   - In Purchase Orders: extract the code under 'Item', 'Supplier Item', or 'Our Item' — NOT 'Your Ref' or 'Buyer Code'.\n"
+    "   - If you cannot find OUR product code, set `sku` to null.\n"
+    "2. `customer_ref` = the CUSTOMER'S own reference code (if shown on the document).\n"
+    "   - Labels that mean it is THEIR code: 'Your Ref', 'Cust Code', 'Buyer Item', 'Your Item',\n"
+    "     'Customer Code', 'PO Item', 'Buyer Ref', 'Your Code'.\n"
+    "   - If no customer reference code is shown, set `customer_ref` to null.\n"
+    "   - NEVER put the customer's reference code in `sku`.\n"
+    "3. Extract the item text description in `description`. Remove leading/trailing product codes.\n"
+    "4. Extract numerical quantity in `quantity`.\n"
+    "5. Extract the Unit of Measure in `uom` (e.g. 'Kg', 'EA', 'ctn', 'box', 'bag').\n"
+    "6. Extract unit price in `unit_price` and total row cost in `line_total`.\n"
     "   - ALWAYS validate: quantity * unit_price = line_total.\n"
     "   - The smaller number is usually unit_price and the larger is line_total.\n"
-    "6. IMPORTANT FOR PICKING SLIPS / NON-PRICED DOCUMENTS:\n"
+    "7. IMPORTANT FOR PICKING SLIPS / NON-PRICED DOCUMENTS:\n"
     "   - If there are NO prices on the document, set `unit_price` and `line_total` to null.\n"
     "   - Do NOT put product numbers in `unit_price` or calculate fake totals!\n"
     "{known_items}"
@@ -251,7 +260,7 @@ def _build_item_context() -> str:
             merged.append(item)
     if not merged:
         return ""
-    lines = ["7. Known product codes for this vendor (use to help identify SKUs and descriptions):"]
+    lines = ["8. Known vendor product codes (use to identify which code on the document is OUR vendor SKU):"]
     for item in merged[:40]:
         sku_str = f"SKU={item['sku']}" if item.get("sku") else "no-SKU"
         price_str = f"${item['unit_price']:.2f}" if item.get("unit_price") else "?"
@@ -264,14 +273,15 @@ _LINE_ITEMS_JSON_SCHEMA = (
     "{\n"
     "  \"line_items\": [\n"
     "    {\n"
-    "      \"line_number\":  1,\n"
-    "      \"sku\":          null,\n"
-    "      \"description\":  \"\",\n"
-    "      \"quantity\":     null,\n"
-    "      \"uom\":          null,\n"
-    "      \"unit_price\":   null,\n"
-    "      \"line_total\":   null,\n"
-    "      \"confidence\":   \"high\"\n"
+    "      \"line_number\":   1,\n"
+    "      \"sku\":           null,\n"
+    "      \"customer_ref\":  null,\n"
+    "      \"description\":   \"\",\n"
+    "      \"quantity\":      null,\n"
+    "      \"uom\":           null,\n"
+    "      \"unit_price\":    null,\n"
+    "      \"line_total\":    null,\n"
+    "      \"confidence\":    \"high\"\n"
     "    }\n"
     "  ],\n"
     "  \"totals\": {\n"
@@ -358,6 +368,7 @@ def map_to_payload(customer_dict: dict, items_dict: dict) -> InvoicePayload:
             line_items.append(LineItem(
                 line_number=int(item.get("line_number") or (i + 1)),
                 sku=str(item.get("sku")).strip() if item.get("sku") is not None else None,
+                customer_ref=str(item.get("customer_ref")).strip() if item.get("customer_ref") is not None else None,
                 description=str(item.get("description", "") or "").strip(),
                 quantity=safe_float(item.get("quantity")),
                 uom=str(item.get("uom")).strip() if item.get("uom") is not None else None,

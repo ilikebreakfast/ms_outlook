@@ -46,13 +46,15 @@ class CustomerInfo:
 @dataclass
 class LineItem:
     line_number:         int             = 0
-    sku:                 Optional[str]   = None
+    sku:                 Optional[str]   = None   # vendor's own product code (what we want)
+    customer_ref:        Optional[str]   = None   # customer's own reference code (what we don't want confused with sku)
     description:         str             = ""
     quantity:            Optional[float] = None
     uom:                 Optional[str]   = None
     unit_price:          Optional[float] = None
     line_total:          Optional[float] = None
     confidence:          str             = "high"
+    sku_verified:        bool            = False  # True if sku matched a known ERP code
     # Math-inference fields (never overwrite extracted values; added alongside)
     inferred_unit_price: Optional[float] = None
     inferred_quantity:   Optional[float] = None
@@ -130,7 +132,7 @@ def init_db():
             description     TEXT NOT NULL,
             unit_price      REAL,
             uom             TEXT,
-            source          TEXT DEFAULT 'llm',
+            source          TEXT,
             confirmed_count INTEGER DEFAULT 0,
             created_at      TEXT DEFAULT (datetime('now')),
             updated_at      TEXT DEFAULT (datetime('now'))
@@ -536,6 +538,31 @@ def validate_and_stage(payload: InvoicePayload) -> InvoicePayload:
                 payload.review_fields.append("line_items")
         if item.inferred_unit_price is not None or item.inferred_quantity is not None or item.inferred_line_total is not None:
             inferred_count += 1
+
+    # SKU cross-check — verify extracted SKUs against known ERP product codes.
+    # If ERP codes are loaded and an extracted SKU doesn't appear in that list it
+    # almost certainly means the LLM picked up the customer's own reference code
+    # instead of our vendor product code.
+    erp_codes = get_item_codes(source_filter="erp")
+    if erp_codes:
+        erp_skus = {
+            str(r["sku"]).strip().lower()
+            for r in erp_codes
+            if r.get("sku")
+        }
+        for item in payload.line_items:
+            if item.sku is None:
+                continue
+            normalised = item.sku.strip().lower()
+            if normalised in erp_skus:
+                item.sku_verified = True
+            else:
+                payload.warnings.append(
+                    f"Line {item.line_number}: SKU '{item.sku}' not found in ERP product list — "
+                    f"may be a customer reference code rather than our vendor code"
+                )
+                if "line_items" not in payload.review_fields:
+                    payload.review_fields.append("line_items")
 
     # Confidence scoring
     confidence = "high"
