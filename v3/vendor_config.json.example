@@ -1,0 +1,16 @@
+{
+  "vendor_exclusions": [
+    "MyCompany Foods",
+    "MyCompany",
+    "MYCOMPANY PTY LTD"
+  ],
+  "vendor_abns": [
+    "00 000 000 000"
+  ],
+  "vendor_emails": [
+    "orders@mycompany.com"
+  ],
+  "vendor_phones": [
+    "0000000000"
+  ]
+}

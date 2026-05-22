@@ -2,11 +2,66 @@
 
 Welcome, AI Agent! This guide outlines the architecture of the **MS Outlook Invoice Processing Pipeline** repository, its dual-version layout, the shared execution environment, and key development guidelines you must follow.
 
+# Behavior guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+1. Think Before Coding
+Don't assume. Don't hide confusion. Surface tradeoffs.
+
+Before implementing:
+
+State your assumptions explicitly. If uncertain, ask.
+If multiple interpretations exist, present them - don't pick silently.
+If a simpler approach exists, say so. Push back when warranted.
+If something is unclear, stop. Name what's confusing. Ask.
+2. Simplicity First
+Minimum code that solves the problem. Nothing speculative.
+
+No features beyond what was asked.
+No abstractions for single-use code.
+No "flexibility" or "configurability" that wasn't requested.
+No error handling for impossible scenarios.
+If you write 200 lines and it could be 50, rewrite it.
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+3. Surgical Changes
+Touch only what you must. Clean up only your own mess.
+
+When editing existing code:
+
+Don't "improve" adjacent code, comments, or formatting.
+Don't refactor things that aren't broken.
+Match existing style, even if you'd do it differently.
+If you notice unrelated dead code, mention it - don't delete it.
+When your changes create orphans:
+
+Remove imports/variables/functions that YOUR changes made unused.
+Don't remove pre-existing dead code unless asked.
+The test: Every changed line should trace directly to the user's request.
+
+4. Goal-Driven Execution
+Define success criteria. Loop until verified.
+
+Transform tasks into verifiable goals:
+
+"Add validation" → "Write tests for invalid inputs, then make them pass"
+"Fix the bug" → "Write a test that reproduces it, then make it pass"
+"Refactor X" → "Ensure tests pass before and after"
+For multi-step tasks, state a brief plan:
+
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
 ---
 
 ## 1. Repository Layout & Architecture
 
-This repository is structured as a transition from a legacy pipeline (`v1`) to a modern modular system (`v2`), which will eventually fully replace `v1`.
+This repository is structured as a progressive implementation of the MS Outlook Invoice Processing Pipeline, spanning legacy (`v1`), the intermediate modern version (`v2`), and the current step-by-step active development version (`v3`).
 
 ```
 ms_outlook/
@@ -16,17 +71,13 @@ ms_outlook/
 ├── CLAUDE.md               # Quick-reference and commands for Claude agents
 ├── GEMINI.md               # Quick-reference and commands for Gemini agents
 │
-├── v1/                     # Legacy email & invoice processing pipeline
-│   ├── venv/               # Legacy local venv (deprecated)
-│   ├── .gitignore          # v1-specific gitignore rules (independent)
-│   ├── CLAUDE.md           # Legacy Claude.md (v1-specific)
-│   └── ...
+├── v1/                     # Legacy email & invoice processing pipeline (deprecated)
 │
-└── v2/                     # Modern email & invoice processing pipeline (Target Version)
-    ├── venv/               # Shared virtual environment (created by run.bat)
-    ├── .gitignore          # v2-specific gitignore rules (independent)
-    ├── dashboard/          # FastAPI operator dashboard and static assets
-    ├── data/               # Gitignored runtime data (attachments, logs, SQLite DB)
+├── v2/                     # Modern email & invoice processing pipeline (previous version)
+│
+└── v3/                     # Active Development: Simple step-by-step robust pipeline
+    ├── .gitignore          # v3-specific gitignore rules (independent)
+    ├── data/               # Local mock attachments, JSON configs, and pipeline DB
     └── ...
 ```
 
@@ -34,14 +85,14 @@ ms_outlook/
 
 ## 2. Shared Virtual Environment & Setup
 
-To make the codebase self-contained and simplify dependency management, **`v2\venv`** is the primary virtual environment for the entire repository.
+To make the codebase self-contained and simplify dependency management, **`v2\venv`** is the primary virtual environment for the entire repository (shares dependencies and interpreter for both `v2` and `v3` scripts).
 
 * **Setup Tool:** Run `run.bat` and select **Option `[0]`** to initialize or update this virtual environment. It automatically:
   1. Checks for a global Python installation (Python 3.10+ recommended).
   2. Runs `python -m venv v2\venv` if it doesn't exist.
   3. Upgrades `pip` to the latest version.
   4. Installs all packages specified in `v2/requirements.txt`.
-* **Python Executable:** All scripts (including those in `v2`) must be executed using the interpreter at:
+* **Python Executable:** All scripts (including those in `v2` and `v3`) must be executed using the interpreter at:
   ```
   v2\venv\Scripts\python.exe
   ```
@@ -69,9 +120,9 @@ The root `run.bat` provides a keyboard-driven terminal menu. It automatically ve
 When pair programming or editing code in this workspace, you **must** adhere to the following rules:
 
 ### A. Independent `.gitignore` Files
-* Keep the root `.gitignore`, `v1/.gitignore`, and `v2/.gitignore` **completely independent and specific to their respective levels**.
-* **Do not** hardcode subfolder paths (e.g. `v1/attachments/` or `v2/data/`) inside the root `.gitignore`. 
-* Let subfolder `.gitignore` files handle their own folders relatively (e.g. `data/` in `v2/.gitignore` and `attachments/` in `v1/.gitignore`).
+* Keep the root `.gitignore`, `v1/.gitignore`, `v2/.gitignore`, and `v3/.gitignore` **completely independent and specific to their respective levels**.
+* **Do not** hardcode subfolder paths (e.g. `v1/attachments/`, `v2/data/`, or `v3/data/`) inside the root `.gitignore`. 
+* Let subfolder `.gitignore` files handle their own folders relatively (e.g. `data/` in `v3/.gitignore` or `v2/.gitignore` and `attachments/` in `v1/.gitignore`).
 
 ### B. Windows Batch File Parsing Safeguards
 * **Avoid parenthesized blocks** (e.g. `if ... ( ... )`) in `.bat` scripts when printing or executing commands that might contain brackets or parentheses.
@@ -80,7 +131,9 @@ When pair programming or editing code in this workspace, you **must** adhere to 
 
 ### C. Relative Paths & Portability
 * Always reference paths relative to the workspace root or the active script.
-* Use `"v2\venv\Scripts\python.exe"` (properly quoted) to invoke the virtual environment.
+* Use `"v2\venv\Scripts\python.exe"` (properly quoted) to invoke the virtual environment for python files in both `v2` and `v3`.
 
 ### D. Documentation Preservation
 * Maintain all existing comments, docstrings, and architectural descriptions unless the user explicitly requests a refactor of those descriptions.
+
+

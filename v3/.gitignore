@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Credentials, secrets, and token caches
+.env
+.env.*
+!.env.example
+config/token_cache.bin
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Application runtime data (private customer info, attachments, logs, SQLite DBs)
+data/
+invoice_staging/
+invoice_memory.db
+vendor_config.json
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# IDE and System files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
