@@ -4,22 +4,34 @@ Welcome to **Version 3 (v3)** of the Invoice Processing Pipeline! This version a
 
 ---
 
-## What Was Built — Phase 1 & 2 Implementation
+## What Was Built — Phase 1, 2 & 2 Continuation
 
 > [!NOTE]
-> The sections below document what was **actually implemented** during Phase 1 and Phase 2 development. The original roadmap planned for a pure `pdfplumber` coordinate-based extractor; the final architecture instead uses a **local LLM (Ollama)** as the primary extraction engine, with `pdfplumber` and `PyMuPDF` handling document ingestion and page classification, and `PaddleOCR` as an OCR fallback layer.
+> The sections below document what was **actually implemented** during Phase 1, Phase 2, and the Phase 2 Continuation. The original roadmap planned for a pure `pdfplumber` coordinate-based extractor; the final architecture instead uses a **local LLM (Ollama)** as the primary extraction engine, with `pdfplumber` and `PyMuPDF` handling document ingestion and page classification, and `PaddleOCR` as an OCR fallback layer.
 
 ### Architecture Built
 
 ```
 v3/
 ├── core/invoices/
-│   ├── extractor.py       # data contracts + SQLite store + PDF rasterizer + validator
-│   ├── llm_extractor.py   # Ollama LLM client + customer/line-item prompts
-│   └── manual_review.py   # operator review CLI
+│   ├── extractor.py       # data contracts + SQLite store (customer_templates + item_codes)
+│   │                      # + PDF rasterizer + math inference + validator/stager
+│   ├── llm_extractor.py   # Ollama LLM client + dynamic context injection
+│   │                      # + customer/line-item prompts + per-customer prompt loading
+│   ├── manual_review.py   # operator review CLI (display, correct, accept/reject)
+│   └── knowledge_base.py  # ERP CSV loader + per-customer prompt loader + PROMPT.md generator
 ├── invoice_parser.py      # pipeline entry point (argparse + stage orchestration)
 ├── tests/invoices/        # bat files + Python view scripts for DB and staging
-└── vendor_config.json     # private vendor exclusion config (gitignored)
+├── vendor_config.json     # private vendor exclusion config (gitignored)
+└── knowledge/
+    ├── PROMPT_BASE.md                     # static extraction guidelines (operator-edited)
+    ├── PROMPT.md                          # auto-generated knowledge summary (gitignored)
+    ├── product_mapping.json.example       # CSV column mapping template
+    ├── product_mapping.json               # your ERP column mapping (gitignored)
+    ├── products/                          # ERP CSV exports (gitignored — drop files here)
+    └── customers/
+        ├── example_customer.md.example   # per-customer prompt template
+        └── <slug>.md                     # per-customer rules (gitignored)
 ```
 
 ### Local LLM Integration (Ollama)
@@ -29,6 +41,7 @@ v3/
 - Dynamic model fallback at startup: queries `http://localhost:11434/api/tags` and selects the best matching available model
 - Deterministic extraction (`temperature: 0.0`) with structured JSON output schema
 - Vendor exclusion config (`vendor_config.json`) injected into prompts to prevent own-company details being classified as the customer
+- **Dynamic context injection:** known customers and item codes queried from SQLite at extraction time and appended to prompts — no hardcoded customer or product names in code
 
 ### PDF Processing Stack
 
@@ -40,10 +53,9 @@ v3/
 
 ### Template Memory Store (SQLite)
 
-- `invoice_memory.db` → `customer_templates` table
-- Keyed by customer email (preferred) or name
-- `confirmed_count` tracks operator-verified saves; templates with `confirmed_count >= 2` are trusted and used to override low-confidence LLM fields
-- Fuzzy diff comparison (SequenceMatcher) flags field changes vs. stored memory for operator review
+- `invoice_memory.db` → `customer_templates` table + `item_codes` table
+- `customer_templates`: keyed by customer email (preferred) or name; `confirmed_count >= 2` triggers trusted template overrides and fuzzy diff comparison (SequenceMatcher) for changed fields
+- `item_codes`: stores SKU, description, unit price, UOM, source (`'llm'` or `'erp'`), confirmed_count; populated from operator-confirmed invoices and ERP CSV imports
 
 ### Staging & Review System
 
@@ -51,14 +63,31 @@ v3/
 - **`invoice_staging/approved/`** — operator-confirmed or high-confidence auto-approved invoices
 - **`invoice_staging/rejected/`** — operator-rejected invoices
 - Each staging file is a full `InvoicePayload` JSON (source file, customer, line items, totals, confidence, warnings, review flags)
-- Math validation: line-item sum vs. subtotal/total with a $0.10 tolerance
-- Human-in-the-loop CLI: field-by-field correction prompts → accept / re-edit / reject
+- Math inference: derives missing `qty` / `unit_price` / `line_total` from the other two without overwriting extracted values; flags mismatches > $0.02
+- Human-in-the-loop CLI: field-by-field correction prompts → accept / re-edit / reject; inferred values shown with `~` prefix, math mismatches with `!`
 
 ### Data Contracts
 
 All data flows through typed Python dataclasses (`FieldValue`, `CustomerInfo`, `LineItem`, `InvoiceTotals`, `InvoicePayload`, `PageData`, `RasterisedPDF`) defined in `core/invoices/extractor.py` and shared across all modules.
 
----
+`LineItem` fields added in Phase 2 Continuation:
+
+| Field | Description |
+|---|---|
+| `customer_ref` | Customer's own product reference code (separate from our supplier `sku`) |
+| `sku_verified` | `True` when `sku` matched a known ERP product code |
+| `inferred_unit_price` | Derived from line_total ÷ quantity |
+| `inferred_quantity` | Derived from line_total ÷ unit_price |
+| `inferred_line_total` | Derived from quantity × unit_price |
+| `math_ok` | `False` when all three fields are present but don't agree within $0.02 |
+
+### Business Context Clarification
+
+The system operates as the **supplier receiving Purchase Orders from customers** — not as a buyer processing invoices it receives. Prompts and terminology were updated to reflect this:
+- Documents parsed are typically **customer-issued POs sent to us**
+- `Vendor:` / `Supplier:` fields on a PO refer to **us** (excluded from extraction)
+- `From:` / `Buyer:` / `Ordered By:` fields are the **customer** (extracted)
+- SKU label perspective on customer POs: `"Your Code"` / `"Supplier Code"` = our code → `sku`; `"Our Code"` / `"Buyer Code"` = theirs → `customer_ref`
 
 ---
 
@@ -117,13 +146,59 @@ settings = {
   3. ✅ OCR fallback implemented via `PaddleOCR` for scanned/image pages; output fed to Ollama vision model (`qwen2-vl:2b`).
   4. ✅ CLI validation tool built (`print_payload_summary`, `review_payload`) with interactive field correction and accept/reject flow.
 
-### Phase 2: Template Rules Engine & Database Ingestion 🔄 PARTIALLY COMPLETE
+### Phase 2: Template Rules Engine & Database Ingestion ✅ COMPLETE
 * **Goal:** Build the logical engine to learn parser templates, store parsed customer and invoice records, and apply templates to new files automatically.
 * **Key Tasks:**
-  1. ✅ Template schema defined — customer profile stored as a SQLite row (name, email, phone, ABN, address, confirmed_count) keyed by email/name. LLM-based extraction is the rule engine; coordinate/regex anchors are available for future per-template tuning.
+  1. ✅ Template schema defined — customer profile stored as a SQLite row (name, email, phone, ABN, address, confirmed_count) keyed by email/name.
   2. ✅ `customer_templates` SQLite table implemented with upsert logic and confidence-based memory overrides.
-  3. 🔄 Full `invoices` table (Invoice #, Date, line items) not yet in SQLite — parsed invoices currently live as JSON staging files in `invoice_staging/`. Will be added in Phase 2 continuation.
-  3. ✅ Sender matching implemented: email or name is used as the lookup key; templates with `confirmed_count >= 2` are applied automatically to override low-confidence LLM fields.
+  3. ✅ `item_codes` SQLite table added — stores confirmed line items (SKU, description, unit price, UOM, source, confirmed_count). Populated from operator-confirmed invoices and ERP CSV imports.
+  4. ✅ Sender matching implemented: email or name is used as the lookup key; templates with `confirmed_count >= 2` are applied automatically to override low-confidence LLM fields.
+  5. ✅ Full invoice data persisted as structured JSON staging files in `invoice_staging/` (pending / approved / rejected) — serves as the invoice record store until Phase 5 dashboard requires a relational table.
+
+### Phase 2 Continuation: Self-Improving Knowledge Base ✅ COMPLETE
+* **Goal:** Make the system smarter with every confirmed document — dynamically enriching LLM prompts, validating extracted data against known product codes, and generating a portable knowledge summary for external AI agents.
+* **What was built:**
+
+  **Line-item math inference**
+  - `infer_line_item_math()` derives any missing value (`qty`, `unit_price`, `line_total`) from the other two without overwriting extracted values
+  - Mismatches flagged as warnings and shown in review CLI with `!` marker
+  - More than one inferred value per document lowers parse confidence to ≤ medium
+
+  **Vendor SKU safety**
+  - `LineItem.customer_ref` — separate field for the customer's own reference code so it never contaminates `sku`
+  - `LineItem.sku_verified` — set `True` when extracted SKU matches a known ERP product code
+  - ERP cross-check in `validate_and_stage()`: if ERP codes are loaded, unrecognised SKUs are flagged as possible customer reference codes
+  - LLM extraction instructions explicitly separate vendor codes (`sku`) from customer codes (`customer_ref`) with document-type-aware label lists
+
+  **ERP product CSV loader** (`knowledge_base.py`)
+  - Drop `.csv` exports from your ERP into `v3/knowledge/products/`
+  - Configure column names once in `product_mapping.json` (copy from `.example`)
+  - Loaded on every pipeline run (idempotent upsert into `item_codes` table, `source='erp'`)
+
+  **Dynamic LLM context injection**
+  - Removed all hardcoded customer and product names from prompts
+  - `_build_customer_context()` — injects confirmed customers (≥2) from DB into customer extraction prompt
+  - `_build_item_context()` — injects known ERP + confirmed item codes into line-item extraction prompt
+  - Both are queried fresh at extraction time, so the LLM knowledge grows with every confirmed document
+
+  **Per-customer prompt files**
+  - `v3/knowledge/customers/<slug>.md` — optional per-customer override rules (gitignored)
+  - Loaded after page-1 customer identification, injected into line-item extraction as override rules
+  - Slug derived from the customer's lookup key (email or name, lowercased, non-alphanumeric → `_`)
+  - Only needed for customers whose document formats consistently confuse the general rules
+  - Template provided at `v3/knowledge/customers/example_customer.md.example`
+
+  **PROMPT.md auto-generation**
+  - `generate_prompt_md()` regenerates `v3/knowledge/PROMPT.md` after every confirmed invoice
+  - Combines: known customers table, ERP product codes, confirmed item codes, static `PROMPT_BASE.md` guidelines
+  - `PROMPT_BASE.md` (tracked in git) — operator-edited static rules merged into every generated `PROMPT.md`
+  - Use `PROMPT.md` as context when prompting an external AI to review or improve extraction quality
+
+  **Prompt terminology fix**
+  - Reframed all LLM prompts for supplier-receives-PO context
+  - `"Vendor Name Exclusions"` → `"Our Company Names"` (clarifies these are our own details to skip)
+  - Customer extraction: added `From`, `Buyer`, `Ordered By`, `Purchasing Company` as PO-specific labels
+  - SKU labels split by document issuer (customer PO vs our own documents) to handle `"Our Code"` / `"Your Code"` perspective inversion
 
 ### Phase 3: Interactive Template Builder Frontend
 * **Goal:** A user-friendly web interface allowing operators to visually construct parsing templates for new customers.
