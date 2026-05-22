@@ -16,11 +16,11 @@ from typing import Optional, List
 os.environ["FLAGS_use_onednn"] = "0"
 
 # Load local configuration (ignored by git) for private supplier exclusions
-CONFIG_PATH = Path(__file__).parent / "config.json"
-CONFIG_EXAMPLE_PATH = Path(__file__).parent / "config.json.example"
+CONFIG_PATH = Path(__file__).parent / "vendor_config.json"
+CONFIG_EXAMPLE_PATH = Path(__file__).parent / "vendor_config.json.example"
 
 def load_config() -> dict:
-    """Load configuration from config.json, falling back to config.json.example or defaults."""
+    """Load configuration from vendor_config.json, falling back to vendor_config.json.example or defaults."""
     path = CONFIG_PATH if CONFIG_PATH.exists() else CONFIG_EXAMPLE_PATH
     if path.exists():
         try:

@@ -25,7 +25,7 @@ config/token_cache.bin
 # Application runtime data (Private customer info, attachments, logs, SQLite DBs)
 data/
 invoice_staging/
-config.json
+vendor_config.json
 *.db
 *.db-wal
 *.db-shm
