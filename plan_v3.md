@@ -4,6 +4,64 @@ Welcome to **Version 3 (v3)** of the Invoice Processing Pipeline! This version a
 
 ---
 
+## What Was Built — Phase 1 & 2 Implementation
+
+> [!NOTE]
+> The sections below document what was **actually implemented** during Phase 1 and Phase 2 development. The original roadmap planned for a pure `pdfplumber` coordinate-based extractor; the final architecture instead uses a **local LLM (Ollama)** as the primary extraction engine, with `pdfplumber` and `PyMuPDF` handling document ingestion and page classification, and `PaddleOCR` as an OCR fallback layer.
+
+### Architecture Built
+
+```
+v3/
+├── core/invoices/
+│   ├── extractor.py       # data contracts + SQLite store + PDF rasterizer + validator
+│   ├── llm_extractor.py   # Ollama LLM client + customer/line-item prompts
+│   └── manual_review.py   # operator review CLI
+├── invoice_parser.py      # pipeline entry point (argparse + stage orchestration)
+├── tests/invoices/        # bat files + Python view scripts for DB and staging
+└── vendor_config.json     # private vendor exclusion config (gitignored)
+```
+
+### Local LLM Integration (Ollama)
+
+- **Text model:** `qwen2.5:3b` — used for native-text PDF pages
+- **Vision model:** `qwen2-vl:2b` — used for scanned/image pages when available
+- Dynamic model fallback at startup: queries `http://localhost:11434/api/tags` and selects the best matching available model
+- Deterministic extraction (`temperature: 0.0`) with structured JSON output schema
+- Vendor exclusion config (`vendor_config.json`) injected into prompts to prevent own-company details being classified as the customer
+
+### PDF Processing Stack
+
+| Component | Role |
+|---|---|
+| `pdfplumber` | Text extraction and page classification (>80 non-whitespace chars = text page) |
+| `PyMuPDF` (`fitz`) | Page rasterization to JPEG at 150 DPI (text) / 300 DPI (scanned) — no Poppler binary needed |
+| `PaddleOCR` | OCR pre-scan for image/scanned pages; output passed to vision LLM as a hint |
+
+### Template Memory Store (SQLite)
+
+- `invoice_memory.db` → `customer_templates` table
+- Keyed by customer email (preferred) or name
+- `confirmed_count` tracks operator-verified saves; templates with `confirmed_count >= 2` are trusted and used to override low-confidence LLM fields
+- Fuzzy diff comparison (SequenceMatcher) flags field changes vs. stored memory for operator review
+
+### Staging & Review System
+
+- **`invoice_staging/pending/`** — invoices with warnings, low confidence, or missing fields
+- **`invoice_staging/approved/`** — operator-confirmed or high-confidence auto-approved invoices
+- **`invoice_staging/rejected/`** — operator-rejected invoices
+- Each staging file is a full `InvoicePayload` JSON (source file, customer, line items, totals, confidence, warnings, review flags)
+- Math validation: line-item sum vs. subtotal/total with a $0.10 tolerance
+- Human-in-the-loop CLI: field-by-field correction prompts → accept / re-edit / reject
+
+### Data Contracts
+
+All data flows through typed Python dataclasses (`FieldValue`, `CustomerInfo`, `LineItem`, `InvoiceTotals`, `InvoicePayload`, `PageData`, `RasterisedPDF`) defined in `core/invoices/extractor.py` and shared across all modules.
+
+---
+
+---
+
 ## 1. Architectural Strategy: Simple & Progressive
 
 In `v3`, we focus on high reliability, automated verification, and clean architecture. Instead of building all components concurrently, we construct the foundation first, polish it, and then layer on features.
@@ -51,22 +109,21 @@ settings = {
 
 ## 3. Phased Implementation Roadmap
 
-### Phase 1: High-Accuracy Attachment Parsing (Current Focus)
+### Phase 1: High-Accuracy Attachment Parsing ✅ COMPLETE
 * **Goal:** Extract clean text and tabular line items from all document formats (.pdf, .csv, .txt) with 100% correctness.
 * **Key Tasks:**
-  1. Set up a core Python parser harness that processes files in `v3/data/attachments/`.
-  2. Implement an advanced `pdfplumber` extractor utilizing coordinate anchoring, region cropping, and fine-tuned `table_settings`.
-  3. Support fallback mechanisms (e.g. OCR) for scanned PDFs if native text extraction yields sparse characters.
-  4. Build a CLI validation tool to verify and review the extracted layout and raw text for each local file.
+  1. ✅ Set up a core Python parser harness (`core/invoices/extractor.py`, `invoice_parser.py`).
+  2. ✅ PDF extraction implemented via `pdfplumber` (text classification) + `PyMuPDF` rasterizer + Ollama LLM prompts for structured extraction. Coordinate anchoring/cropping available if needed for future template refinement.
+  3. ✅ OCR fallback implemented via `PaddleOCR` for scanned/image pages; output fed to Ollama vision model (`qwen2-vl:2b`).
+  4. ✅ CLI validation tool built (`print_payload_summary`, `review_payload`) with interactive field correction and accept/reject flow.
 
-### Phase 2: Template Rules Engine & Database Ingestion
+### Phase 2: Template Rules Engine & Database Ingestion 🔄 PARTIALLY COMPLETE
 * **Goal:** Build the logical engine to learn parser templates, store parsed customer and invoice records, and apply templates to new files automatically.
 * **Key Tasks:**
-  1. Define a JSON template schema (e.g. key coordinates, regex anchors, or table extraction strategies per sender).
-  2. Design and implement a robust SQLite database schema to house:
-     * `customers`: Profile details and associated template definitions.
-     * `invoices`: Parsed invoices with fields (Invoice #, Date, Total, Tax) and line items.
-  3. Create matching logic that identifies the sender (using `mock_senders.json` / incoming email), loads their template, and processes the attachment.
+  1. ✅ Template schema defined — customer profile stored as a SQLite row (name, email, phone, ABN, address, confirmed_count) keyed by email/name. LLM-based extraction is the rule engine; coordinate/regex anchors are available for future per-template tuning.
+  2. ✅ `customer_templates` SQLite table implemented with upsert logic and confidence-based memory overrides.
+  3. 🔄 Full `invoices` table (Invoice #, Date, line items) not yet in SQLite — parsed invoices currently live as JSON staging files in `invoice_staging/`. Will be added in Phase 2 continuation.
+  3. ✅ Sender matching implemented: email or name is used as the lookup key; templates with `confirmed_count >= 2` are applied automatically to override low-confidence LLM fields.
 
 ### Phase 3: Interactive Template Builder Frontend
 * **Goal:** A user-friendly web interface allowing operators to visually construct parsing templates for new customers.
