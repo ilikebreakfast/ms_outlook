@@ -113,16 +113,16 @@ _SYSTEM_PROMPT = (
 # ==============================================================================
 
 def _build_exclusions_str() -> str:
-    """Build vendor exclusion instructions string for injection into prompts."""
+    """Build our-company exclusion instructions for injection into prompts."""
     s = ""
     if VENDOR_EXCLUSIONS:
-        s += f"- Vendor Name Exclusions: {', '.join(repr(x) for x in VENDOR_EXCLUSIONS)}\n"
+        s += f"- Our Company Names: {', '.join(repr(x) for x in VENDOR_EXCLUSIONS)}\n"
     if VENDOR_ABNS:
-        s += f"- Vendor ABN Exclusions: {', '.join(repr(x) for x in VENDOR_ABNS)}\n"
+        s += f"- Our ABN(s): {', '.join(repr(x) for x in VENDOR_ABNS)}\n"
     if VENDOR_EMAILS:
-        s += f"- Vendor Email Exclusions: {', '.join(repr(x) for x in VENDOR_EMAILS)}\n"
+        s += f"- Our Email(s): {', '.join(repr(x) for x in VENDOR_EMAILS)}\n"
     if VENDOR_PHONES:
-        s += f"- Vendor Phone Exclusions: {', '.join(repr(x) for x in VENDOR_PHONES)}\n"
+        s += f"- Our Phone(s): {', '.join(repr(x) for x in VENDOR_PHONES)}\n"
     return s
 
 _CUSTOMER_JSON_SCHEMA = (
@@ -137,17 +137,18 @@ _CUSTOMER_JSON_SCHEMA = (
 )
 
 _CUSTOMER_INSTRUCTIONS_TEMPLATE = (
-    "Extract customer (buyer) details from this invoice.\n"
+    "Extract customer (buyer) details from this order document.\n"
     "IMPORTANT:\n"
-    "1. Differentiate between the Supplier/Vendor and the Buyer/Customer:\n"
-    "   - The Supplier/Vendor issues the invoice (provides goods/services).\n"
-    "   - The Customer/Buyer receives and is billed for the invoice.\n"
-    "   - Do NOT extract the Supplier/Vendor's details as the customer!\n"
-    "2. We have configured the following Supplier exclusions:\n"
+    "1. These documents are typically Purchase Orders (POs) or order confirmations sent TO us by our customers:\n"
+    "   - WE are the Supplier/Vendor — our details appear in 'Vendor', 'Supplier', 'To', or 'Sold To' fields.\n"
+    "   - The CUSTOMER is the company that placed the order — the document SENDER.\n"
+    "   - Do NOT extract our own Supplier/Vendor details as the customer!\n"
+    "2. Our company exclusions (if any of these appear, they belong to US — ignore for customer extraction):\n"
     "{exclusions}"
-    "   - If any names, ABNs, emails, or phones above appear, they belong to the Vendor — ignore them for customer details.\n"
-    "3. Look for Customer/Buyer details labeled as 'Ship To', 'Deliver To', 'Bill To', or listed next to 'Supplier'.\n"
-    "   - e.g. 'Supplier: Vendor  Ship To: Customer' → Customer Name is the second party.\n"
+    "3. Look for Customer/Buyer details in these field labels:\n"
+    "   - On Purchase Orders (most common): 'From', 'Buyer', 'Ordered By', 'Customer', 'Order From', 'Company', 'Purchasing Company'\n"
+    "   - On standard invoices: 'Bill To', 'Ship To', 'Deliver To', 'Sold To'\n"
+    "   - General rule: the party listed in or near a 'Vendor:' or 'Supplier:' field is usually US, not the customer.\n"
     "{known_customers}"
     "\n"
 )
@@ -219,20 +220,23 @@ def is_boilerplate_page(text: str) -> bool:
     return False
 
 _LINE_ITEMS_INSTRUCTIONS_TEMPLATE = (
-    "Extract ALL line items and totals from this document.\n"
+    "Extract ALL line items and totals from this order document.\n"
     "INSTRUCTIONS:\n"
-    "1. `sku` = THE VENDOR'S OWN product code (OUR internal code, NOT the customer's).\n"
-    "   - Labels that mean it is OUR code: 'Product Code', 'Code', 'Item No', 'Item #',\n"
-    "     'Supplier Item', 'Supplier Code', 'Our Code', 'Stock Code'.\n"
-    "   - Example vendor codes: '15335', '15329', '85255', '48245', '15196' (typically 4-6 digit numeric).\n"
-    "   - In Picking Slips: look under 'Code' or 'Product' column.\n"
-    "   - In Purchase Orders: extract the code under 'Item', 'Supplier Item', or 'Our Item' — NOT 'Your Ref' or 'Buyer Code'.\n"
-    "   - If you cannot find OUR product code, set `sku` to null.\n"
-    "2. `customer_ref` = the CUSTOMER'S own reference code (if shown on the document).\n"
-    "   - Labels that mean it is THEIR code: 'Your Ref', 'Cust Code', 'Buyer Item', 'Your Item',\n"
-    "     'Customer Code', 'PO Item', 'Buyer Ref', 'Your Code'.\n"
-    "   - If no customer reference code is shown, set `customer_ref` to null.\n"
-    "   - NEVER put the customer's reference code in `sku`.\n"
+    "1. `sku` = OUR (the supplier's) internal product code — NOT the customer's.\n"
+    "   KEY RULE: the perspective of 'Our' and 'Your' on the document depends on who issued it:\n"
+    "   - On a CUSTOMER-ISSUED Purchase Order: 'Your Code', 'Your Item', 'Supplier Code', 'Vendor Code',\n"
+    "     'Supplier Item', 'Vendor Item' → these are OUR codes (put in `sku`).\n"
+    "     'Our Code', 'Our Item', 'Buyer Code', 'Cust Code' → these are THEIRS (put in `customer_ref`).\n"
+    "   - On OUR OWN documents (picking slips, our invoices): 'Product Code', 'Code', 'Item No',\n"
+    "     'Item #', 'Stock Code' → OUR codes (put in `sku`).\n"
+    "   - Example supplier codes: '15335', '15329', '85255', '48245', '15196' (4–6 digit numeric).\n"
+    "   - If you cannot find our supplier product code, set `sku` to null.\n"
+    "2. `customer_ref` = the customer's own reference code for this product (if shown).\n"
+    "   - On customer-issued POs: 'Our Code', 'Our Item', 'Our Ref', 'Buyer Code', 'Cust Code',\n"
+    "     'Customer Code', 'PO Item' → these are the customer's codes.\n"
+    "   - On our own documents: 'Customer Ref', 'Cust Ref', 'Buyer Ref', 'Your Code' → customer's codes.\n"
+    "   - If no customer reference is shown, set `customer_ref` to null.\n"
+    "   - NEVER put a customer reference code in `sku`.\n"
     "3. Extract the item text description in `description`. Remove leading/trailing product codes.\n"
     "4. Extract numerical quantity in `quantity`.\n"
     "5. Extract the Unit of Measure in `uom` (e.g. 'Kg', 'EA', 'ctn', 'box', 'bag').\n"
