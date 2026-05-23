@@ -21,17 +21,16 @@ else:
     print("\n--- Mode: TEST SANDBOX ---")
 
 if not PENDING_DIR.exists():
-    print(f"Pending directory not found: {PENDING_DIR}")
-    sys.exit(0)
-
-files = sorted(PENDING_DIR.glob("*.json"))
+    files = []
+else:
+    files = sorted(PENDING_DIR.glob("*.json"))
 
 print(f"\n{'='*70}")
-print(f"  PENDING TEST INVOICES  ({len(files)} files)  →  {PENDING_DIR}")
+print(f"  PENDING INVOICES  ({len(files)} files)  →  {PENDING_DIR}")
 print(f"{'='*70}")
 
 if not files:
-    print("  No pending test invoices.")
+    print("  No pending invoices.")
 else:
     for f in files:
         try:

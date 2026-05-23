@@ -21,17 +21,16 @@ else:
     print("\n--- Mode: TEST SANDBOX ---")
 
 if not APPROVED_DIR.exists():
-    print(f"Approved directory not found: {APPROVED_DIR}")
-    sys.exit(0)
-
-files = sorted(APPROVED_DIR.glob("*.json"))
+    files = []
+else:
+    files = sorted(APPROVED_DIR.glob("*.json"))
 
 print(f"\n{'='*70}")
-print(f"  APPROVED TEST INVOICES  ({len(files)} files)  →  {APPROVED_DIR}")
+print(f"  APPROVED INVOICES  ({len(files)} files)  →  {APPROVED_DIR}")
 print(f"{'='*70}")
 
 if not files:
-    print("  No approved test invoices.")
+    print("  No approved invoices.")
 else:
     for f in files:
         try:

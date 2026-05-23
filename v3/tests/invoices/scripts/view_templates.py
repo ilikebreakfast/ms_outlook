@@ -21,21 +21,19 @@ else:
     print("\n--- Mode: TEST SANDBOX ---")
 
 if not DB_PATH.exists():
-    print(f"No database found at: {DB_PATH}")
-    print("Run the pipeline on at least one invoice in test mode first.")
-    sys.exit(0)
-
-conn = sqlite3.connect(str(DB_PATH))
-conn.row_factory = sqlite3.Row
-rows = conn.execute("SELECT * FROM customer_templates ORDER BY updated_at DESC").fetchall()
-conn.close()
+    rows = []
+else:
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM customer_templates ORDER BY updated_at DESC").fetchall()
+    conn.close()
 
 print(f"\n{'='*70}")
-print(f"  CUSTOMER TEMPLATES (TEST SANDBOX)  ({len(rows)} records)")
+print(f"  CUSTOMER TEMPLATES  ({len(rows)} records)  →  {DB_PATH}")
 print(f"{'='*70}")
 
 if not rows:
-    print("  No sandbox templates saved yet.")
+    print("  No templates saved yet.")
 else:
     for r in rows:
         print(f"\n  [{r['id']}]  {r['lookup_key']}")
