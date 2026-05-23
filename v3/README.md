@@ -46,10 +46,15 @@ v3/
 │       └── <slug>.md                       # per-customer rules (gitignored — see below)
 ├── tests/
 │   └── invoices/
-│       ├── view_templates.py / .bat        # inspect customer_templates DB
-│       ├── view_pending.py / .bat          # list pending staged invoices
-│       ├── view_approved.py / .bat         # list approved staged invoices
-│       └── run_on_attachment.bat           # interactive PDF pipeline launcher
+│       ├── view_templates.bat              # Show saved customer templates (tests/data/ DB)
+│       ├── view_pending.bat                # List pending staged test invoices
+│       ├── view_approved.bat               # List approved staged test invoices
+│       ├── run_on_attachment.bat           # Interactive PDF pipeline launcher (sandbox mode)
+│       └── scripts/
+│           ├── view_templates.py
+│           ├── view_pending.py
+│           ├── view_approved.py
+│           └── run_on_attachment.py
 ├── invoice_parser.py           # main entry point
 ├── vendor_config.json          # OUR company exclusions (gitignored — copy from .example)
 ├── vendor_config.json.example

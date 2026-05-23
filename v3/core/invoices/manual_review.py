@@ -19,6 +19,13 @@ from core.invoices.extractor import (
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent
 
+import os
+# Sandbox logic for test runs
+if os.environ.get("INVOICE_TEST") == "1":
+    _DATA_DIR = _V3_ROOT / "tests" / "data"
+else:
+    _DATA_DIR = _V3_ROOT
+
 
 def _update_prompt_md() -> None:
     """Regenerate PROMPT.md after a confirmed invoice (best-effort, silent on error)."""
@@ -158,7 +165,7 @@ def review_payload(payload: InvoicePayload) -> InvoicePayload:
             payload.needs_review = False
             payload.parse_confidence = "high"
 
-            approved_dir = _V3_ROOT / "invoice_staging" / "approved"
+            approved_dir = _DATA_DIR / "invoice_staging" / "approved"
             approved_dir.mkdir(parents=True, exist_ok=True)
 
             old_path = Path(payload.staging_path)
@@ -181,7 +188,7 @@ def review_payload(payload: InvoicePayload) -> InvoicePayload:
             payload.needs_review = False
             payload.parse_confidence = "rejected"
 
-            rejected_dir = _V3_ROOT / "invoice_staging" / "rejected"
+            rejected_dir = _DATA_DIR / "invoice_staging" / "rejected"
             rejected_dir.mkdir(parents=True, exist_ok=True)
 
             old_path = Path(payload.staging_path)
@@ -253,7 +260,7 @@ def dict_to_payload(d: dict) -> InvoicePayload:
 
 def review_all_pending(staging_base: str = "invoice_staging") -> None:
     """Load and interactively review all JSON files in the pending/ directory."""
-    pending_dir = _V3_ROOT / staging_base / "pending"
+    pending_dir = _DATA_DIR / staging_base / "pending"
     if not pending_dir.exists():
         print(f"No pending reviews directory found at: {pending_dir}")
         return

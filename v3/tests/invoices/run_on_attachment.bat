@@ -1,3 +1,4 @@
 @echo off
-"%~dp0..\..\..\v2\venv\Scripts\python.exe" "%~dp0run_on_attachment.py"
+set INVOICE_TEST=1
+"%~dp0..\..\..\v2\venv\Scripts\python.exe" "%~dp0scripts\run_on_attachment.py"
 pause

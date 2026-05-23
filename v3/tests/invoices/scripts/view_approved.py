@@ -1,10 +1,11 @@
-"""List and summarise all invoices in invoice_staging/approved/."""
+"""List and summarise all invoices in invoice_staging/approved/ under the test sandbox."""
 
 import json
 import sys
 from pathlib import Path
 
-APPROVED_DIR = Path(__file__).resolve().parent.parent.parent / "invoice_staging" / "approved"
+_V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+APPROVED_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "approved"
 
 if not APPROVED_DIR.exists():
     print(f"Approved directory not found: {APPROVED_DIR}")
@@ -13,11 +14,11 @@ if not APPROVED_DIR.exists():
 files = sorted(APPROVED_DIR.glob("*.json"))
 
 print(f"\n{'='*70}")
-print(f"  APPROVED INVOICES  ({len(files)} files)  →  {APPROVED_DIR}")
+print(f"  APPROVED TEST INVOICES  ({len(files)} files)  →  {APPROVED_DIR}")
 print(f"{'='*70}")
 
 if not files:
-    print("  No approved invoices.")
+    print("  No approved test invoices.")
 else:
     for f in files:
         try:

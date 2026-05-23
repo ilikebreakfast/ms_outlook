@@ -25,6 +25,12 @@ os.environ["FLAGS_use_onednn"] = "0"
 # Resolved path to the v3/ root directory (this file lives at v3/core/invoices/)
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# Sandbox logic for test runs
+if os.environ.get("INVOICE_TEST") == "1":
+    _DATA_DIR = _V3_ROOT / "tests" / "data"
+else:
+    _DATA_DIR = _V3_ROOT
+
 # ==============================================================================
 # SECTION 1: SHARED DATA CONTRACT (DATACLASSES)
 # ==============================================================================
@@ -99,10 +105,11 @@ class RasterisedPDF:
 # SECTION 2: SQLITE MEMORY STORE
 # ==============================================================================
 
-DB_PATH = _V3_ROOT / "invoice_memory.db"
+DB_PATH = _DATA_DIR / "invoice_memory.db"
 
 def get_db_connection():
     """Return a SQLite connection with dict-like row access."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn
@@ -624,7 +631,7 @@ def validate_and_stage(payload: InvoicePayload) -> InvoicePayload:
     )
 
     # Write staging JSON
-    base_staging = _V3_ROOT / "invoice_staging"
+    base_staging = _DATA_DIR / "invoice_staging"
     pending_dir = base_staging / "pending"
     approved_dir = base_staging / "approved"
     pending_dir.mkdir(parents=True, exist_ok=True)

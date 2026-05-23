@@ -2,23 +2,25 @@
 Interactive attachment selector for the invoice pipeline.
 
   N — new attachments (v3/data/attachments/)   → moved to processed/ after success
-  P — processed attachments (v3/data/processed/)
+  P — processed attachments (v3/tests/data/processed/)
   R — review all pending staged invoices
   Q — quit
 """
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
-_V3_ROOT      = Path(__file__).resolve().parent.parent.parent
-_ATTACH_DIR   = _V3_ROOT / "data" / "attachments"
-_PROCESSED_DIR = _V3_ROOT / "data" / "processed"
-_SENDERS_FILE = _V3_ROOT / "data" / "mock_senders.json"
-_PARSER       = _V3_ROOT / "invoice_parser.py"
-_PYTHON       = Path(sys.executable)
+_V3_ROOT       = Path(__file__).resolve().parent.parent.parent.parent
+_DATA_DIR      = _V3_ROOT / "tests" / "data" if os.environ.get("INVOICE_TEST") == "1" else _V3_ROOT
+_ATTACH_DIR    = _V3_ROOT / "data" / "attachments"
+_PROCESSED_DIR = _DATA_DIR / "processed"
+_SENDERS_FILE  = _V3_ROOT / "data" / "mock_senders.json"
+_PARSER        = _V3_ROOT / "invoice_parser.py"
+_PYTHON        = Path(sys.executable)
 
 W = 68  # display width
 
@@ -77,11 +79,40 @@ def _pick_file(pdfs: list[Path]) -> Path | None:
     return None
 
 
-def _run_parser(pdf: Path) -> int:
+def _get_extraction_mode() -> str | None:
+    print(f"\n  Select extraction mode:")
+    print(f"    [1] Both (Default: Text for text pages, Vision for scanned pages)")
+    print(f"    [2] Language Model only (Force Text, uses OCR for image pages)")
+    print(f"    [3] Vision Model only (Force Vision, renders all pages as images)")
+    print(f"    [Q] Cancel / Back")
+    print(f"{'-'*W}")
+    while True:
+        choice = input("  Select mode [1]: ").strip().upper()
+        if not choice or choice == "1":
+            return "both"
+        if choice == "2":
+            return "text"
+        if choice == "3":
+            return "vision"
+        if choice == "Q":
+            return None
+        print("  Invalid choice.")
+
+
+def _run_parser(pdf: Path, mode: str) -> int:
     print(f"\n{'='*W}")
-    print(f"  Running: {pdf.name}".ljust(W))
+    print(f"  Running: {pdf.name}  [Mode: {mode.upper()}]".ljust(W))
     print(f"{'='*W}\n")
-    result = subprocess.run([str(_PYTHON), str(_PARSER), str(pdf)])
+    
+    # Inject INVOICE_TEST=1 for sandboxed run
+    env = dict(os.environ, INVOICE_TEST="1")
+    cmd = [str(_PYTHON), str(_PARSER), str(pdf)]
+    if mode == "text":
+        cmd.append("--force-text")
+    elif mode == "vision":
+        cmd.append("--force-vision")
+        
+    result = subprocess.run(cmd, env=env)
     return result.returncode
 
 
@@ -108,7 +139,7 @@ def main() -> None:
         print("  INVOICE ATTACHMENT SELECTOR".center(W))
         print(f"{'='*W}")
         print("  [N]  New attachments        (data/attachments/)")
-        print("  [P]  Processed attachments  (data/processed/)")
+        print("  [P]  Processed attachments  (tests/data/processed/)")
         print("  [R]  Review all pending staged invoices")
         print("  [Q]  Quit")
         print(f"{'-'*W}")
@@ -118,7 +149,8 @@ def main() -> None:
             break
 
         if choice == "R":
-            subprocess.run([str(_PYTHON), str(_PARSER), "--review-pending"])
+            # Injects INVOICE_TEST=1 for sandboxed pending review
+            subprocess.run([str(_PYTHON), str(_PARSER), "--review-pending"], env=dict(os.environ, INVOICE_TEST="1"))
             continue
 
         if choice == "N":
@@ -143,7 +175,14 @@ def main() -> None:
         if selected is None:
             continue
 
-        returncode = _run_parser(selected)
+        mode = "both"
+        if move_after:  # only ask for extraction mode when executing on new files
+            selected_mode = _get_extraction_mode()
+            if selected_mode is None:
+                continue
+            mode = selected_mode
+
+        returncode = _run_parser(selected, mode)
 
         if move_after and returncode == 0:
             _move_to_processed(selected)

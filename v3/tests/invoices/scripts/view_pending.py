@@ -1,10 +1,11 @@
-"""List and summarise all invoices in invoice_staging/pending/."""
+"""List and summarise all invoices in invoice_staging/pending/ under the test sandbox."""
 
 import json
 import sys
 from pathlib import Path
 
-PENDING_DIR = Path(__file__).resolve().parent.parent.parent / "invoice_staging" / "pending"
+_V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+PENDING_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "pending"
 
 if not PENDING_DIR.exists():
     print(f"Pending directory not found: {PENDING_DIR}")
@@ -13,11 +14,11 @@ if not PENDING_DIR.exists():
 files = sorted(PENDING_DIR.glob("*.json"))
 
 print(f"\n{'='*70}")
-print(f"  PENDING INVOICES  ({len(files)} files)  →  {PENDING_DIR}")
+print(f"  PENDING TEST INVOICES  ({len(files)} files)  →  {PENDING_DIR}")
 print(f"{'='*70}")
 
 if not files:
-    print("  No pending invoices.")
+    print("  No pending test invoices.")
 else:
     for f in files:
         try:

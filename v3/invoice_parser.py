@@ -19,6 +19,12 @@ from core.invoices.manual_review import review_payload, review_all_pending
 from core.invoices.knowledge_base import load_product_csvs
 
 _V3_ROOT = Path(__file__).parent
+import os
+# Sandbox logic for test runs
+if os.environ.get("INVOICE_TEST") == "1":
+    _DATA_DIR = _V3_ROOT / "tests" / "data"
+else:
+    _DATA_DIR = _V3_ROOT
 
 # ==============================================================================
 # PIPELINE ORCHESTRATOR
@@ -31,7 +37,7 @@ def run_pipeline(
 ):
     """Wire all stages: rasterise → LLM extract → validate/stage → HITL review."""
     # Ensure staging directories exist
-    base_staging = _V3_ROOT / "invoice_staging"
+    base_staging = _DATA_DIR / "invoice_staging"
     for subdir in ("pending", "approved", "rejected", "dummy"):
         (base_staging / subdir).mkdir(parents=True, exist_ok=True)
 
@@ -68,6 +74,8 @@ if __name__ == "__main__":
     parser.add_argument("--email", help="Path to email body .txt file for context")
     parser.add_argument("--auto", action="store_true", help="Skip CLI review prompts (batch mode)")
     parser.add_argument("--review-pending", action="store_true", help="Review all pending staged invoices")
+    parser.add_argument("--force-text", action="store_true", help="Force text-only language model (uses OCR for image pages)")
+    parser.add_argument("--force-vision", action="store_true", help="Force vision-only model (renders all pages as images)")
     args = parser.parse_args()
 
     if args.review_pending:
@@ -79,6 +87,11 @@ if __name__ == "__main__":
         email_text = None
         if args.email:
             email_text = Path(args.email).read_text(encoding="utf-8")
+
+        if args.force_text:
+            os.environ["FORCE_TEXT"] = "1"
+        elif args.force_vision:
+            os.environ["FORCE_VISION"] = "1"
 
         result = run_pipeline(args.pdf, email_context=email_text, auto_review=args.auto)
 

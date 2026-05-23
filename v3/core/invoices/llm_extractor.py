@@ -179,7 +179,16 @@ def extract_customer(page: PageData, email_context: str | None = None) -> dict:
         known_customers=known_customers_str,
     )
 
-    use_vision = (page.page_type == "image") and (VISION_MODEL in available_models)
+    import os
+    force_text = os.environ.get("FORCE_TEXT") == "1"
+    force_vision = os.environ.get("FORCE_VISION") == "1"
+
+    if force_text:
+        use_vision = False
+    elif force_vision:
+        use_vision = True
+    else:
+        use_vision = (page.page_type == "image") and (VISION_MODEL in available_models)
 
     if not use_vision:
         text_source = page.text_content if page.page_type == "text" else page.paddle_text
@@ -310,7 +319,16 @@ def extract_line_items(pages: list[PageData], customer_prompt: str | None = None
     if not active_pages:
         active_pages = pages  # fallback if all pages were filtered
 
-    use_vision = any(p.page_type == "image" for p in active_pages) and (VISION_MODEL in available_models)
+    import os
+    force_text = os.environ.get("FORCE_TEXT") == "1"
+    force_vision = os.environ.get("FORCE_VISION") == "1"
+
+    if force_text:
+        use_vision = False
+    elif force_vision:
+        use_vision = True
+    else:
+        use_vision = any(p.page_type == "image" for p in active_pages) and (VISION_MODEL in available_models)
     item_context = _build_item_context()
     instructions = _LINE_ITEMS_INSTRUCTIONS_TEMPLATE.format(known_items=item_context)
 

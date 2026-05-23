@@ -1,14 +1,15 @@
-"""Display all customer templates stored in invoice_memory.db."""
+"""Display all customer templates stored in the test sandbox database."""
 
 import sqlite3
 import sys
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "invoice_memory.db"
+_V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+DB_PATH = _V3_ROOT / "tests" / "data" / "invoice_memory.db"
 
 if not DB_PATH.exists():
     print(f"No database found at: {DB_PATH}")
-    print("Run the pipeline on at least one invoice first.")
+    print("Run the pipeline on at least one invoice in test mode first.")
     sys.exit(0)
 
 conn = sqlite3.connect(str(DB_PATH))
@@ -17,11 +18,11 @@ rows = conn.execute("SELECT * FROM customer_templates ORDER BY updated_at DESC")
 conn.close()
 
 print(f"\n{'='*70}")
-print(f"  CUSTOMER TEMPLATES  ({len(rows)} records)")
+print(f"  CUSTOMER TEMPLATES (TEST SANDBOX)  ({len(rows)} records)")
 print(f"{'='*70}")
 
 if not rows:
-    print("  No templates saved yet.")
+    print("  No sandbox templates saved yet.")
 else:
     for r in rows:
         print(f"\n  [{r['id']}]  {r['lookup_key']}")
