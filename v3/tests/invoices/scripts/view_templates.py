@@ -5,12 +5,20 @@ import sys
 from pathlib import Path
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+is_live = False
 if "--live" in sys.argv:
+    is_live = True
+elif "--test" not in sys.argv:
+    choice = input("View (L)ive or (T)est sandbox? [T]: ").strip().lower()
+    if choice.startswith('l'):
+        is_live = True
+
+if is_live:
     DB_PATH = _V3_ROOT / "data" / "invoice_memory.db"
-    print("Mode: LIVE")
+    print("\n--- Mode: LIVE ---")
 else:
     DB_PATH = _V3_ROOT / "tests" / "data" / "invoice_memory.db"
-    print("Mode: TEST (use --live for live data)")
+    print("\n--- Mode: TEST SANDBOX ---")
 
 if not DB_PATH.exists():
     print(f"No database found at: {DB_PATH}")

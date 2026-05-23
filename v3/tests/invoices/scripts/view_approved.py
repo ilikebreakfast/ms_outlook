@@ -5,12 +5,20 @@ import sys
 from pathlib import Path
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+is_live = False
 if "--live" in sys.argv:
+    is_live = True
+elif "--test" not in sys.argv:
+    choice = input("View (L)ive or (T)est sandbox? [T]: ").strip().lower()
+    if choice.startswith('l'):
+        is_live = True
+
+if is_live:
     APPROVED_DIR = _V3_ROOT / "data" / "invoice_staging" / "approved"
-    print("Mode: LIVE")
+    print("\n--- Mode: LIVE ---")
 else:
     APPROVED_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "approved"
-    print("Mode: TEST (use --live for live data)")
+    print("\n--- Mode: TEST SANDBOX ---")
 
 if not APPROVED_DIR.exists():
     print(f"Approved directory not found: {APPROVED_DIR}")
