@@ -20,6 +20,7 @@ from core.invoices.extractor import (
     get_known_customers, get_item_codes,
 )
 from core.invoices.knowledge_base import load_customer_prompt
+from core import config as _cfg
 
 # v3/ root (this file lives at v3/core/invoices/)
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -48,9 +49,10 @@ VENDOR_PHONES     = _CONFIG.get("vendor_phones", [])
 # OLLAMA CLIENT
 # ==============================================================================
 
-OLLAMA_BASE  = "http://localhost:11434"
-TEXT_MODEL   = "qwen2.5:3b"
-VISION_MODEL = "qwen2.5vl"
+OLLAMA_BASE    = _cfg.OLLAMA_BASE
+TEXT_MODEL     = _cfg.TEXT_MODEL
+VISION_MODEL   = _cfg.VISION_MODEL
+VISION_ENABLED = _cfg.VISION_ENABLED
 
 def get_available_models() -> list[str]:
     """Return list of pulled model names from the local Ollama instance."""
@@ -62,34 +64,7 @@ def get_available_models() -> list[str]:
         pass
     return []
 
-# Dynamic model selection — runs once at import time
 available_models = get_available_models()
-if available_models:
-    best_text = None
-    for model in available_models:
-        if "qwen2.5:3b" in model or "qwen:3b" in model:
-            best_text = model
-            break
-    if not best_text:
-        for model in available_models:
-            if "qwen" in model and "vl" not in model:
-                best_text = model
-                break
-    if best_text:
-        TEXT_MODEL = best_text
-
-    best_vision = None
-    for model in available_models:
-        if "qwen-gpu" in model:
-            best_vision = model
-            break
-    if not best_vision:
-        for model in available_models:
-            if "vl" in model:
-                best_vision = model
-                break
-    if best_vision:
-        VISION_MODEL = best_vision
 
 def ollama_chat(model: str, messages: list[dict], timeout: int | None = 120) -> str:
     """Send a chat request to the local Ollama API and return the reply string."""
@@ -184,16 +159,11 @@ def extract_customer(page: PageData, email_context: str | None = None) -> dict:
         known_customers=known_customers_str,
     )
 
-    import os
-    force_text = os.environ.get("FORCE_TEXT") == "1"
-    force_vision = os.environ.get("FORCE_VISION") == "1"
-
-    if force_text:
-        use_vision = False
-    elif force_vision:
-        use_vision = True
-    else:
-        use_vision = (page.page_type == "image") and (VISION_MODEL in available_models)
+    use_vision = (
+        VISION_ENABLED
+        and (page.page_type == "image")
+        and (VISION_MODEL in available_models)
+    )
 
     if not use_vision:
         text_source = page.text_content if page.page_type == "text" else page.paddle_text
@@ -324,16 +294,11 @@ def extract_line_items(pages: list[PageData], customer_prompt: str | None = None
     if not active_pages:
         active_pages = pages  # fallback if all pages were filtered
 
-    import os
-    force_text = os.environ.get("FORCE_TEXT") == "1"
-    force_vision = os.environ.get("FORCE_VISION") == "1"
-
-    if force_text:
-        use_vision = False
-    elif force_vision:
-        use_vision = True
-    else:
-        use_vision = any(p.page_type == "image" for p in active_pages) and (VISION_MODEL in available_models)
+    use_vision = (
+        VISION_ENABLED
+        and any(p.page_type == "image" for p in active_pages)
+        and (VISION_MODEL in available_models)
+    )
     item_context = _build_item_context()
     instructions = _LINE_ITEMS_INSTRUCTIONS_TEMPLATE.format(known_items=item_context)
 

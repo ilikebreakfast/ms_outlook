@@ -79,8 +79,7 @@ v3/
 |---|---|
 | Python 3.11+ | Runtime |
 | [Ollama](https://ollama.com/) | Local LLM server |
-| `qwen2.5:3b` | Text extraction model |
-| `qwen2.5vl` | Vision model for scanned pages (optional) |
+| `gemma3:4b` | Default model — text extraction and vision (see model guide below) |
 | `pdfplumber` | PDF text extraction and page classification |
 | `PyMuPDF` (`fitz`) | PDF rasterization (no Poppler required) |
 | `PaddleOCR` | OCR fallback for scanned/image pages |
@@ -92,10 +91,40 @@ Install Python deps (using the shared v2 venv):
 v2\venv\Scripts\pip install pdfplumber pymupdf paddleocr pillow numpy requests
 ```
 
-Pull Ollama models:
+Pull the default model:
 ```bash
-ollama pull qwen2.5:3b
-ollama pull qwen2.5vl   # optional — only needed for scanned PDFs
+ollama pull gemma3:4b
+```
+
+---
+
+## Model Configuration
+
+Models and vision mode are configured in `v3/core/config.py` and can be overridden via environment variables.
+
+| Setting | Default | Env var override |
+|---|---|---|
+| `TEXT_MODEL` | `gemma3:4b` | `TEXT_MODEL=<name>` |
+| `VISION_MODEL` | `gemma3:4b` | `VISION_MODEL=<name>` |
+| `VISION_ENABLED` | `False` | `VISION_ENABLED=1` |
+| `OLLAMA_BASE` | `http://localhost:11434` | `OLLAMA_BASE=<url>` |
+
+**Vision is disabled by default** — local vision models require GPU acceleration to run at useful speeds. Enable it only when running on a machine with a supported discrete GPU.
+
+### Hardware guide
+
+| Machine | Recommended models | Vision |
+|---|---|---|
+| Laptop — Intel Arc 130V (iGPU, 32GB shared RAM) | `gemma3:4b` text | Disabled (CPU only — too slow) |
+| Desktop — AMD RX 7800 XT (16GB VRAM) | `gemma3:12b` text + `gemma3:12b` vision | Enable with `VISION_ENABLED=1` |
+| Any machine with NVIDIA 12GB+ VRAM | `gemma3:12b` or `qwen2.5:14b` | Enable with `VISION_ENABLED=1` |
+
+On the desktop (7800 XT), ROCm-enabled Ollama can run `gemma3:12b` comfortably within 16GB VRAM,
+giving significantly better extraction quality. Pull and configure:
+```bash
+ollama pull gemma3:12b
+# Then set env vars or edit config.py:
+TEXT_MODEL=gemma3:12b VISION_MODEL=gemma3:12b VISION_ENABLED=1 python v3/invoice_parser.py ...
 ```
 
 ---
