@@ -50,7 +50,7 @@ VENDOR_PHONES     = _CONFIG.get("vendor_phones", [])
 
 OLLAMA_BASE  = "http://localhost:11434"
 TEXT_MODEL   = "qwen2.5:3b"
-VISION_MODEL = "qwen2-vl:2b"
+VISION_MODEL = "qwen2.5vl"
 
 def get_available_models() -> list[str]:
     """Return list of pulled model names from the local Ollama instance."""

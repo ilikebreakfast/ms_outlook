@@ -75,7 +75,7 @@ v3/
 | Python 3.11+ | Runtime |
 | [Ollama](https://ollama.com/) | Local LLM server |
 | `qwen2.5:3b` | Text extraction model |
-| `qwen2-vl:2b` | Vision model for scanned pages (optional) |
+| `qwen2.5vl` | Vision model for scanned pages (optional) |
 | `pdfplumber` | PDF text extraction and page classification |
 | `PyMuPDF` (`fitz`) | PDF rasterization (no Poppler required) |
 | `PaddleOCR` | OCR fallback for scanned/image pages |
@@ -90,7 +90,7 @@ v2\venv\Scripts\pip install pdfplumber pymupdf paddleocr pillow numpy requests
 Pull Ollama models:
 ```bash
 ollama pull qwen2.5:3b
-ollama pull qwen2-vl:2b   # optional — only needed for scanned PDFs
+ollama pull qwen2.5vl   # optional — only needed for scanned PDFs
 ```
 
 ---

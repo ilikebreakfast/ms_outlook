@@ -37,7 +37,7 @@ v3/
 ### Local LLM Integration (Ollama)
 
 - **Text model:** `qwen2.5:3b` — used for native-text PDF pages
-- **Vision model:** `qwen2-vl:2b` — used for scanned/image pages when available
+- **Vision model:** `qwen2.5vl` — used for scanned/image pages when available
 - Dynamic model fallback at startup: queries `http://localhost:11434/api/tags` and selects the best matching available model
 - Deterministic extraction (`temperature: 0.0`) with structured JSON output schema
 - Vendor exclusion config (`vendor_config.json`) injected into prompts to prevent own-company details being classified as the customer
@@ -143,7 +143,7 @@ settings = {
 * **Key Tasks:**
   1. ✅ Set up a core Python parser harness (`core/invoices/extractor.py`, `invoice_parser.py`).
   2. ✅ PDF extraction implemented via `pdfplumber` (text classification) + `PyMuPDF` rasterizer + Ollama LLM prompts for structured extraction. Coordinate anchoring/cropping available if needed for future template refinement.
-  3. ✅ OCR fallback implemented via `PaddleOCR` for scanned/image pages; output fed to Ollama vision model (`qwen2-vl:2b`).
+  3. ✅ OCR fallback implemented via `PaddleOCR` for scanned/image pages; output fed to Ollama vision model (`qwen2.5vl`).
   4. ✅ CLI validation tool built (`print_payload_summary`, `review_payload`) with interactive field correction and accept/reject flow.
 
 ### Phase 2: Template Rules Engine & Database Ingestion ✅ COMPLETE
