@@ -389,7 +389,7 @@ def rasterise(filepath: str) -> RasterisedPDF:
             if page_type == "image":
                 print(f"Page {page_num} classified as scanned IMAGE. Running PaddleOCR...")
                 try:
-                    from paddleocr import PaddleOCR
+                    from paddleocr import PaddleOCR  # type: ignore
                     if ocr_model is None:
                         ocr_model = PaddleOCR(lang='en')
                     numpy_image = np.array(pillow_image.convert("RGB"))
