@@ -63,20 +63,47 @@ def _print_pdf_table(pdfs: list[Path], senders: dict, label: str) -> None:
         print(f"  {i:<4} {name:<32} {domain:<22} {mtime}")
 
 
-def _pick_file(pdfs: list[Path]) -> Path | None:
-    print(f"\n  [Q] Back")
+def _pick_files(pdfs: list[Path]) -> list[Path]:
+    print(f"\n  [A] All")
+    print(f"  [Q] Back")
     print(f"{'-'*W}")
-    raw = input("  Select number or Q: ").strip().upper()
+    raw = input("  Select numbers (comma-separated), A for all, or Q: ").strip().upper()
     if raw == "Q":
-        return None
-    try:
-        idx = int(raw) - 1
-        if 0 <= idx < len(pdfs):
-            return pdfs[idx]
-        print("  Out of range.")
-    except ValueError:
-        print("  Invalid input.")
-    return None
+        return []
+    if raw == "A":
+        return pdfs
+    
+    selected = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part: continue
+        try:
+            idx = int(part) - 1
+            if 0 <= idx < len(pdfs):
+                if pdfs[idx] not in selected:
+                    selected.append(pdfs[idx])
+            else:
+                print(f"  Warning: {part} is out of range.")
+        except ValueError:
+            print(f"  Warning: '{part}' is not a valid number.")
+    return selected
+
+
+def _get_target_environment() -> str | None:
+    print(f"\n  Target Environment:")
+    print(f"    [T] Test sandbox (don't move attachment)")
+    print(f"    [L] Live production (moves attachment to processed)")
+    print(f"    [Q] Cancel / Back")
+    print(f"{'-'*W}")
+    while True:
+        choice = input("  Select environment [T]: ").strip().upper()
+        if not choice or choice == "T":
+            return "test"
+        if choice == "L":
+            return "live"
+        if choice == "Q":
+            return None
+        print("  Invalid choice.")
 
 
 def _get_extraction_mode() -> str | None:
@@ -99,13 +126,17 @@ def _get_extraction_mode() -> str | None:
         print("  Invalid choice.")
 
 
-def _run_parser(pdf: Path, mode: str) -> int:
+def _run_parser(pdf: Path, mode: str, env_mode: str) -> int:
     print(f"\n{'='*W}")
-    print(f"  Running: {pdf.name}  [Mode: {mode.upper()}]".ljust(W))
+    print(f"  Running: {pdf.name}  [Ext: {mode.upper()} | Env: {env_mode.upper()}]".ljust(W))
     print(f"{'='*W}\n")
     
-    # Inject INVOICE_TEST=1 for sandboxed run
-    env = dict(os.environ, INVOICE_TEST="1")
+    env = os.environ.copy()
+    if env_mode == "test":
+        env["INVOICE_TEST"] = "1"
+    else:
+        env.pop("INVOICE_TEST", None)
+
     cmd = [str(_PYTHON), str(_PARSER), str(pdf)]
     if mode == "text":
         cmd.append("--force-text")
@@ -117,15 +148,16 @@ def _run_parser(pdf: Path, mode: str) -> int:
 
 
 def _move_to_processed(pdf: Path) -> None:
-    _PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    dest = _PROCESSED_DIR / pdf.name
+    dest_dir = _V3_ROOT / "data" / "processed"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / pdf.name
     # Avoid silent overwrite if same filename already exists in processed/
     if dest.exists():
         stem = pdf.stem
         suffix = pdf.suffix
         counter = 1
         while dest.exists():
-            dest = _PROCESSED_DIR / f"{stem}_{counter}{suffix}"
+            dest = dest_dir / f"{stem}_{counter}{suffix}"
             counter += 1
     pdf.rename(dest)
     print(f"\n  Moved to processed: {dest.name}")
@@ -139,8 +171,8 @@ def main() -> None:
         print("  INVOICE ATTACHMENT SELECTOR".center(W))
         print(f"{'='*W}")
         print("  [N]  New attachments        (data/attachments/)")
-        print("  [P]  Processed attachments  (tests/data/processed/)")
-        print("  [R]  Review all pending staged invoices")
+        print("  [P]  Processed attachments  (data/processed/)")
+        print("  [R]  Review all pending staged invoices (Test sandbox)")
         print("  [Q]  Quit")
         print(f"{'-'*W}")
         choice = input("  Select: ").strip().upper()
@@ -150,17 +182,19 @@ def main() -> None:
 
         if choice == "R":
             # Injects INVOICE_TEST=1 for sandboxed pending review
-            subprocess.run([str(_PYTHON), str(_PARSER), "--review-pending"], env=dict(os.environ, INVOICE_TEST="1"))
+            env = os.environ.copy()
+            env["INVOICE_TEST"] = "1"
+            subprocess.run([str(_PYTHON), str(_PARSER), "--review-pending"], env=env)
             continue
 
         if choice == "N":
-            folder = _ATTACH_DIR
+            folder = _V3_ROOT / "data" / "attachments"
             label = "NEW"
-            move_after = True
+            can_move = True
         elif choice == "P":
-            folder = _PROCESSED_DIR
+            folder = _V3_ROOT / "data" / "processed"
             label = "PROCESSED"
-            move_after = False
+            can_move = False
         else:
             print("  Unknown option — try N, P, R, or Q.")
             continue
@@ -171,23 +205,29 @@ def main() -> None:
         if not pdfs:
             continue
 
-        selected = _pick_file(pdfs)
-        if selected is None:
+        selected_files = _pick_files(pdfs)
+        if not selected_files:
             continue
 
+        env_mode = "test"
+        env_choice = _get_target_environment()
+        if not env_choice:
+            continue
+        env_mode = env_choice
+
         mode = "both"
-        if move_after:  # only ask for extraction mode when executing on new files
-            selected_mode = _get_extraction_mode()
-            if selected_mode is None:
-                continue
-            mode = selected_mode
+        mode_choice = _get_extraction_mode()
+        if not mode_choice:
+            continue
+        mode = mode_choice
 
-        returncode = _run_parser(selected, mode)
+        for selected in selected_files:
+            returncode = _run_parser(selected, mode, env_mode)
 
-        if move_after and returncode == 0:
-            _move_to_processed(selected)
-        elif move_after and returncode != 0:
-            print(f"\n  Pipeline exited with error (code {returncode}) — file left in attachments/.")
+            if can_move and env_mode == "live" and returncode == 0:
+                _move_to_processed(selected)
+            elif can_move and returncode != 0:
+                print(f"\n  Pipeline exited with error (code {returncode}) — {selected.name} left in attachments/.")
 
         input("\n  Press ENTER to return to menu...")
 
