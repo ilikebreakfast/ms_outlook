@@ -18,13 +18,10 @@ from core.invoices.llm_extractor import extract_from_pdf
 from core.invoices.manual_review import review_payload, review_all_pending
 from core.invoices.knowledge_base import load_product_csvs
 
-_V3_ROOT = Path(__file__).parent
-import os
-# Sandbox logic for test runs
-if os.environ.get("INVOICE_TEST") == "1":
-    _DATA_DIR = _V3_ROOT / "tests" / "data"
-else:
-    _DATA_DIR = _V3_ROOT / "data"
+from core.config import V3_ROOT, DATA_DIR
+
+_V3_ROOT = V3_ROOT
+_DATA_DIR = DATA_DIR
 
 # ==============================================================================
 # PIPELINE ORCHESTRATOR

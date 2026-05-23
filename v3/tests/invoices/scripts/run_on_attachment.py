@@ -14,8 +14,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-_V3_ROOT       = Path(__file__).resolve().parent.parent.parent.parent
-_DATA_DIR      = _V3_ROOT / "tests" / "data" if os.environ.get("INVOICE_TEST") == "1" else _V3_ROOT
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+from core.config import V3_ROOT, DATA_DIR
+
+_V3_ROOT       = V3_ROOT
+_DATA_DIR      = DATA_DIR
 _ATTACH_DIR    = _V3_ROOT / "data" / "attachments"
 _PROCESSED_DIR = _DATA_DIR / "processed"
 _SENDERS_FILE  = _V3_ROOT / "data" / "mock_senders.json"

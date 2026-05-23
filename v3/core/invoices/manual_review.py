@@ -17,14 +17,10 @@ from core.invoices.extractor import (
     save_template, save_item_codes,
 )
 
-_V3_ROOT = Path(__file__).resolve().parent.parent.parent
+from core.config import V3_ROOT, DATA_DIR
 
-import os
-# Sandbox logic for test runs
-if os.environ.get("INVOICE_TEST") == "1":
-    _DATA_DIR = _V3_ROOT / "tests" / "data"
-else:
-    _DATA_DIR = _V3_ROOT / "data"
+_V3_ROOT = V3_ROOT
+_DATA_DIR = DATA_DIR
 
 
 def _update_prompt_md() -> None:

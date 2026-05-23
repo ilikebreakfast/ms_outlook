@@ -23,13 +23,10 @@ from typing import Optional
 os.environ["FLAGS_use_onednn"] = "0"
 
 # Resolved path to the v3/ root directory (this file lives at v3/core/invoices/)
-_V3_ROOT = Path(__file__).resolve().parent.parent.parent
+from core.config import V3_ROOT, DATA_DIR
 
-# Sandbox logic for test runs
-if os.environ.get("INVOICE_TEST") == "1":
-    _DATA_DIR = _V3_ROOT / "tests" / "data"
-else:
-    _DATA_DIR = _V3_ROOT / "data"
+_V3_ROOT = V3_ROOT
+_DATA_DIR = DATA_DIR
 
 # ==============================================================================
 # SECTION 1: SHARED DATA CONTRACT (DATACLASSES)
