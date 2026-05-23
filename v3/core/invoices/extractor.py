@@ -335,18 +335,42 @@ def get_item_codes(source_filter: str | None = None, min_confirmed: int = 0) -> 
 # SECTION 3: PDF RASTERIZER
 # ==============================================================================
 
+def _rasterise_text_file(filepath: str) -> RasterisedPDF:
+    """Wrap a plain-text or CSV file as a single-page synthetic RasterisedPDF."""
+    ext = Path(filepath).suffix.lower()
+    content = Path(filepath).read_text(encoding="utf-8", errors="replace")
+    source_type = "csv_file" if ext == ".csv" else "text_file"
+    print(f"Opening {ext.lstrip('.').upper()} file: {filepath}")
+    return RasterisedPDF(
+        source_file=filepath,
+        source_type=source_type,
+        page_count=1,
+        pages=[PageData(
+            page_number=1,
+            page_type="text",
+            text_content=content,
+            paddle_text="",
+            image_b64="",
+        )],
+    )
+
+
 def rasterise(filepath: str) -> RasterisedPDF:
-    """Open a PDF, classify each page, rasterize at appropriate DPI,
-    run PaddleOCR on scanned pages, and return structured page data.
+    """Open a document file and return structured page data.
+
+    Supports PDF (native text + scanned), plain-text (.txt), and CSV (.csv).
     """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    if Path(filepath).suffix.lower() in (".txt", ".csv"):
+        return _rasterise_text_file(filepath)
+
     # Deferred imports to keep startup fast when only the DB layer is needed
     import pdfplumber
     import fitz        # PyMuPDF — rasterizes without poppler binaries
     import numpy as np
     from PIL import Image
-
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"File not found: {filepath}")
 
     pages_data = []
     has_text = False

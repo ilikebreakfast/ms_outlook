@@ -44,26 +44,31 @@ def _domain(filename: str, senders: dict) -> str:
     return ""
 
 
-def _list_pdfs(folder: Path) -> list[Path]:
+_SUPPORTED_EXTS = {".pdf", ".txt", ".csv"}
+
+
+def _list_attachments(folder: Path) -> list[Path]:
     if not folder.exists():
         return []
-    return sorted(folder.glob("*.pdf"), key=lambda f: f.stat().st_mtime, reverse=True)
+    files = [f for f in folder.iterdir() if f.suffix.lower() in _SUPPORTED_EXTS]
+    return sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)
 
 
-def _print_pdf_table(pdfs: list[Path], senders: dict, label: str) -> None:
+def _print_attachment_table(files: list[Path], senders: dict, label: str) -> None:
     print(f"\n{'='*W}")
-    print(f"  {label} ATTACHMENTS  ({len(pdfs)} files)".ljust(W))
+    print(f"  {label} ATTACHMENTS  ({len(files)} files)".ljust(W))
     print(f"{'='*W}")
-    if not pdfs:
-        print(f"  No PDF files found.")
+    if not files:
+        print(f"  No supported files found (.pdf / .txt / .csv).")
         return
-    print(f"  {'#':<4} {'File':<32} {'Domain':<22} {'Modified'}")
-    print(f"  {'-'*4} {'-'*32} {'-'*22} {'-'*10}")
-    for i, pdf in enumerate(pdfs, 1):
-        mtime  = datetime.fromtimestamp(pdf.stat().st_mtime).strftime("%Y-%m-%d")
-        domain = _domain(pdf.name, senders)[:22]
-        name   = pdf.name[:32]
-        print(f"  {i:<4} {name:<32} {domain:<22} {mtime}")
+    print(f"  {'#':<4} {'File':<32} {'Type':<6} {'Domain':<20} {'Modified'}")
+    print(f"  {'-'*4} {'-'*32} {'-'*6} {'-'*20} {'-'*10}")
+    for i, f in enumerate(files, 1):
+        mtime  = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d")
+        domain = _domain(f.name, senders)[:20]
+        name   = f.name[:32]
+        ftype  = f.suffix.lstrip(".").upper()
+        print(f"  {i:<4} {name:<32} {ftype:<6} {domain:<20} {mtime}")
 
 
 def _pick_files(pdfs: list[Path]) -> list[Path]:
@@ -150,6 +155,17 @@ def _run_parser(pdf: Path, mode: str, env_mode: str) -> int:
     return result.returncode
 
 
+def _get_staged_stems(staging_root: Path) -> set[str]:
+    """Return the set of file stems already present in any staging subdirectory."""
+    stems: set[str] = set()
+    for subdir in ("pending", "approved", "rejected"):
+        d = staging_root / subdir
+        if d.exists():
+            for f in d.glob("*.json"):
+                stems.add(f.stem)
+    return stems
+
+
 def _move_to_processed(pdf: Path) -> None:
     dest_dir = _V3_ROOT / "data" / "processed"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -174,6 +190,7 @@ def main() -> None:
         print("  INVOICE ATTACHMENT SELECTOR".center(W))
         print(f"{'='*W}")
         print("  [N]  New attachments        (data/attachments/)")
+        print("  [U]  Unprocessed only        (not yet in any staging folder)")
         print("  [P]  Processed attachments  (data/processed/)")
         print("  [R]  Review all pending staged invoices (Test sandbox)")
         print("  [Q]  Quit")
@@ -194,16 +211,34 @@ def main() -> None:
             folder = _V3_ROOT / "data" / "attachments"
             label = "NEW"
             can_move = True
+        elif choice == "U":
+            folder = _V3_ROOT / "data" / "attachments"
+            label = "UNPROCESSED"
+            can_move = True
         elif choice == "P":
             folder = _V3_ROOT / "data" / "processed"
             label = "PROCESSED"
             can_move = False
         else:
-            print("  Unknown option — try N, P, R, or Q.")
+            print("  Unknown option — try N, U, P, R, or Q.")
             continue
 
-        pdfs = _list_pdfs(folder)
-        _print_pdf_table(pdfs, senders, label)
+        pdfs = _list_attachments(folder)
+
+        if choice == "U":
+            env_choice_for_filter = _get_target_environment()
+            if not env_choice_for_filter:
+                continue
+            staging_root = (
+                _V3_ROOT / "data" / "invoice_staging"
+                if env_choice_for_filter == "live"
+                else _DATA_DIR / "invoice_staging"
+            )
+            staged_stems = _get_staged_stems(staging_root)
+            pdfs = [f for f in pdfs if f.stem not in staged_stems]
+            label = f"UNPROCESSED ({env_choice_for_filter.upper()})"
+
+        _print_attachment_table(pdfs, senders, label)
 
         if not pdfs:
             continue
@@ -212,11 +247,13 @@ def main() -> None:
         if not selected_files:
             continue
 
-        env_mode = "test"
-        env_choice = _get_target_environment()
-        if not env_choice:
-            continue
-        env_mode = env_choice
+        if choice == "U":
+            env_mode = env_choice_for_filter
+        else:
+            env_choice = _get_target_environment()
+            if not env_choice:
+                continue
+            env_mode = env_choice
 
         mode = "both"
         mode_choice = _get_extraction_mode()
