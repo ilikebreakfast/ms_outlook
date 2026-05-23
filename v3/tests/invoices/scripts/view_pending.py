@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-PENDING_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "pending"
+if "--live" in sys.argv:
+    PENDING_DIR = _V3_ROOT / "data" / "invoice_staging" / "pending"
+    print("Mode: LIVE")
+else:
+    PENDING_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "pending"
+    print("Mode: TEST (use --live for live data)")
 
 if not PENDING_DIR.exists():
     print(f"Pending directory not found: {PENDING_DIR}")

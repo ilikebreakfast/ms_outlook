@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-DB_PATH = _V3_ROOT / "tests" / "data" / "invoice_memory.db"
+if "--live" in sys.argv:
+    DB_PATH = _V3_ROOT / "data" / "invoice_memory.db"
+    print("Mode: LIVE")
+else:
+    DB_PATH = _V3_ROOT / "tests" / "data" / "invoice_memory.db"
+    print("Mode: TEST (use --live for live data)")
 
 if not DB_PATH.exists():
     print(f"No database found at: {DB_PATH}")

@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 
 _V3_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-APPROVED_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "approved"
+if "--live" in sys.argv:
+    APPROVED_DIR = _V3_ROOT / "data" / "invoice_staging" / "approved"
+    print("Mode: LIVE")
+else:
+    APPROVED_DIR = _V3_ROOT / "tests" / "data" / "invoice_staging" / "approved"
+    print("Mode: TEST (use --live for live data)")
 
 if not APPROVED_DIR.exists():
     print(f"Approved directory not found: {APPROVED_DIR}")
