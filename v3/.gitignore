@@ -26,6 +26,13 @@ config/token_cache.bin
 /data/
 /tests/data/
 /vendor_config.json
+
+# Knowledge base dynamic data
+/knowledge/products/
+/knowledge/product_mapping.json
+/knowledge/PROMPT.md
+/knowledge/customers/*.md
+!/knowledge/customers/*.md.example
 *.db
 *.db-wal
 *.db-shm

@@ -34,11 +34,3 @@ token_cache.bin
 *.swo
 .DS_Store
 
-# v3 invoice pipeline — private runtime data
-v3/invoice_staging/
-v3/vendor_config.json
-v3/knowledge/products/
-v3/knowledge/product_mapping.json
-v3/knowledge/PROMPT.md
-v3/knowledge/customers/*.md
-!v3/knowledge/customers/*.md.example
