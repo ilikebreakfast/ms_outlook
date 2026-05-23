@@ -29,7 +29,7 @@ _V3_ROOT = Path(__file__).resolve().parent.parent.parent
 if os.environ.get("INVOICE_TEST") == "1":
     _DATA_DIR = _V3_ROOT / "tests" / "data"
 else:
-    _DATA_DIR = _V3_ROOT
+    _DATA_DIR = _V3_ROOT / "data"
 
 # ==============================================================================
 # SECTION 1: SHARED DATA CONTRACT (DATACLASSES)

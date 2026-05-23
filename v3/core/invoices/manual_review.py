@@ -24,7 +24,7 @@ import os
 if os.environ.get("INVOICE_TEST") == "1":
     _DATA_DIR = _V3_ROOT / "tests" / "data"
 else:
-    _DATA_DIR = _V3_ROOT
+    _DATA_DIR = _V3_ROOT / "data"
 
 
 def _update_prompt_md() -> None:
