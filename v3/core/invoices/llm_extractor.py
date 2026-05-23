@@ -80,13 +80,18 @@ if available_models:
 
     best_vision = None
     for model in available_models:
-        if "vl" in model:
+        if "qwen-gpu" in model:
             best_vision = model
             break
+    if not best_vision:
+        for model in available_models:
+            if "vl" in model:
+                best_vision = model
+                break
     if best_vision:
         VISION_MODEL = best_vision
 
-def ollama_chat(model: str, messages: list[dict], timeout: int = 120) -> str:
+def ollama_chat(model: str, messages: list[dict], timeout: int | None = 120) -> str:
     """Send a chat request to the local Ollama API and return the reply string."""
     payload = {
         "model": model,
@@ -205,7 +210,7 @@ def extract_customer(page: PageData, email_context: str | None = None) -> dict:
             prompt += f"EMAIL CONTEXT:\n{email_context}\n\n"
         prompt += _CUSTOMER_JSON_SCHEMA
         messages.append({"role": "user", "content": prompt, "images": [page.image_b64]})
-        model, timeout = VISION_MODEL, 240
+        model, timeout = VISION_MODEL, None
 
     return parse_json_response(ollama_chat(model, messages, timeout=timeout))
 
@@ -362,7 +367,7 @@ def extract_line_items(pages: list[PageData], customer_prompt: str | None = None
             "content": prompt,
             "images": [p.image_b64 for p in active_pages],
         })
-        model, timeout = VISION_MODEL, 300
+        model, timeout = VISION_MODEL, None
 
     return parse_json_response(ollama_chat(model, messages, timeout=timeout))
 
