@@ -63,6 +63,11 @@ These guidelines are working if: fewer unnecessary changes in diffs, fewer rewri
 
 This repository is structured as a progressive implementation of the MS Outlook Invoice Processing Pipeline, spanning legacy (`v1`), the intermediate modern version (`v2`), and the current step-by-step active development version (`v3`).
 
+> **IMPORTANT:** Each version has its own specific AI agent guidelines. When working within a specific directory, you **MUST** refer to its individual `AGENTS.md` file:
+> * **v1:** [v1/AGENTS.md](file:///c:/git/ms_outlook/v1/AGENTS.md)
+> * **v2:** [v2/AGENTS.md](file:///c:/git/ms_outlook/v2/AGENTS.md)
+> * **v3:** [v3/AGENTS.md](file:///c:/git/ms_outlook/v3/AGENTS.md)
+
 ```
 ms_outlook/
 │
