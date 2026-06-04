@@ -2,6 +2,7 @@
 Interactive attachment selector for the invoice pipeline.
 
   N — new attachments (v3/data/attachments/)   → moved to processed/ after success
+  U — unprocessed only (new attachments not yet staged for the chosen environment)
   P — processed attachments (v3/tests/data/processed/)
   R — review all pending staged invoices
   Q — quit
@@ -15,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
-from core.config import V3_ROOT, DATA_DIR
+from core.config import V3_ROOT, DATA_DIR, data_dir_for
 
 _V3_ROOT       = V3_ROOT
 _DATA_DIR      = DATA_DIR
@@ -50,7 +51,10 @@ _SUPPORTED_EXTS = {".pdf", ".txt", ".csv"}
 def _list_attachments(folder: Path) -> list[Path]:
     if not folder.exists():
         return []
-    files = [f for f in folder.iterdir() if f.suffix.lower() in _SUPPORTED_EXTS]
+    files = [
+        f for f in folder.iterdir()
+        if f.is_file() and f.suffix.lower() in _SUPPORTED_EXTS
+    ]
     return sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)
 
 
@@ -155,15 +159,21 @@ def _run_parser(pdf: Path, mode: str, env_mode: str) -> int:
     return result.returncode
 
 
-def _get_staged_stems(staging_root: Path) -> set[str]:
-    """Return the set of file stems already present in any staging subdirectory."""
-    stems: set[str] = set()
+def _get_staged_names(staging_root: Path) -> set[str]:
+    """Return the set of source filenames already staged.
+
+    Staging JSON files are named '<source-filename>.json' (e.g.
+    'invoice.pdf.json'), so f.stem recovers the original attachment name
+    including its extension. Matching on the full name keeps attachments that
+    share a stem but differ in extension (invoice.pdf vs invoice.csv) distinct.
+    """
+    names: set[str] = set()
     for subdir in ("pending", "approved", "rejected"):
         d = staging_root / subdir
         if d.exists():
             for f in d.glob("*.json"):
-                stems.add(f.stem)
-    return stems
+                names.add(f.stem)
+    return names
 
 
 def _move_to_processed(pdf: Path) -> None:
@@ -229,13 +239,14 @@ def main() -> None:
             env_choice_for_filter = _get_target_environment()
             if not env_choice_for_filter:
                 continue
+            # Resolve the staging dir the parser subprocess will actually write
+            # to for the chosen environment, via the same mapping core.config
+            # uses — independent of this selector's own INVOICE_TEST.
             staging_root = (
-                _V3_ROOT / "data" / "invoice_staging"
-                if env_choice_for_filter == "live"
-                else _DATA_DIR / "invoice_staging"
+                data_dir_for(env_choice_for_filter == "test") / "invoice_staging"
             )
-            staged_stems = _get_staged_stems(staging_root)
-            pdfs = [f for f in pdfs if f.stem not in staged_stems]
+            staged_names = _get_staged_names(staging_root)
+            pdfs = [f for f in pdfs if f.name not in staged_names]
             label = f"UNPROCESSED ({env_choice_for_filter.upper()})"
 
         _print_attachment_table(pdfs, senders, label)

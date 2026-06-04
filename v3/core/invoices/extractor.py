@@ -658,8 +658,11 @@ def validate_and_stage(payload: InvoicePayload) -> InvoicePayload:
     pending_dir.mkdir(parents=True, exist_ok=True)
     approved_dir.mkdir(parents=True, exist_ok=True)
 
-    file_stem = Path(payload.source_file).stem if payload.source_file else "unknown_invoice"
-    json_filename = f"{file_stem}.json"
+    # Key the staging file on the full source filename (including extension) so
+    # attachments that share a stem but differ in extension — e.g. invoice.pdf
+    # and invoice.csv — do not overwrite each other's staged result.
+    source_name = Path(payload.source_file).name if payload.source_file else "unknown_invoice"
+    json_filename = f"{source_name}.json"
     target_path = pending_dir / json_filename if payload.needs_review else approved_dir / json_filename
     target_path.write_text(json.dumps(asdict(payload), indent=2), encoding="utf-8")
     payload.staging_path = str(target_path.resolve())
