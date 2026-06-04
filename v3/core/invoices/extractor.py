@@ -73,7 +73,7 @@ class InvoiceTotals:
 @dataclass
 class InvoicePayload:
     source_file:      str          = ""
-    source_type:      str          = ""   # "pdf_text" | "pdf_scanned" | "pdf_mixed"
+    source_type:      str          = ""   # "pdf_text" | "pdf_scanned" | "pdf_mixed" | "text_file" | "csv_file"
     customer:         CustomerInfo = field(default_factory=CustomerInfo)
     line_items:       list[LineItem]  = field(default_factory=list)
     totals:           InvoiceTotals   = field(default_factory=InvoiceTotals)
@@ -94,7 +94,7 @@ class PageData:
 @dataclass
 class RasterisedPDF:
     source_file: str
-    source_type: str   # "pdf_text" | "pdf_scanned" | "pdf_mixed"
+    source_type: str   # "pdf_text" | "pdf_scanned" | "pdf_mixed" | "text_file" | "csv_file"
     page_count:  int
     pages:       list[PageData]
 
@@ -335,6 +335,14 @@ def get_item_codes(source_filter: str | None = None, min_confirmed: int = 0) -> 
 # SECTION 3: PDF RASTERIZER
 # ==============================================================================
 
+# Extensions wrapped as synthetic text pages (no PDF engine needed).
+TEXT_EXTENSIONS = (".txt", ".csv")
+# Every extension rasterise() can ingest — the authoritative list of accepted
+# attachment types. Import this in callers (e.g. the attachment selector)
+# instead of duplicating the set.
+SUPPORTED_EXTENSIONS = (".pdf",) + TEXT_EXTENSIONS
+
+
 def _rasterise_text_file(filepath: str) -> RasterisedPDF:
     """Wrap a plain-text or CSV file as a single-page synthetic RasterisedPDF."""
     ext = Path(filepath).suffix.lower()
@@ -363,7 +371,7 @@ def rasterise(filepath: str) -> RasterisedPDF:
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"File not found: {filepath}")
 
-    if Path(filepath).suffix.lower() in (".txt", ".csv"):
+    if Path(filepath).suffix.lower() in TEXT_EXTENSIONS:
         return _rasterise_text_file(filepath)
 
     # Deferred imports to keep startup fast when only the DB layer is needed

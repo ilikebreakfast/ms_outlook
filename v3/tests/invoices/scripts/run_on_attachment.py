@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 from core.config import V3_ROOT, DATA_DIR, data_dir_for
+from core.invoices.extractor import SUPPORTED_EXTENSIONS
 
 _V3_ROOT       = V3_ROOT
 _DATA_DIR      = DATA_DIR
@@ -45,7 +46,10 @@ def _domain(filename: str, senders: dict) -> str:
     return ""
 
 
-_SUPPORTED_EXTS = {".pdf", ".txt", ".csv"}
+# Accepted attachment types come straight from the rasteriser so the two
+# never drift; rendered as ".pdf / .txt / .csv" for user-facing messages.
+_SUPPORTED_EXTS = set(SUPPORTED_EXTENSIONS)
+_SUPPORTED_EXTS_LABEL = " / ".join(SUPPORTED_EXTENSIONS)
 
 
 def _list_attachments(folder: Path) -> list[Path]:
@@ -63,7 +67,7 @@ def _print_attachment_table(files: list[Path], senders: dict, label: str) -> Non
     print(f"  {label} ATTACHMENTS  ({len(files)} files)".ljust(W))
     print(f"{'='*W}")
     if not files:
-        print(f"  No supported files found (.pdf / .txt / .csv).")
+        print(f"  No supported files found ({_SUPPORTED_EXTS_LABEL}).")
         return
     print(f"  {'#':<4} {'File':<32} {'Type':<6} {'Domain':<20} {'Modified'}")
     print(f"  {'-'*4} {'-'*32} {'-'*6} {'-'*20} {'-'*10}")
@@ -75,7 +79,7 @@ def _print_attachment_table(files: list[Path], senders: dict, label: str) -> Non
         print(f"  {i:<4} {name:<32} {ftype:<6} {domain:<20} {mtime}")
 
 
-def _pick_files(pdfs: list[Path]) -> list[Path]:
+def _pick_files(files: list[Path]) -> list[Path]:
     print(f"\n  [A] All")
     print(f"  [Q] Back")
     print(f"{'-'*W}")
@@ -83,17 +87,17 @@ def _pick_files(pdfs: list[Path]) -> list[Path]:
     if raw == "Q":
         return []
     if raw == "A":
-        return pdfs
-    
+        return files
+
     selected = []
     for part in raw.split(","):
         part = part.strip()
         if not part: continue
         try:
             idx = int(part) - 1
-            if 0 <= idx < len(pdfs):
-                if pdfs[idx] not in selected:
-                    selected.append(pdfs[idx])
+            if 0 <= idx < len(files):
+                if files[idx] not in selected:
+                    selected.append(files[idx])
             else:
                 print(f"  Warning: {part} is out of range.")
         except ValueError:
@@ -138,18 +142,18 @@ def _get_extraction_mode() -> str | None:
         print("  Invalid choice.")
 
 
-def _run_parser(pdf: Path, mode: str, env_mode: str) -> int:
+def _run_parser(attachment: Path, mode: str, env_mode: str) -> int:
     print(f"\n{'='*W}")
-    print(f"  Running: {pdf.name}  [Ext: {mode.upper()} | Env: {env_mode.upper()}]".ljust(W))
+    print(f"  Running: {attachment.name}  [Ext: {mode.upper()} | Env: {env_mode.upper()}]".ljust(W))
     print(f"{'='*W}\n")
-    
+
     env = os.environ.copy()
     if env_mode == "test":
         env["INVOICE_TEST"] = "1"
     else:
         env.pop("INVOICE_TEST", None)
 
-    cmd = [str(_PYTHON), str(_PARSER), str(pdf)]
+    cmd = [str(_PYTHON), str(_PARSER), str(attachment)]
     if mode == "text":
         cmd.append("--force-text")
     elif mode == "vision":
@@ -176,19 +180,19 @@ def _get_staged_names(staging_root: Path) -> set[str]:
     return names
 
 
-def _move_to_processed(pdf: Path) -> None:
+def _move_to_processed(attachment: Path) -> None:
     dest_dir = _V3_ROOT / "data" / "processed"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / pdf.name
+    dest = dest_dir / attachment.name
     # Avoid silent overwrite if same filename already exists in processed/
     if dest.exists():
-        stem = pdf.stem
-        suffix = pdf.suffix
+        stem = attachment.stem
+        suffix = attachment.suffix
         counter = 1
         while dest.exists():
             dest = dest_dir / f"{stem}_{counter}{suffix}"
             counter += 1
-    pdf.rename(dest)
+    attachment.rename(dest)
     print(f"\n  Moved to processed: {dest.name}")
 
 
@@ -200,7 +204,7 @@ def main() -> None:
         print("  INVOICE ATTACHMENT SELECTOR".center(W))
         print(f"{'='*W}")
         print("  [N]  New attachments        (data/attachments/)")
-        print("  [U]  Unprocessed only        (not yet in any staging folder)")
+        print("  [U]  Unprocessed only        (not yet staged for the chosen env)")
         print("  [P]  Processed attachments  (data/processed/)")
         print("  [R]  Review all pending staged invoices (Test sandbox)")
         print("  [Q]  Quit")
@@ -233,7 +237,7 @@ def main() -> None:
             print("  Unknown option — try N, U, P, R, or Q.")
             continue
 
-        pdfs = _list_attachments(folder)
+        files = _list_attachments(folder)
 
         if choice == "U":
             env_choice_for_filter = _get_target_environment()
@@ -246,15 +250,15 @@ def main() -> None:
                 data_dir_for(env_choice_for_filter == "test") / "invoice_staging"
             )
             staged_names = _get_staged_names(staging_root)
-            pdfs = [f for f in pdfs if f.name not in staged_names]
+            files = [f for f in files if f.name not in staged_names]
             label = f"UNPROCESSED ({env_choice_for_filter.upper()})"
 
-        _print_attachment_table(pdfs, senders, label)
+        _print_attachment_table(files, senders, label)
 
-        if not pdfs:
+        if not files:
             continue
 
-        selected_files = _pick_files(pdfs)
+        selected_files = _pick_files(files)
         if not selected_files:
             continue
 
