@@ -3,8 +3,8 @@ v4 pipeline orchestrator.
 
 Import order matters here: v3's internal modules use bare `from core.X import`
 which resolves against sys.path.  We add v3/ to sys.path BEFORE importing v3
-modules, then add v4/ so v4's own `from v4.core.X import` works via the repo
-root.  Both root entries are added before any domain imports run.
+modules, then the repo root so `from v4.core.X import` resolves via the
+package namespace.  Both insertions must happen before any domain imports.
 """
 import json
 import logging
@@ -21,7 +21,7 @@ for _p in (str(_V3_ROOT), str(_REPO_ROOT)):
         sys.path.insert(0, _p)
 
 # --- v3 imports (while v3/ is at the front so its bare `core.*` resolves) ---
-from core.invoices.extractor import (           # noqa: E402  (v3/core/invoices/extractor.py)
+from core.invoices.extractor import (           # noqa: E402
     InvoicePayload,
     CustomerInfo,
     LineItem,
@@ -49,31 +49,59 @@ _SUPPORTED_EXTS = {".pdf"}
 # ---------------------------------------------------------------------------
 
 def _grid_to_json(grids: list[CellGrid]) -> str:
-    """Serialise CellGrids to the compact JSON format sent to the LLM."""
+    """
+    Serialise CellGrids to the compact JSON format sent to the LLM.
+    Cell values are included as-is; injection scrubbing is applied inside
+    llm_escalation._build_user_content() before they reach the prompt.
+    """
     tables = []
     for g in grids:
         tables.append({
             "source":  g.source,
             "headers": g.headers,
-            "rows":    g.rows[:60],   # cap rows to avoid excessive token usage
+            "rows":    g.rows[:60],   # cap rows to avoid excessive token use
         })
     return json.dumps(tables, ensure_ascii=False)
 
 
-def _map_llm_response(llm: dict, blob: AttachmentBlob) -> InvoicePayload:
+def _source_type(grids: list[CellGrid]) -> str:
+    """Derive source_type from the winning extraction tier."""
+    if not grids:
+        return "pdf_mixed"   # unknown — extraction failed
+    src = grids[0].source
+    if src == "pdfplumber":
+        return "pdf_text"
+    if src == "paddleocr":
+        return "pdf_scanned"
+    return "pdf_mixed"       # azure_di or other
+
+
+def _map_llm_response(llm: dict, blob: AttachmentBlob, source_type: str) -> InvoicePayload:
     """Map the LLM JSON response dict to v3 InvoicePayload dataclasses."""
 
     def fv(raw: dict) -> FieldValue:
         return FieldValue(
             value=raw.get("value"),
-            confidence=raw.get("confidence", "low"),
+            # Use the LLM's stated confidence; default to "high" so documents
+            # where the model omits confidence (confident outputs) don't
+            # spuriously get demoted to medium by validate_and_stage.
+            confidence=raw.get("confidence", "high"),
             source="llm",
         )
 
-    cust_raw = llm.get("customer", {})
+    cust_raw  = llm.get("customer", {})
+    llm_email = cust_raw.get("email", {}).get("value")
+
     customer = CustomerInfo(
         name    = fv(cust_raw.get("name",    {})),
-        email   = fv(cust_raw.get("email",   {})),
+        # Prefer the LLM-extracted email; fall back to the envelope sender so
+        # validate_and_stage can find the customer's trusted template by email.
+        email   = FieldValue(
+            value      = llm_email or blob.sender,
+            confidence = cust_raw.get("email", {}).get("confidence", "medium")
+                         if llm_email else "medium",
+            source     = "llm" if llm_email else "email",
+        ),
         phone   = fv(cust_raw.get("phone",   {})),
         abn     = fv(cust_raw.get("abn",     {})),
         address = fv(cust_raw.get("address", {})),
@@ -90,7 +118,7 @@ def _map_llm_response(llm: dict, blob: AttachmentBlob) -> InvoicePayload:
             uom          = raw.get("uom"),
             unit_price   = raw.get("unit_price"),
             line_total   = raw.get("line_total"),
-            confidence   = raw.get("confidence", "low"),
+            confidence   = raw.get("confidence", "high"),
         ))
 
     tot_raw = llm.get("totals", {})
@@ -101,11 +129,11 @@ def _map_llm_response(llm: dict, blob: AttachmentBlob) -> InvoicePayload:
     )
 
     return InvoicePayload(
-        source_file  = blob.filename,
-        source_type  = "pdf_text",
-        customer     = customer,
-        line_items   = line_items,
-        totals       = totals,
+        source_file = blob.filename,
+        source_type = source_type,
+        customer    = customer,
+        line_items  = line_items,
+        totals      = totals,
     )
 
 
@@ -130,19 +158,14 @@ def process_attachment(blob: AttachmentBlob) -> bool:
     for w in extraction.warnings:
         log.info("[%s] %s", blob.filename, w)
 
+    stype = _source_type(extraction.grids)
+
     if extraction.grids:
-        grid_json  = _grid_to_json(extraction.grids)
-        # Determine source type from the winning tier
-        source_type = (
-            "pdf_text"    if extraction.grids[0].source == "pdfplumber" else
-            "pdf_scanned" if extraction.grids[0].source == "paddleocr"  else
-            "pdf_mixed"
-        )
+        grid_json = _grid_to_json(extraction.grids)
     else:
-        # No grid at all — send empty context; LLM will return low-confidence output
-        grid_json   = json.dumps([{"source": "none", "headers": [], "rows": []}])
-        source_type = "pdf_text"
-        log.warning("No tables extracted from %s — LLM will work without grid", blob.filename)
+        # No grid — send minimal context; LLM will produce low-confidence output
+        grid_json = json.dumps([{"source": "none", "headers": [], "rows": []}])
+        log.warning("[%s] No tables extracted — LLM will work without a grid", blob.filename)
 
     # --- LLM extraction (column labelling + field extraction) ---
     llm_result = extract_from_grid(
@@ -150,26 +173,25 @@ def process_attachment(blob: AttachmentBlob) -> bool:
         sender_email = blob.sender,
     )
     if not llm_result:
-        log.error("LLM returned empty result for %s", blob.filename)
+        log.error("[%s] LLM returned empty result", blob.filename)
         mark_processed(blob.internet_message_id, status="llm_failed")
         return False
 
     # --- Map to v3 payload ---
-    payload = _map_llm_response(llm_result, blob)
-    payload.source_type = source_type
+    payload = _map_llm_response(llm_result, blob, stype)
 
     # --- Validate and stage (v3 reuse) ---
     try:
         staged = validate_and_stage(payload)
         log.info(
-            "Staged %s — confidence=%s, needs_review=%s, items=%d",
-            blob.filename, staged.parse_confidence, staged.needs_review,
-            len(staged.line_items),
+            "[%s] Staged — tier=%s, confidence=%s, items=%d, needs_review=%s",
+            blob.filename, stype, staged.parse_confidence,
+            len(staged.line_items), staged.needs_review,
         )
         mark_processed(blob.internet_message_id, status="staged")
         return True
     except Exception as e:
-        log.error("validate_and_stage failed for %s: %s", blob.filename, e)
+        log.error("[%s] validate_and_stage failed: %s", blob.filename, e)
         mark_processed(blob.internet_message_id, status="stage_failed")
         return False
 
@@ -186,17 +208,33 @@ def run_pipeline() -> dict:
     poll = run_poll()
 
     if poll.first_run and not poll.attachments:
-        log.info("First-run snapshot complete — inbox baseline established")
+        log.info(
+            "First-run snapshot complete — inbox baseline established.\n"
+            "  New messages will be processed on the next poll.\n"
+            "  Run with FIRST_RUN_PROCESS=1 to process the existing inbox on first run."
+        )
         return {
-            "first_run": True,
-            "new_messages": 0,
-            "attachments_found": 0,
-            "processed": 0,
-            "failed": 0,
+            "first_run":           True,
+            "new_messages":        0,
+            "attachments_found":   0,
+            "processed":           0,
+            "failed":              0,
+            "skipped_blocked":     poll.skipped_blocked,
+        }
+
+    if not poll.attachments:
+        log.info("No new attachments to process.")
+        return {
+            "first_run":           poll.first_run,
+            "new_messages":        poll.new_messages,
+            "attachments_found":   0,
+            "processed":           0,
+            "failed":              0,
+            "skipped_blocked":     poll.skipped_blocked,
         }
 
     log.info(
-        "Processing %d attachment(s) from %d new message(s)",
+        "Processing %d attachment(s) from %d new message(s)…",
         len(poll.attachments), poll.new_messages,
     )
 
@@ -208,14 +246,20 @@ def run_pipeline() -> dict:
             else:
                 failed += 1
         except Exception:
-            log.exception("Unhandled error for %s", blob.filename)
+            log.exception("Unhandled error processing %s", blob.filename)
             failed += 1
 
+    log.info(
+        "Cycle complete — processed=%d, failed=%d, blocked=%d",
+        processed, failed, poll.skipped_blocked,
+    )
+
     return {
-        "first_run":         poll.first_run,
-        "new_messages":      poll.new_messages,
-        "attachments_found": len(poll.attachments),
-        "processed":         processed,
-        "failed":            failed,
-        "skipped_duplicate": poll.skipped_duplicate,
+        "first_run":           poll.first_run,
+        "new_messages":        poll.new_messages,
+        "attachments_found":   len(poll.attachments),
+        "processed":           processed,
+        "failed":              failed,
+        "skipped_duplicate":   poll.skipped_duplicate,
+        "skipped_blocked":     poll.skipped_blocked,
     }

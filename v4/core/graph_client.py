@@ -11,11 +11,15 @@ call when it nears expiry.  For a long-running local daemon, this is sufficient.
 
 Retry: all Graph API calls are wrapped with tenacity exponential back-off.
 HTTP 429/500/502/503/504 and transient network errors are retried up to 4×;
-the Retry-After header is honoured on 429 responses.
+the Retry-After header is honoured on 429 responses in both seconds and
+HTTP-date formats (both are permitted by the spec).
 """
 import logging
-import requests
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+
 import msal
+import requests
 from tenacity import (
     retry,
     retry_if_exception,
@@ -36,7 +40,7 @@ _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 # ---------------------------------------------------------------------------
-# Retry helpers (identical logic to v1/auth/graph_client.py)
+# Retry helpers
 # ---------------------------------------------------------------------------
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -48,18 +52,31 @@ def _is_retryable(exc: BaseException) -> bool:
 
 
 def _wait_respecting_retry_after(retry_state) -> float:
-    """Honour Retry-After on 429; otherwise exponential back-off capped at 16 s."""
+    """
+    Honour the Retry-After header on 429 responses.
+    Graph may send it as seconds ("120") or as an HTTP-date
+    ("Wed, 21 Oct 2026 07:28:00 GMT") — both are handled.
+    Falls back to exponential back-off capped at 16 s.
+    """
     exc = retry_state.outcome.exception()
     if (
         isinstance(exc, requests.HTTPError)
         and exc.response is not None
         and exc.response.status_code == 429
     ):
-        header = exc.response.headers.get("Retry-After")
+        header = exc.response.headers.get("Retry-After", "")
         if header:
+            # Try seconds format first
             try:
-                return float(header)
+                return max(1.0, float(header))
             except ValueError:
+                pass
+            # Try HTTP-date format
+            try:
+                dt   = parsedate_to_datetime(header)
+                secs = (dt - datetime.now(timezone.utc)).total_seconds()
+                return max(1.0, secs)
+            except Exception:
                 pass
     return min(2 ** (retry_state.attempt_number - 1), 16)
 
@@ -81,12 +98,14 @@ _app: msal.ConfidentialClientApplication | None = None
 
 
 def _build_app() -> msal.ConfidentialClientApplication:
+    if CERT_PATH is None:
+        raise RuntimeError("MS_CERT_PATH is not configured — cannot build MSAL app")
     private_key_pem = CERT_PATH.read_text()
     credential: dict = {"private_key": private_key_pem}
     if CERT_THUMBPRINT:
         credential["thumbprint"] = CERT_THUMBPRINT
-    # When the .pem contains both the private key AND the certificate
-    # (a "bundle" PEM), MSAL can compute the thumbprint automatically.
+    # When the .pem is a bundle (private key + certificate chain), MSAL computes
+    # the thumbprint automatically and "thumbprint" can be omitted.
     return msal.ConfidentialClientApplication(
         CLIENT_ID,
         authority=AUTHORITY,
@@ -107,9 +126,11 @@ def get_access_token() -> str:
     result = _app.acquire_token_for_client(scopes=GRAPH_SCOPE)
 
     if "access_token" not in result:
-        msg = f"App-only token acquisition failed: {result.get('error_description', result)}"
-        _send_alert(msg)
-        raise RuntimeError(f"Graph auth failed: {result.get('error_description', result)}")
+        # Log only the error code/description — never the full result dict,
+        # which may contain diagnostic fields the webhook endpoint shouldn't see.
+        err = result.get("error_description") or result.get("error") or "unknown error"
+        _send_alert(f"App-only token acquisition failed: {err}")
+        raise RuntimeError(f"Graph auth failed: {err}")
 
     return result["access_token"]
 

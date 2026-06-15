@@ -1,0 +1,20 @@
+{
+  "_instructions": [
+    "Copy this file to v4/data/allowlist.json (gitignored) and edit it.",
+    "Alternatively, set ALLOWED_SENDER_DOMAINS and/or ALLOWED_SENDER_EMAILS",
+    "in v4/.env for a quick single-line config.",
+    "",
+    "allowed_domains: all email addresses at these domains are accepted.",
+    "allowed_emails:  specific individual addresses (e.g. personal Gmail senders).",
+    "",
+    "Restart the pipeline (or wait for the next poll) after changes.",
+    "Unknown senders are logged with copy-pasteable instructions to add them."
+  ],
+  "allowed_domains": [
+    "example-supplier.com.au",
+    "another-supplier.com"
+  ],
+  "allowed_emails": [
+    "individual.contact@gmail.com"
+  ]
+}
