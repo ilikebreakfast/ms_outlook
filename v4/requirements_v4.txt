@@ -1,0 +1,35 @@
+# v4 pipeline — additional dependencies beyond what v2/requirements.txt covers.
+# Install into the shared venv:
+#   "v2\venv\Scripts\pip.exe" install -r v4/requirements_v4.txt
+
+# Microsoft auth — app-only ConfidentialClientApplication (cert)
+msal>=1.28.0
+
+# HTTP + retry (shared with v1; ensure version parity)
+requests>=2.31.0
+tenacity>=8.2.0
+
+# PDF table extraction — tier 1
+pdfplumber>=0.11.0
+
+# PDF rasterization (PyMuPDF) — likely already installed from v3;
+# listed here so the venv audit is complete.
+PyMuPDF>=1.24.0
+
+# LLM escalation — Claude Haiku 4.5 via Anthropic API
+# Includes native prompt-caching support and the Batches API.
+anthropic>=0.40.0
+
+# Azure Document Intelligence — tier-3 table fallback
+azure-ai-documentintelligence>=1.0.0
+azure-core>=1.30.0
+
+# Local scheduling (APScheduler for --schedule mode)
+apscheduler>=3.10.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
+
+# Image processing for PaddleOCR page rasterization
+Pillow>=10.0.0
+numpy>=1.26.0

@@ -1,0 +1,17 @@
+# Environment / secrets — NEVER commit these
+.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.bin
+
+# Runtime data (delta link, SQLite, staged attachments)
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
